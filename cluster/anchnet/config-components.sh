@@ -60,7 +60,9 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --basic_auth_file=/etc/kubernetes/basic-auth.csv \
 --client_ca_file=/etc/kubernetes/ca.crt \
 --tls_cert_file=/etc/kubernetes/master.crt \
---tls_private_key_file=/etc/kubernetes/master.key"
+--tls_private_key_file=/etc/kubernetes/master.key \
+--cloud_config=/etc/kubernetes/anchnet-config \
+--cloud_provider=anchnet"
 EOF
 }
 
@@ -68,7 +70,9 @@ EOF
 function create-kube-controller-manager-opts {
   cat <<EOF > ~/kube/default/kube-controller-manager
 KUBE_CONTROLLER_MANAGER_OPTS="--logtostderr=true \
---master=${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT}"
+--master=${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} \
+--cloud_config=/etc/kubernetes/anchnet-config \
+--cloud_provider=anchnet"
 EOF
 }
 
@@ -83,8 +87,7 @@ EOF
 # Create kubelet options.
 #
 # Input:
-#   $1 Hostname override. Before cloudprovide interface is implemented, we use this
-#      to override hostname of the instance.
+#   $1 Hostname override - override hostname used in kubelet.
 #   $2 API server address, typically master internal IP address.
 #   $3 Cluster DNS IP address, should fall into service ip range.
 #   $4 Cluster search domain, e.g. cluster.local
@@ -100,7 +103,9 @@ KUBELET_OPTS="--logtostderr=true \
 --cluster_dns=${3} \
 --cluster_domain=${4} \
 --pod-infra-container-image=${5} \
---kubeconfig=/etc/kubernetes/kubelet-kubeconfig"
+--kubeconfig=/etc/kubernetes/kubelet-kubeconfig \
+--cloud_config=/etc/kubernetes/anchnet-config \
+--cloud_provider=anchnet"
 EOF
 }
 

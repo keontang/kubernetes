@@ -35,6 +35,7 @@ spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLeve
   ${KUBE_ROOT}/_output/local/bin/linux/amd64/kube-controller-manager \
   ${KUBE_ROOT}/_output/local/bin/linux/amd64/kube-apiserver \
   ${KUBE_ROOT}/_output/local/bin/linux/amd64/kube-scheduler \
+  ${KUBE_ROOT}/_output/local/bin/linux/amd64/kubectl \
   ubuntu@${instance_ip}:~/kube/master
 expect "*assword*"
 send -- "${KUBE_INSTANCE_PASSWORD}\r"

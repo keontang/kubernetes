@@ -29,7 +29,7 @@ DEV_MODE=false
 #   ~/kube/node - Directory containing all node binaries
 #   Installed docker
 #   Installed bridge-utils
-INSTANCE_IMAGE="img-1MT6JC6I"
+INSTANCE_IMAGE="img-OBKRMWB4"
 
 # Helper constants.
 ANCHNET_CMD="anchnet"
@@ -45,6 +45,10 @@ function verify-prereqs {
   if [[ "$(which expect)" == "" ]]; then
     echo "Can't find expect binary in PATH, please fix and retry."
     echo "For ubuntu, if you have root access, run: sudo apt-get install expect."
+    exit 1
+  fi
+  if [[ ! -f ~/.anchnet/config  ]]; then
+    echo "Can't find anchnet config file in ~/.anchnet, please fix and retry."
     exit 1
   fi
 }
@@ -77,12 +81,12 @@ function kube-up {
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
-    MASTER_INSTANCE_ID="i-E7MPPDL7"
-    MASTER_EIP_ID="eip-D2D5YSGK"
-    MASTER_EIP="43.254.52.57"
-    NODE_INSTANCE_IDS="i-SIP7N4S9,i-IPD3K0GE"
-    NODE_EIP_IDS="eip-UX3EPGEH,eip-E4EZPNUA"
-    NODE_EIPS="43.254.52.58,43.254.55.218"
+    MASTER_INSTANCE_ID="i-FF830WKU"
+    MASTER_EIP_ID="eip-1ITUTNX9"
+    MASTER_EIP="43.254.55.207"
+    NODE_INSTANCE_IDS="i-W7X4DRTB,i-EBW0J52Y"
+    NODE_EIP_IDS="eip-2EUFNTQM,eip-8KHBY6I7"
+    NODE_EIPS="43.254.55.206,43.254.55.202"
     PRIVATE_SDN_INTERFACE="eth1"
   else
     # Create master/node instances from anchnet without provision. The following
@@ -109,9 +113,12 @@ function kube-up {
   create-node-internal-ips
   create-etcd-initial-cluster
 
-  # Now start provisioning master and nodes.
-  provision-master
-  provision-nodes
+  # Now start installing master and nodes.
+  install-master
+  install-nodes
+
+  # Start master/nodes all together.
+  provision-k8s
 
   # common.sh defines create-kubeconfig, which is used to create client kubeconfig
   # for kubectl. To properly create kubeconfig, make sure to supply it with assumed
@@ -168,7 +175,7 @@ function deploy-addons {
 
   # Calling 'addons-start.sh' to start addons.
     expect <<EOF
-set timeout 360
+set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@${MASTER_EIP} "sudo ./kube/addons-start.sh"
 expect "*assword for*"
@@ -409,17 +416,25 @@ function setup-instance-ssh {
   # TODO: Use ubuntu image for now. If we use different image, user name can be 'root'.
   # Use a large timeout to tolerate ssh connection delay; otherwise, expect script will mess up.
   expect <<EOF
-set timeout 360
+set timeout -1
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   $HOME/.ssh/id_rsa.pub ubuntu@$1:~/host_rsa.pub
-expect "*?assword:"
-send -- "${KUBE_INSTANCE_PASSWORD}\r"
-expect eof
+expect {
+  "*?assword:" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
 spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@$1 "umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub"
-expect "*?assword:"
-send -- "${KUBE_INSTANCE_PASSWORD}\r"
-expect eof
+expect {
+  "*?assword:" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
 EOF
 
   attempt=0
@@ -582,7 +597,7 @@ function create-etcd-initial-cluster {
 # The method assumes master instance is running. It does the following two things:
 # 1. Copies master component configurations to working directory (~/kube).
 # 2. Create a master-start.sh file which applies the configs, setup network, and
-#   starts k8s master.
+#   starts k8s master. The base image we use have the binaries in place.
 #
 # Assumed vars:
 #   KUBE_ROOT
@@ -593,8 +608,8 @@ function create-etcd-initial-cluster {
 #   SERVICE_CLUSTER_IP_RANGE
 #   PRIVATE_SDN_INTERFACE
 #   PER_USER_CONFIG_FILE
-function provision-master {
-  echo "+++++ Start provisioning master"
+function install-master {
+  echo "+++++ Start installing master"
 
   # Create master startup script.
   (
@@ -614,9 +629,11 @@ function provision-master {
     # Function 'create-private-interface-opts' creates network options used to
     # configure private sdn network interface.
     echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_INTERNAL_IP} ${INTERNAL_IP_MASK}"
-    # The following lines organize file structure a little bit.
-    echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security"
-    echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security"
+    # The following lines organize file structure a little bit. To make it
+    # pleasant when running the script multiple times, we ignore errors.
+    echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security 1>/dev/nul 2>&1"
+    echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security 1>/dev/nul 2>&1"
+    echo "mv ~/kube/config ~/kube/security/anchnet-config 1>/dev/nul 2>&1"
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"
     echo "sudo mkdir -p /etc/kubernetes"
@@ -628,6 +645,7 @@ function provision-master {
     echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
     echo "sudo cp ~/kube/security/known-tokens.csv ~/kube/security/basic-auth.csv /etc/kubernetes"
     echo "sudo cp ~/kube/security/ca.crt ~/kube/security/master.crt ~/kube/security/master.key /etc/kubernetes"
+    echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
     # Restart network manager to make private sdn in effect.
     echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
     echo "sudo service network-manager restart"
@@ -642,8 +660,7 @@ function provision-master {
   ) > "${KUBE_TEMP}/master-start.sh"
   chmod a+x ${KUBE_TEMP}/master-start.sh
 
-  # Copy master component configurations and startup script to master instance under
-  # ~/kube. The base image we use have the binaries in place.
+  # Copy master component configs and startup scripts to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/master/* \
       ${KUBE_TEMP}/master-start.sh \
@@ -652,23 +669,13 @@ function provision-master {
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
+      ~/.anchnet/config \
       "ubuntu@${MASTER_EIP}":~/kube
-
-  # Call master-start.sh to start master. Note since we don't run flanneld on master,
-  # we don't need to run expect in background.
-  expect <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ubuntu@${MASTER_EIP} "sudo ~/kube/master-start.sh"
-expect "*assword for*"
-send -- "${KUBE_INSTANCE_PASSWORD}\r"
-expect eof
-EOF
 }
 
 
 # The method assumes node instances are running. It does the similar thing as
-# provision-master, but to nodes.
+# install-master, but to nodes.
 #
 # TODO: Create caicloud registry to host images like caicloud/k8s-pause:0.8.0.
 #
@@ -682,22 +689,19 @@ EOF
 #   DNS_DOMAIN
 #   POD_INFRA_CONTAINER
 #   PER_USER_CONFIG_FILE
-function provision-nodes {
-  local pids=""
+function install-nodes {
   IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
+  IFS=',' read -ra node_instance_arr <<< "${NODE_INSTANCE_IDS}"
 
   for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    echo "+++++ Start provisioning node-${i}"
+    echo "+++++ Start installing node-${i}"
     local node_internal_ip=${node_iip_arr[${i}]}
     local node_eip=${node_eip_arr[${i}]}
-    # TODO: In 'create-kubelet-opts', we use ${node_internal_ip} as kubelet host
-    #   override due to lack of cloudprovider support. This essentially means that
-    #   k8s is running as a bare-metal cluster. Once we implement that interface,
-    #   we have a full-fleged k8s running on anchnet.
-    # Create node startup script. Note we assume the base image has necessary tools
-    # installed, e.g. docker, bridge-util, etc. The flow is similar to master startup
-    # script.
+    local node_instance_id=${node_instance_arr[${i}]}
+    # Create node startup script. Note we assume the base image has necessary
+    # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
+    # master startup script.
     (
       echo "#!/bin/bash"
       echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
@@ -705,15 +709,18 @@ function provision-nodes {
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/reconf-docker.sh"
       echo ""
-      # Create component options.
-      echo "create-etcd-opts kubernetes-node${i} \"${node_internal_ip}\" \"${ETCD_INITIAL_CLUSTER}\""
-      echo "create-kubelet-opts ${node_internal_ip} \"${MASTER_INTERNAL_IP}\" \"${DNS_SERVER_IP}\" \"${DNS_DOMAIN}\" \"${POD_INFRA_CONTAINER}\""
+      # Create component options. Note in 'create-kubelet-opts', we use
+      # ${node_instance_id} as hostname override for each node - see
+      # 'pkg/cloudprovider/anchnet/anchnet_instances.go' for how this works.
+      echo "create-etcd-opts kubernetes-node${i} ${node_internal_ip} \"${ETCD_INITIAL_CLUSTER}\""
+      echo "create-kubelet-opts ${node_instance_id} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
       echo "create-kube-proxy-opts \"${MASTER_INTERNAL_IP}\""
       echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
       # Create network options.
       echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${node_internal_ip} ${INTERNAL_IP_MASK}"
       # Organize files a little bit.
-      echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security"
+      echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/nul 2>&1"
+      echo "mv ~/kube/config ~/kube/security/anchnet-config 1>/dev/nul 2>&1"
       # Create the system directories used to hold the final data.
       echo "sudo mkdir -p /opt/bin"
       echo "sudo mkdir -p /etc/kubernetes"
@@ -724,6 +731,7 @@ function provision-nodes {
       echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
       echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
       echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
+      echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
       # Restart network manager to make private sdn in effect.
       echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
       echo "sudo service network-manager restart"
@@ -744,9 +752,35 @@ function provision-nodes {
         ${KUBE_TEMP}/node${i}-start.sh \
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
+        ~/.anchnet/config \
         "ubuntu@${node_eip}":~/kube
   done
+}
 
+
+# Start master/nodes concurrently.
+#
+# Assumed vars:
+#   KUBE_INSTANCE_PASSWORD
+#   MASTER_EIP
+#   NODE_EIPS
+function provision-k8s {
+  local pids=""
+
+  echo "+++++ Start provisioning master"
+  # Call master-start.sh to start master. Note since we don't run flanneld on master,
+  # we don't need to run expect in background.
+  expect <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ubuntu@${MASTER_EIP} "sudo ~/kube/master-start.sh"
+expect "*assword for*"
+send -- "${KUBE_INSTANCE_PASSWORD}\r"
+expect eof
+EOF
+  pids="$pids $!"
+
+  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
   local i=0
   for node_eip in "${node_eip_arr[@]}"; do
     echo "+++++ Start provisioning node-${i}"
@@ -767,9 +801,9 @@ EOF
     i=$(($i+1))
   done
 
-  echo "Wait for all nodes to be provisioned..."
+  echo "Wait for all instances to be provisioned..."
   wait $pids
-  echo "All nodes have been provisioned..."
+  echo "All instances have been provisioned..."
 }
 
 

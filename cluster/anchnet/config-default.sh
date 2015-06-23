@@ -29,6 +29,7 @@ export VXNET_NAME="caicloud"
 #   pattern here, e.g. node IP starts from 10.244.1.0 and increment by 1
 #   for subsequent nodes. So a helper shell function should suffice.
 export INTERNAL_IP_RANGE=10.244.0.1/16
+export INTERNAL_IP_MASK="255.255.0.0"
 export MASTER_INTERNAL_IP="10.244.0.1"
 export NODE_INTERNAL_IPS="10.244.1.0,10.244.1.1"
 

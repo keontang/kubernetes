@@ -84,6 +84,7 @@ EOF
 # Input:
 #   Interface name, e.g. eth1
 #   Private address, e.g. 10.244.0.1
+#   Private address master, e.g. 255.255.0.0
 function create-private-interface-opts {
   cat <<-EOF > ~/kube/network/interfaces
 	auto lo
@@ -91,18 +92,6 @@ function create-private-interface-opts {
 	auto ${1}
 	iface ${1} inet static
 	address ${2}
-	netmask 255.255.0.0
+	netmask ${3}
 EOF
-}
-
-
-# TODO: This can be slow in China's network, is there any better source?
-function install-node {
-  # Install docker on node
-  sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
-  sudo sh -c "echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
-  sudo apt-get update
-  sudo apt-get install -y --force-yes lxc-docker-1.6.2
-  # Install brctl
-  sudo apt-get install bridge-utils
 }

@@ -14,22 +14,73 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: implement this
 
 # The script creates an instance with:
-#   1. cluster binaries installed;
+#   1. cluster binaries installed, with specified versions;
 #   2. docker and bridge-utils installed
 #
 # The instance is supposed to be used to create a base image.
 
 set -e
 
-
-# Release version for creating cluster.
-ETCD_VERSION="v2.0.9"
+# Release version for different components used to create cluster. Make sure
+# they all exist on their respective github release page.
+ETCD_VERSION="v2.0.12"
 FLANNEL_VERSION="0.4.0"
-K8S_VERSION="v0.18.2"
+K8S_VERSION="v0.19.3"
+DOCKER_VERSION="1.6.2"
+KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
 
+KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+source "${KUBE_ROOT}/cluster/anchnet/util.sh"
+
+
+# Main function used to create the base image.
+function main {
+  download-release
+
+  local instance_info=$(${ANCHNET_CMD} runinstance base-image -p="${KUBE_INSTANCE_PASSWORD}")
+  local instance_id=$(echo ${instance_info} | json_val '["instances"][0]')
+  local eip_id=$(echo ${instance_info} | json_val '["eips"][0]')
+
+  check-instance-status "${instance_id}"
+  get-ip-address-from-eipid "${eip_id}"
+  local eip=${EIP_ADDRESS}
+
+  # Enable ssh without password.
+  setup-instance-ssh "${eip}"
+
+  # Create a file used to install nodes. NOTE: The script will be ran multiple
+  # times to make sure things are installed properly.
+  (
+    echo "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9"
+    echo "sudo sh -c \"echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list\""
+    echo "sudo apt-get update"
+    echo "sudo apt-get install -y --force-yes lxc-docker-${DOCKER_VERSION}"
+    echo "sudo apt-get install bridge-utils"
+  ) > ${KUBE_TEMP}/install.sh
+  chmod a+x ${KUBE_TEMP}/install.sh
+
+  # Create working directory.
+  ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+      "ubuntu@${eip}" "mkdir -p ~/kube"
+  # Copy master/node components to the instance; can be very slow based on network.
+  scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+      ${KUBE_TEMP}/master ${KUBE_TEMP}/node ${KUBE_TEMP}/install.sh "ubuntu@${eip}":~/kube
+  # Run the installation script twice.
+  expect <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ubuntu@${eip} "sudo ~/kube/install.sh && sudo ~/kube/install.sh"
+expect "*assword for*"
+send -- "${KUBE_INSTANCE_PASSWORD}\r"
+expect eof
+EOF
+
+  # Clean up unused files.
+  ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+      "ubuntu@${eip}" "rm ~/kube/install.sh ~/.ssh/authorized_keys"
+}
 
 
 # Download release to a temp dir, organized by master and node. E.g.
@@ -52,8 +103,6 @@ function download-release {
   mkdir "${KUBE_TEMP}"/node
 
   (cd "${KUBE_TEMP}"
-   # TODO: Anchnet has private SDN tool, we can investigate it later and
-   # can hopefully remove dependency on flannel.
    echo "Download flannel release ..."
    if [ ! -f flannel.tar.gz ] ; then
      curl -L  https://github.com/coreos/flannel/releases/download/v${FLANNEL_VERSION}/flannel-${FLANNEL_VERSION}-linux-amd64.tar.gz -o flannel.tar.gz
@@ -90,3 +139,5 @@ function download-release {
    echo "Done! Downloaded all components in ${KUBE_TEMP}"
   )
 }
+
+main

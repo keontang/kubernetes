@@ -19,7 +19,7 @@ set -e
 # When running dev, no machine will be created. Developer is responsible to
 # specify the instance IDs, eip IDs, etc.
 # TODO: Create a clean up script to stop all services, delete old configs, etc.
-DEV_MODE=true
+DEV_MODE=false
 
 # The base image used to create master and node instance. This image is created
 # from build-image.sh, which installs caicloud-k8s release binaries, docker, etc.
@@ -29,7 +29,7 @@ DEV_MODE=true
 #   ~/kube/node - Directory containing all node binaries
 #   Installed docker
 #   Installed bridge-utils
-INSTANCE_IMAGE="img-U2MTHX7T"
+INSTANCE_IMAGE="img-EBYD687W"
 
 # Helper constants.
 ANCHNET_CMD="anchnet"

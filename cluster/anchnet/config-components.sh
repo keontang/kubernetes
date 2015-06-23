@@ -86,7 +86,7 @@ EOF
 #   Private address, e.g. 10.244.0.1
 #   Private address master, e.g. 255.255.0.0
 function create-private-interface-opts {
-  cat <<-EOF > ~/kube/network/interfaces
+  cat <<EOF > ~/kube/network/interfaces
 	auto lo
 	iface lo inet loopback
 	auto ${1}

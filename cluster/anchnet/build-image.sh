@@ -37,6 +37,14 @@ source "${KUBE_ROOT}/cluster/anchnet/util.sh"
 
 # Main function used to create the base image.
 function main {
+  verify-prereqs
+
+  # Make sure we have a staging area.
+  ensure-temp-dir
+
+  # Make sure we have a public/private key pair used to provision the machine.
+  ensure-pub-key
+
   download-release
 
   local instance_info=$(${ANCHNET_CMD} runinstance base-image -p="${KUBE_INSTANCE_PASSWORD}")

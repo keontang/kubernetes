@@ -29,8 +29,8 @@ if [[ "$(which kubectl)" == "" ]]; then
 fi
 
 if [ "${ENABLE_CLUSTER_DNS}" == true ]; then
-	echo "Deploying DNS on kubernetes"
-	# Use kubectl to create skydns rc and service.
-	kubectl create -f ${KUBE_ROOT}/cluster/anchnet/addons/skydns-rc.yaml
-	kubectl create -f ${KUBE_ROOT}/cluster/anchnet/addons/skydns-svc.yaml
+  echo "Deploying DNS on kubernetes"
+  # Use kubectl to create skydns rc and service.
+  kubectl create -f ${KUBE_ROOT}/cluster/anchnet/addons/skydns-rc.yaml
+  kubectl create -f ${KUBE_ROOT}/cluster/anchnet/addons/skydns-svc.yaml
 fi

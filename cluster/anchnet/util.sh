@@ -168,7 +168,7 @@ function ensure-temp-dir {
 # $ RunInstance
 #
 # Input:
-#   A valid json string.
+#   $1 A valid json string.
 function json_val {
   python -c 'import json,sys;obj=json.load(sys.stdin);print obj'$1''
 }
@@ -255,7 +255,7 @@ function create-node-instances {
 # Check instance status from anchnet, break out until it's in running status.
 #
 # Input:
-#   Instance ID, e.g. i-TRMTHPWG
+#   $1 Instance ID, e.g. i-TRMTHPWG
 function check-instance-status {
   local attempt=0
   while true; do
@@ -282,7 +282,7 @@ function check-instance-status {
 # returns empty string, sometimes returns null.
 #
 # Input:
-#   Eip ID, e.g. eip-TRMTHPWG
+#   $1 Eip ID, e.g. eip-TRMTHPWG
 #
 # Output:
 #   EIP_ADDRESS - The external IP address of the EIP
@@ -315,7 +315,7 @@ function get-ip-address-from-eipid {
 # because root login is disabled by default in ubuntu.
 #
 # Input:
-#   Instance external IP address
+#   $1 Instance external IP address
 #
 # Assumed vars:
 #   KUBE_INSTANCE_PASSWORD

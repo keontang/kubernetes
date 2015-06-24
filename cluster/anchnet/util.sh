@@ -47,11 +47,6 @@ function verify-prereqs {
     echo "For ubuntu, if you have root access, run: sudo apt-get install expect."
     exit 1
   fi
-  if [[ ! -f ~/.ssh/id_rsa.pub ]]; then
-    echo "Can't find id_rsa.pub in ~/.ssh, please fix and retry."
-    echo "For linux, run `ssh-keygen -t rsa` to create one."
-    exit 1
-  fi
 }
 
 
@@ -67,6 +62,9 @@ function kube-up {
 
   # Make sure we have a staging area.
   ensure-temp-dir
+
+  # Make sure we have a public/private key pair used to provision the machine.
+  ensure-pub-key
 
   # Get all cluster configuration parameters from config-default.
   KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
@@ -131,6 +129,24 @@ function prompt-instance-password {
   if [[ "${KUBE_INSTANCE_PASSWORD}" != "${another}" ]]; then
     echo "Passwords do not match"
     exit 1
+  fi
+}
+
+
+# Create ~/.ssh/id_rsa.pub if it doesn't exist.
+function ensure-pub-key {
+  if [[ ! -f ~/.ssh/id_rsa.pub ]]; then
+    expect <<EOF
+spawn ssh-keygen -t rsa -b 4096
+expect "*rsa key*"
+expect "*file in which to save the key*"
+send -- "\r"
+expect "*assphrase*"
+send -- "\r"
+expect "*assphrase*"
+send -- "\r"
+expect eof
+EOF
   fi
 }
 

@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-# MASTER_INSECURE_* is used to server insecure connection. It is either
+# MASTER_INSECURE_* is used to serve insecure connection. It is either
 # localhost, blocked by firewall, or use with nginx, etc. MASTER_SECURE_*
 # is accessed directly from outside world, serving HTTPS. Thses configs
 # should rarely change.
@@ -54,9 +54,13 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --insecure-port=${MASTER_INSECURE_PORT} \
 --bind-address=${MASTER_SECURE_ADDRESS} \
 --secure-port=${MASTER_SECURE_PORT} \
+--etcd_servers=http://127.0.0.1:4001 \
+--service-cluster-ip-range=${1} \
 --token_auth_file=/etc/kubernetes/known-tokens.csv \
---etcd_servers=http://${MASTER_INSECURE_ADDRESS}:4001 \
---service-cluster-ip-range=${1}"
+--basic_auth_file=/etc/kubernetes/basic-auth.csv \
+--client_ca_file=/etc/kubernetes/ca.crt \
+--tls_cert_file=/etc/kubernetes/master.crt \
+--tls_private_key_file=/etc/kubernetes/master.key"
 EOF
 }
 
@@ -132,11 +136,11 @@ EOF
 #   $3 Private address master, e.g. 255.255.0.0
 function create-private-interface-opts {
   cat <<EOF > ~/kube/network/interfaces
-	auto lo
-	iface lo inet loopback
-	auto ${1}
-	iface ${1} inet static
-	address ${2}
-	netmask ${3}
+auto lo
+iface lo inet loopback
+auto ${1}
+iface ${1} inet static
+address ${2}
+netmask ${3}
 EOF
 }

@@ -19,7 +19,7 @@ set -e
 # When running dev, no machine will be created. Developer is responsible to
 # specify the instance IDs, eip IDs, etc.
 # TODO: Create a clean up script to stop all services, delete old configs, etc.
-DEV_MODE=false
+DEV_MODE=true
 
 # The base image used to create master and node instance. This image is created
 # from build-image.sh, which installs caicloud-k8s release binaries, docker, etc.
@@ -72,12 +72,12 @@ function kube-up {
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
-    MASTER_INSTANCE_ID="i-HE5KQUMP"
-    MASTER_EIP_ID="eip-CBJJ8RH6"
-    MASTER_EIP="43.254.54.73"
-    NODE_INSTANCE_IDS="i-8VR0ND4M,i-YXP2QVW7"
-    NODE_EIP_IDS="eip-C6MBZ9XR,eip-NS1T1PTZ"
-    NODE_EIPS="43.254.54.249,43.254.54.71"
+    MASTER_INSTANCE_ID="i-BDUZ8W59"
+    MASTER_EIP_ID="eip-UFPGJ8MH"
+    MASTER_EIP="43.254.55.200"
+    NODE_INSTANCE_IDS="i-KUTI4DO3,i-NYW98IK0"
+    NODE_EIP_IDS="eip-NA5NY8Y5,eip-QPR3G9KT"
+    NODE_EIPS="43.254.55.203,43.254.55.202"
     PRIVATE_INTERFACE="eth1"
   else
     # Create master/node instances from anchnet without provision. The following
@@ -95,8 +95,11 @@ function kube-up {
     create-sdn-network
   fi
 
-  # Now start provisioning master and nodes.
+  # Create certificates to secure cluster communication.
+  create-certs-and-credentials
   create-etcd-initial-cluster
+
+  # Now start provisioning master and nodes.
   provision-master
   provision-nodes
 
@@ -460,6 +463,7 @@ function provision-master {
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
     echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
     echo "sudo mkdir -p /opt/bin && sudo cp ~/kube/master/* /opt/bin"
+    echo "sudo mkdir -p /etc/kubernetes && sudo cp ~/kube/known-tokens.csv /etc/kubernetes"
     echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
     echo "sudo service network-manager restart"
     # This is tricky. k8s uses /proc/net/route to find public interface; if we do
@@ -476,6 +480,7 @@ function provision-master {
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/master/* \
       ${KUBE_TEMP}/master-start.sh \
+      ${KUBE_TEMP}/known-tokens.csv \
       "ubuntu@${MASTER_EIP}":~/kube
 
   # Call master-start.sh to start master.
@@ -535,6 +540,7 @@ function provision-nodes {
       echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
       echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
       echo "sudo mkdir -p /opt/bin && sudo cp ~/kube/node/* /opt/bin"
+      echo "sudo mkdir -p /etc/kubernetes && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
       echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
       echo "sudo service network-manager restart"
       # Same reason as to the sleep in master; but here, the affected k8s component
@@ -550,6 +556,8 @@ function provision-nodes {
     scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
         ${KUBE_ROOT}/cluster/anchnet/node/* \
         ${KUBE_TEMP}/node${i}-start.sh \
+        ${KUBE_TEMP}/kubelet-kubeconfig \
+        ${KUBE_TEMP}/kube-proxy-kubeconfig \
         "ubuntu@${node_eip}":~/kube
     # Call node${i}-start.sh to start node.
     expect <<EOF
@@ -562,4 +570,145 @@ expect eof
 EOF
     i=$(($i+1))
   done
+}
+
+
+# Create certificate pairs and credentials for the cluster.
+# Note: Part of the code in this function is copied from gce/util.sh, with
+# some added documentation.
+#
+# These are used for static cert distribution (e.g. static clustering) at
+# cluster creation time. This will be obsoleted once we implement dynamic
+# clustering.
+#
+# The following certificate pairs are created:
+#
+#  - ca (the cluster's certificate authority)
+#  - server
+#  - kubelet
+#  - kubecfg (for kubectl)
+#
+# Assumed vars
+#   KUBE_TEMP
+#   SERVICE_CLUSTER_IP_RANGE
+#   DNS_DOMAIN
+#   MASTER_NAME
+#
+# Vars set:
+#   CERT_DIR
+#   CA_CERT_BASE64
+#   MASTER_CERT_BASE64
+#   MASTER_KEY_BASE64
+#   KUBELET_CERT_BASE64
+#   KUBELET_KEY_BASE64
+#   KUBECFG_CERT_BASE64
+#   KUBECFG_KEY_BASE64
+#   KUBELET_TOKEN
+#   KUBE_PROXY_TOKEN
+#
+# Files created:
+#   ${KUBE_TEMP}/kubelet-kubeconfig
+#   ${KUBE_TEMP}/kube-proxy-kubeconfig
+#   ${KUBE_TEMP}/known-tokens.csv
+function create-certs-and-credentials {
+  # TODO: Figure out this name.
+  MASTER_NAME="master"
+
+  local -r cert_ip="${MASTER_EIP}"
+
+  # 'octects' will be an arrary of segregated IP, e.g. 192.168.3.0/24 => 192 168 3 0
+  # 'service_ip' is the first IP address in SERVICE_CLUSTER_IP_RANGE; it is the service
+  #    created to represent kubernetes api itself, i.e. kubectl get service:
+  #    NAME         LABELS                                    SELECTOR   IP(S)         PORT(S)
+  #    kubernetes   component=apiserver,provider=kubernetes   <none>     192.168.3.1   443/TCP
+  # 'sans' are all the possible names that ca certifcate certifies.
+  local octects=($(echo "$SERVICE_CLUSTER_IP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
+  ((octects[3]+=1))
+  local -r service_ip=$(echo "${octects[*]}" | sed 's/ /./g')
+  local -r sans="IP:${cert_ip},IP:${service_ip},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc,DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME}"
+
+  # Note: This was heavily cribbed from make-ca-cert.sh
+  (
+    cd "${KUBE_TEMP}"
+    curl -L -O https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz > /dev/null 2>&1
+    tar xzf easy-rsa.tar.gz > /dev/null 2>&1
+    cd easy-rsa-master/easyrsa3
+    ./easyrsa init-pki > /dev/null 2>&1
+    ./easyrsa --batch "--req-cn=${cert_ip}@$(date +%s)" build-ca nopass > /dev/null 2>&1
+    ./easyrsa --subject-alt-name="${sans}" build-server-full "${MASTER_NAME}" nopass > /dev/null 2>&1
+    ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
+    ./easyrsa build-client-full kubecfg nopass > /dev/null 2>&1) || {
+    echo "=== Failed to generate certificates: Aborting ==="
+    exit 2
+  }
+
+  # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
+  # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
+  CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
+  CA_CERT_BASE64=$(cat "${CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')
+  MASTER_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/${MASTER_NAME}.crt" | base64 | tr -d '\r\n')
+  MASTER_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/${MASTER_NAME}.key" | base64 | tr -d '\r\n')
+  KUBELET_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kubelet.crt" | base64 | tr -d '\r\n')
+  KUBELET_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubelet.key" | base64 | tr -d '\r\n')
+  KUBECFG_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kubecfg.crt" | base64 | tr -d '\r\n')
+  KUBECFG_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubecfg.key" | base64 | tr -d '\r\n')
+
+  # Generate a bearer token for this cluster. This may disappear, upstream issue:
+  # https://github.com/GoogleCloudPlatform/kubernetes/issues/3168
+  KUBELET_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
+  KUBE_PROXY_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
+  KUBE_BEARER_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
+
+  # Create kubeconfig used by kubelet and kube-proxy to connect to apiserver.
+  (
+    umask 077;
+    cat > "${KUBE_TEMP}/kubelet-kubeconfig" <<EOF
+apiVersion: v1
+kind: Config
+users:
+- name: kubelet
+  user:
+    token: ${KUBELET_TOKEN}
+clusters:
+- name: local
+  cluster:
+     insecure-skip-tls-verify: true
+contexts:
+- context:
+    cluster: local
+    user: kubelet
+  name: service-account-context
+current-context: service-account-context
+EOF
+  )
+
+  (
+    umask 077;
+    cat > "${KUBE_TEMP}/kube-proxy-kubeconfig" <<EOF
+apiVersion: v1
+kind: Config
+users:
+- name: kube-proxy
+  user:
+    token: ${KUBE_PROXY_TOKEN}
+clusters:
+- name: local
+  cluster:
+     insecure-skip-tls-verify: true
+contexts:
+- context:
+    cluster: local
+    user: kube-proxy
+  name: service-account-context
+current-context: service-account-context
+EOF
+  )
+
+  # Create known-tokens.csv used by apiserver to authenticate clients using tokens.
+  (
+    umask 077;
+    echo "${KUBE_BEARER_TOKEN},admin,admin" > "${KUBE_TEMP}/known-tokens.csv"
+    echo "${KUBELET_TOKEN},kubelet,kubelet" >> "${KUBE_TEMP}/known-tokens.csv"
+    echo "${KUBE_PROXY_TOKEN},kube_proxy,kube_proxy" >> "${KUBE_TEMP}/known-tokens.csv"
+  )
 }

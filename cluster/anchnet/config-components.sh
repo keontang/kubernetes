@@ -15,21 +15,31 @@
 # limitations under the License.
 
 
+# MASTER_INSECURE_* is used to server insecure connection. It is either
+# localhost, blocked by firewall, or use with nginx, etc. MASTER_SECURE_*
+# is accessed directly from outside world, serving HTTPS. Thses configs
+# should rarely change.
+MASTER_INSECURE_ADDRESS="127.0.0.1"
+MASTER_INSECURE_PORT=8080
+MASTER_SECURE_ADDRESS="0.0.0.0"
+MASTER_SECURE_PORT=6443
+
+
 # Create etcd options used to start etcd on master/nodes.
 # https://github.com/coreos/etcd/blob/master/Documentation/clustering.md
 #
 # Input:
 #   $1 Instance name appearing to etcd. E.g. kubernetes-master, kubernetes-node0, etc.
-#   $2 IP address used to listen to peer connection, typically instance internal address
+#   $2 IP address used to listen to peer connection, typically instance internal address.
 #   $3 Static cluster configuration setup.
 function create-etcd-opts {
   cat <<EOF > ~/kube/default/etcd
 ETCD_OPTS="-name ${1} \
-  -initial-advertise-peer-urls http://${2}:2380 \
-  -listen-peer-urls http://${2}:2380 \
-  -initial-cluster-token etcd-cluster-1 \
-  -initial-cluster ${3} \
-  -initial-cluster-state new"
+-initial-advertise-peer-urls http://${2}:2380 \
+-listen-peer-urls http://${2}:2380 \
+-initial-cluster-token etcd-cluster-1 \
+-initial-cluster ${3} \
+-initial-cluster-state new"
 EOF
 }
 
@@ -39,10 +49,13 @@ EOF
 #   $1 Service IP range. All kubernetes service will fall into the range.
 function create-kube-apiserver-opts {
   cat <<EOF > ~/kube/default/kube-apiserver
-KUBE_APISERVER_OPTS="--address=0.0.0.0 \
---port=8080 \
---etcd_servers=http://127.0.0.1:4001 \
---logtostderr=true \
+KUBE_APISERVER_OPTS="--logtostderr=true \
+--insecure-bind-address=${MASTER_INSECURE_ADDRESS} \
+--insecure-port=${MASTER_INSECURE_PORT} \
+--bind-address=${MASTER_SECURE_ADDRESS} \
+--secure-port=${MASTER_SECURE_PORT} \
+--token_auth_file=/etc/kubernetes/known-tokens.csv \
+--etcd_servers=http://${MASTER_INSECURE_ADDRESS}:4001 \
 --service-cluster-ip-range=${1}"
 EOF
 }
@@ -50,8 +63,8 @@ EOF
 # Create controller manager options.
 function create-kube-controller-manager-opts {
   cat <<EOF > ~/kube/default/kube-controller-manager
-KUBE_CONTROLLER_MANAGER_OPTS="--master=127.0.0.1:8080 \
---logtostderr=true"
+KUBE_CONTROLLER_MANAGER_OPTS="--logtostderr=true \
+--master=${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT}"
 EOF
 }
 
@@ -59,7 +72,7 @@ EOF
 function create-kube-scheduler-opts {
   cat <<EOF > ~/kube/default/kube-scheduler
 KUBE_SCHEDULER_OPTS="--logtostderr=true \
---master=127.0.0.1:8080"
+--master=${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT}"
 EOF
 }
 
@@ -68,32 +81,34 @@ EOF
 # Input:
 #   $1 Hostname override. Before cloudprovide interface is implemented, we use this
 #      to override hostname of the instance.
-#   $2 API server address, typicall master internal IP.
+#   $2 API server address, typically master internal IP address.
 #   $3 Cluster DNS IP address, should fall into service ip range.
 #   $4 Cluster search domain, e.g. cluster.local
 #   $5 Pod infra image, i.e. the pause. Default pause image comes from gcr, which is
 #      sometimes blocked by GFW.
 function create-kubelet-opts {
   cat <<EOF > ~/kube/default/kubelet
-KUBELET_OPTS="--address=0.0.0.0 \
+KUBELET_OPTS="--logtostderr=true \
+--address=0.0.0.0 \
 --port=10250 \
 --hostname_override=${1} \
---api_servers=http://${2}:8080 \
---logtostderr=true \
+--api_servers=https://${2}:${MASTER_SECURE_PORT} \
 --cluster_dns=${3} \
 --cluster_domain=${4} \
---pod-infra-container-image=${5}"
+--pod-infra-container-image=${5} \
+--kubeconfig=/etc/kubernetes/kubelet-kubeconfig"
 EOF
 }
 
 # Create kube-proxy options
 #
 # Input:
-#   $1 Master internal IP address
+#   $1 API server address, typically master internal IP address
 function create-kube-proxy-opts {
   cat <<EOF > ~/kube/default/kube-proxy
-KUBE_PROXY_OPTS="--master=http://${1}:8080 \
---logtostderr=true"
+KUBE_PROXY_OPTS="--logtostderr=true \
+--master=https://${1}:${MASTER_SECURE_PORT} \
+--kubeconfig=/etc/kubernetes/kube-proxy-kubeconfig"
 EOF
 }
 

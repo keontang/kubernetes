@@ -19,7 +19,7 @@ set -e
 # When running dev, no machine will be created. Developer is responsible to
 # specify the instance IDs, eip IDs, etc.
 # TODO: Create a clean up script to stop all services, delete old configs, etc.
-DEV_MODE=true
+DEV_MODE=false
 
 # The base image used to create master and node instance. This image is created
 # from build-image.sh, which installs caicloud-k8s release binaries, docker, etc.
@@ -72,12 +72,12 @@ function kube-up {
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
-    MASTER_INSTANCE_ID="i-BDUZ8W59"
-    MASTER_EIP_ID="eip-UFPGJ8MH"
-    MASTER_EIP="43.254.55.200"
-    NODE_INSTANCE_IDS="i-KUTI4DO3,i-NYW98IK0"
-    NODE_EIP_IDS="eip-NA5NY8Y5,eip-QPR3G9KT"
-    NODE_EIPS="43.254.55.203,43.254.55.202"
+    MASTER_INSTANCE_ID="i-R9L16LW2"
+    MASTER_EIP_ID="eip-3AF1DJM3"
+    MASTER_EIP="43.254.55.115"
+    NODE_INSTANCE_IDS="i-G6LUDOG0,i-WZ1TVLUY"
+    NODE_EIP_IDS="eip-353TW9G4,eip-K613022N"
+    NODE_EIPS="43.254.55.114,43.254.55.117"
     PRIVATE_INTERFACE="eth1"
   else
     # Create master/node instances from anchnet without provision. The following
@@ -95,7 +95,7 @@ function kube-up {
     create-sdn-network
   fi
 
-  # Create certificates to secure cluster communication.
+  # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
   create-etcd-initial-cluster
 
@@ -103,13 +103,14 @@ function kube-up {
   provision-master
   provision-nodes
 
-  # Create a username/password for accessing cluster. KUBE_MASTER_IP and
-  # CONTEXT are used in create-kubeconfig
+  # common.sh defines create-kubeconfig, which is used to create client kubeconfig
+  # for kubectl. To properly create kubeconfig, make sure to supply it with assumed
+  # vars.
+  # TODO: Fix hardcoded port in KUBE_MASTER_IP
+  # TODO: Fix hardcoded CONTEXT
   source "${KUBE_ROOT}/cluster/common.sh"
-  # TODO: Fix the port.
   KUBE_MASTER_IP="${MASTER_EIP}:6443"
   CONTEXT="anchnet_kubernetes"
-  get-password
   create-kubeconfig
 }
 
@@ -448,39 +449,58 @@ function provision-master {
   # Create master startup script.
   (
     echo "#!/bin/bash"
-    echo "mkdir -p ~/kube/default ~/kube/network"
+    echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
     echo ""
+    # The following create-*-opts functions create component options (flags).
+    # The flag options are stored under ~/kube/default.
     echo "create-etcd-opts kubernetes-master \"${MASTER_INTERNAL_IP}\" \"${ETCD_INITIAL_CLUSTER}\""
     echo "create-kube-apiserver-opts \"${SERVICE_CLUSTER_IP_RANGE}\""
     echo "create-kube-controller-manager-opts"
     echo "create-kube-scheduler-opts"
     echo "create-flanneld-opts ${PRIVATE_INTERFACE}"
+    # Function 'create-private-interface-opts' creates network options used to
+    # configure private sdn network interface.
     echo "create-private-interface-opts ${PRIVATE_INTERFACE} ${MASTER_INTERNAL_IP} ${INTERNAL_IP_MASK}"
+    # The following two lines organize file structure a little bit.
+    echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security"
+    echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security"
+    # Create the system directories used to hold the final data.
+    echo "sudo mkdir -p /opt/bin"
+    echo "sudo mkdir -p /etc/kubernetes"
+    # Copy binaries and configurations to system directories.
+    echo "sudo cp ~/kube/master/* /opt/bin"
     echo "sudo cp ~/kube/default/* /etc/default"
     echo "sudo cp ~/kube/init_conf/* /etc/init/"
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
     echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
-    echo "sudo mkdir -p /opt/bin && sudo cp ~/kube/master/* /opt/bin"
-    echo "sudo mkdir -p /etc/kubernetes && sudo cp ~/kube/known-tokens.csv /etc/kubernetes"
+    echo "sudo cp ~/kube/security/known-tokens.csv ~/kube/security/basic-auth.csv /etc/kubernetes"
+    echo "sudo cp ~/kube/security/ca.crt ~/kube/security/master.crt ~/kube/security/master.key /etc/kubernetes"
+    # Restart network manager to make private sdn in effect.
     echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
     echo "sudo service network-manager restart"
     # This is tricky. k8s uses /proc/net/route to find public interface; if we do
     # not sleep here, the network-manager hasn't finished bootstrap and the routing
-    # table in /proc won't be established. So k8s (e.g. api-server) will bailout
+    # table in /proc won't be established. So k8s (e.g. api-server) will bail out
     # and complains no interface to bind.
     echo "sleep 10"
+    # Finally, start kubernetes cluster. Upstart will make sure all components start
+    # upon etcd start.
     echo "sudo service etcd start"
   ) > "${KUBE_TEMP}/master-start.sh"
   chmod a+x ${KUBE_TEMP}/master-start.sh
 
-  # Copy master component configurations and startup script to master instance. The
-  # base image we use have the binaries in place.
+  # Copy master component configurations and startup script to master instance under
+  # ~/kube. The base image we use have the binaries in place.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/master/* \
       ${KUBE_TEMP}/master-start.sh \
       ${KUBE_TEMP}/known-tokens.csv \
+      ${KUBE_TEMP}/basic-auth.csv \
+      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
+      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
+      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
       "ubuntu@${MASTER_EIP}":~/kube
 
   # Call master-start.sh to start master.
@@ -522,31 +542,43 @@ function provision-nodes {
     #   k8s is running as a bare-metal cluster. Once we implement that interface,
     #   we have a full-fleged k8s running on anchnet.
     # Create node startup script. Note we assume the base image has necessary tools
-    # installed, e.g. docker, bridge-util, etc.
+    # installed, e.g. docker, bridge-util, etc. The flow is similar to master startup
+    # script.
     (
       echo "#!/bin/bash"
-      echo "mkdir -p ~/kube/default ~/kube/network"
+      echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/reconf-docker.sh"
       echo ""
+      # Create component options.
       echo "create-etcd-opts kubernetes-node${i} \"${node_internal_ip}\" \"${ETCD_INITIAL_CLUSTER}\""
       echo "create-kubelet-opts ${node_internal_ip} \"${MASTER_INTERNAL_IP}\" \"${DNS_SERVER_IP}\" \"${DNS_DOMAIN}\" \"${POD_INFRA_CONTAINER}\""
       echo "create-kube-proxy-opts \"${MASTER_INTERNAL_IP}\""
       echo "create-flanneld-opts ${PRIVATE_INTERFACE}"
+      # Create network options.
       echo "create-private-interface-opts ${PRIVATE_INTERFACE} ${node_internal_ip} ${INTERNAL_IP_MASK}"
+      # Organize files a little bit.
+      echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security"
+      # Create the system directories used to hold the final data.
+      echo "sudo mkdir -p /opt/bin"
+      echo "sudo mkdir -p /etc/kubernetes"
+      # Copy binaries and configurations to system directories.
+      echo "sudo cp ~/kube/node/* /opt/bin"
       echo "sudo cp ~/kube/default/* /etc/default"
       echo "sudo cp ~/kube/init_conf/* /etc/init/"
       echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
       echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
-      echo "sudo mkdir -p /opt/bin && sudo cp ~/kube/node/* /opt/bin"
-      echo "sudo mkdir -p /etc/kubernetes && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
+      echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
+      # Restart network manager to make private sdn in effect.
       echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
       echo "sudo service network-manager restart"
       # Same reason as to the sleep in master; but here, the affected k8s component
       # is kube-proxy.
       echo "sleep 10"
+      # Finally, start kubernetes cluster.
       echo "sudo service etcd start"
+      # Reconfigure docker network to use flannel overlay.
       echo "reconfig-docker-net"
     ) > "${KUBE_TEMP}/node${i}-start.sh"
     chmod a+x ${KUBE_TEMP}/node${i}-start.sh
@@ -559,6 +591,7 @@ function provision-nodes {
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
         "ubuntu@${node_eip}":~/kube
+
     # Call node${i}-start.sh to start node.
     expect <<EOF
 set timeout 360
@@ -574,8 +607,8 @@ EOF
 
 
 # Create certificate pairs and credentials for the cluster.
-# Note: Part of the code in this function is copied from gce/util.sh, with
-# some added documentation.
+# Note: Some of the code in this function is inspired from gce/util.sh,
+# make-ca-cert.sh.
 #
 # These are used for static cert distribution (e.g. static clustering) at
 # cluster creation time. This will be obsoleted once we implement dynamic
@@ -586,78 +619,98 @@ EOF
 #  - ca (the cluster's certificate authority)
 #  - server
 #  - kubelet
-#  - kubecfg (for kubectl)
+#  - kubectl
 #
 # Assumed vars
 #   KUBE_TEMP
-#   SERVICE_CLUSTER_IP_RANGE
-#   DNS_DOMAIN
+#   MASTER_EIP
 #   MASTER_NAME
+#   DNS_DOMAIN
+#   SERVICE_CLUSTER_IP_RANGE
 #
 # Vars set:
+#   KUBELET_TOKEN
+#   KUBE_PROXY_TOKEN
+#   KUBE_BEARER_TOKEN
 #   CERT_DIR
+#   CA_CERT - Path to ca cert
+#   KUBE_CERT - Path to kubectl client cert
+#   KUBE_KEY - Path to kubectl client key
 #   CA_CERT_BASE64
 #   MASTER_CERT_BASE64
 #   MASTER_KEY_BASE64
 #   KUBELET_CERT_BASE64
 #   KUBELET_KEY_BASE64
-#   KUBECFG_CERT_BASE64
-#   KUBECFG_KEY_BASE64
-#   KUBELET_TOKEN
-#   KUBE_PROXY_TOKEN
+#   KUBECTL_CERT_BASE64
+#   KUBECTL_KEY_BASE64
 #
 # Files created:
 #   ${KUBE_TEMP}/kubelet-kubeconfig
 #   ${KUBE_TEMP}/kube-proxy-kubeconfig
 #   ${KUBE_TEMP}/known-tokens.csv
+#   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt
+#   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt
+#   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key
+#   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/kubelet.crt
+#   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/kubelet.key
+#   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/kubectl.crt
+#   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/kubectl.key
 function create-certs-and-credentials {
   # TODO: Figure out this name.
   MASTER_NAME="master"
 
-  local -r cert_ip="${MASTER_EIP}"
-
   # 'octects' will be an arrary of segregated IP, e.g. 192.168.3.0/24 => 192 168 3 0
   # 'service_ip' is the first IP address in SERVICE_CLUSTER_IP_RANGE; it is the service
-  #    created to represent kubernetes api itself, i.e. kubectl get service:
+  #  created to represent kubernetes api itself, i.e. kubectl get service:
   #    NAME         LABELS                                    SELECTOR   IP(S)         PORT(S)
   #    kubernetes   component=apiserver,provider=kubernetes   <none>     192.168.3.1   443/TCP
-  # 'sans' are all the possible names that ca certifcate certifies.
+  # 'sans' are all the possible names that the ca certifcate certifies.
   local octects=($(echo "$SERVICE_CLUSTER_IP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
   ((octects[3]+=1))
-  local -r service_ip=$(echo "${octects[*]}" | sed 's/ /./g')
-  local -r sans="IP:${cert_ip},IP:${service_ip},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc,DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME}"
+  local service_ip=$(echo "${octects[*]}" | sed 's/ /./g')
+  local sans="IP:${MASTER_EIP},IP:${MASTER_INTERNAL_IP},IP:${service_ip}"
+  sans="${sans},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc"
+  sans="${sans},DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME}"
 
-  # Note: This was heavily cribbed from make-ca-cert.sh
+  # Create cluster certificates.
   (
     cd "${KUBE_TEMP}"
     curl -L -O https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz > /dev/null 2>&1
     tar xzf easy-rsa.tar.gz > /dev/null 2>&1
     cd easy-rsa-master/easyrsa3
     ./easyrsa init-pki > /dev/null 2>&1
-    ./easyrsa --batch "--req-cn=${cert_ip}@$(date +%s)" build-ca nopass > /dev/null 2>&1
-    ./easyrsa --subject-alt-name="${sans}" build-server-full "${MASTER_NAME}" nopass > /dev/null 2>&1
+    ./easyrsa --batch "--req-cn=${MASTER_EIP}@$(date +%s)" build-ca nopass > /dev/null 2>&1
+    ./easyrsa --subject-alt-name="${sans}" build-server-full master nopass > /dev/null 2>&1
     ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
-    ./easyrsa build-client-full kubecfg nopass > /dev/null 2>&1) || {
+    ./easyrsa build-client-full kubectl nopass > /dev/null 2>&1
+  ) || {
+    # TODO: Better error handling.
     echo "=== Failed to generate certificates: Aborting ==="
     exit 2
   }
-
+  CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
+  # Path to certificates, used to create kubeconfig for kubectl.
+  CA_CERT="${CERT_DIR}/pki/ca.crt"
+  KUBE_CERT="${CERT_DIR}/pki/issued/kubectl.crt"
+  KUBE_KEY="${CERT_DIR}/pki/private/kubectl.key"
   # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
   # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
-  CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
   CA_CERT_BASE64=$(cat "${CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')
-  MASTER_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/${MASTER_NAME}.crt" | base64 | tr -d '\r\n')
-  MASTER_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/${MASTER_NAME}.key" | base64 | tr -d '\r\n')
+  MASTER_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/master.crt" | base64 | tr -d '\r\n')
+  MASTER_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/master.key" | base64 | tr -d '\r\n')
   KUBELET_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kubelet.crt" | base64 | tr -d '\r\n')
   KUBELET_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubelet.key" | base64 | tr -d '\r\n')
-  KUBECFG_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kubecfg.crt" | base64 | tr -d '\r\n')
-  KUBECFG_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubecfg.key" | base64 | tr -d '\r\n')
+  KUBECTL_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kubectl.crt" | base64 | tr -d '\r\n')
+  KUBECTL_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubectl.key" | base64 | tr -d '\r\n')
 
-  # Generate a bearer token for this cluster. This may disappear, upstream issue:
+  # Generate bearer tokens for this cluster. This may disappear, upstream issue:
   # https://github.com/GoogleCloudPlatform/kubernetes/issues/3168
   KUBELET_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
   KUBE_PROXY_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
   KUBE_BEARER_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
+
+  # Create a username/password for accessing cluster.
+  get-password
 
   # Create kubeconfig used by kubelet and kube-proxy to connect to apiserver.
   (
@@ -672,7 +725,7 @@ users:
 clusters:
 - name: local
   cluster:
-     insecure-skip-tls-verify: true
+    certificate-authority-data: ${CA_CERT_BASE64}
 contexts:
 - context:
     cluster: local
@@ -694,7 +747,7 @@ users:
 clusters:
 - name: local
   cluster:
-     insecure-skip-tls-verify: true
+    certificate-authority-data: ${CA_CERT_BASE64}
 contexts:
 - context:
     cluster: local
@@ -710,5 +763,11 @@ EOF
     echo "${KUBE_BEARER_TOKEN},admin,admin" > "${KUBE_TEMP}/known-tokens.csv"
     echo "${KUBELET_TOKEN},kubelet,kubelet" >> "${KUBE_TEMP}/known-tokens.csv"
     echo "${KUBE_PROXY_TOKEN},kube_proxy,kube_proxy" >> "${KUBE_TEMP}/known-tokens.csv"
+  )
+
+  # Create basic-auth.csv used by apiserver to authenticate clients using HTTP basic auth.
+  (
+    umask 077
+    echo "${KUBE_PASSWORD},${KUBE_USER},admin" > "${KUBE_TEMP}/basic-auth.csv"
   )
 }

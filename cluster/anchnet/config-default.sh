@@ -18,10 +18,11 @@
 
 # Define number of nodes (minions). There will be only one master.
 export NUM_MINIONS=${NUM_MINIONS:-2}
-# Define the IP range used for service cluster IPs.
-export SERVICE_CLUSTER_IP_RANGE=192.168.3.0/24  # formerly PORTAL_NET
+# Define the IP range used for service cluster IPs. If this is ever changed,
+# fixed cluster service IP needs to be changed as well, including DNS_SERVER_IP.
+export SERVICE_CLUSTER_IP_RANGE=10.254.0.0/16  # formerly PORTAL_NET
 # Define the IP range used for flannel overlay network, should not conflict with above SERVICE_CLUSTER_IP_RANGE
-export FLANNEL_NET=172.16.0.0/16
+export FLANNEL_NET=172.16.0.0/12
 # Define the private SDN network name in anchnet.
 export VXNET_NAME="caicloud"
 # Define the internal IPs for instances in the above private SDN network.
@@ -60,7 +61,7 @@ DOCKER_OPTS=""
 # Optional: Install cluster DNS.
 ENABLE_CLUSTER_DNS=true
 # DNS_SERVER_IP must be a IP in SERVICE_CLUSTER_IP_RANGE
-DNS_SERVER_IP="192.168.3.100"
+DNS_SERVER_IP=10.254.0.100
 DNS_DOMAIN="cluster.local"
 DNS_REPLICAS=1
 

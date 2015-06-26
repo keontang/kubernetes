@@ -29,7 +29,7 @@ DEV_MODE=false
 #   ~/kube/node - Directory containing all node binaries
 #   Installed docker
 #   Installed bridge-utils
-INSTANCE_IMAGE="img-EBYD687W"
+INSTANCE_IMAGE="img-1MT6JC6I"
 
 # Helper constants.
 ANCHNET_CMD="anchnet"
@@ -72,13 +72,13 @@ function kube-up {
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
-    MASTER_INSTANCE_ID="i-R9L16LW2"
-    MASTER_EIP_ID="eip-3AF1DJM3"
-    MASTER_EIP="43.254.55.115"
-    NODE_INSTANCE_IDS="i-G6LUDOG0,i-WZ1TVLUY"
-    NODE_EIP_IDS="eip-353TW9G4,eip-K613022N"
-    NODE_EIPS="43.254.55.114,43.254.55.117"
-    PRIVATE_INTERFACE="eth1"
+    MASTER_INSTANCE_ID="i-E7MPPDL7"
+    MASTER_EIP_ID="eip-D2D5YSGK"
+    MASTER_EIP="43.254.52.57"
+    NODE_INSTANCE_IDS="i-SIP7N4S9,i-IPD3K0GE"
+    NODE_EIP_IDS="eip-UX3EPGEH,eip-E4EZPNUA"
+    NODE_EIPS="43.254.52.58,43.254.55.218"
+    PRIVATE_SDN_INTERFACE="eth1"
   else
     # Create master/node instances from anchnet without provision. The following
     # two methods will create a set of vars to be used later:
@@ -91,7 +91,7 @@ function kube-up {
     # Create a private SDN. Add master, nodes to it. The IP address of the machines
     # in this network are based on MASTER_INTERNAL_IP and NODE_INTERNAL_IPS. The
     # method will create one var:
-    #   PRIVATE_INTERFACE
+    #   PRIVATE_SDN_INTERFACE
     create-sdn-network
   fi
 
@@ -115,9 +115,56 @@ function kube-up {
 }
 
 
-# Step3 of cluster bootstrapping: verify cluster is up.
-function verify-cluster {
-  echo "Delegate verifying cluster to deployment manager"
+# Step3 of cluster bootstrapping: deploy addons.
+#
+# TODO: This is not a standard step: we changed kube-up.sh to call this method.
+# Deploying addons can't be done in kube-up because we must make sure our cluster
+# is validated. In some cloudproviders, deploying addons is done at kube master,
+# i.e. running as a backgroud service to repeatly check addon status.
+function deploy-addons {
+  # At this point, addon secrets have been created (in create-certs-and-credentials).
+  # Note we have to create the secrets beforehand, so that when provisioning master,
+  # it knows all the tokens (including addons). All other addons related setup will
+  # need to be performed here.
+
+  # These two files are copied from cluster/addons/dns, with gcr.io changed to dockerhub.
+  local -r skydns_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/skydns-rc.yaml.in"
+  local -r skydns_svc_file="${KUBE_ROOT}/cluster/anchnet/addons/skydns-svc.yaml.in"
+
+  # Replace placeholder with our configuration.
+  sed -e "s/{{ pillar\['dns_replicas'\] }}/${DNS_REPLICAS}/g;s/{{ pillar\['dns_domain'\] }}/${DNS_DOMAIN}/g" ${skydns_rc_file} > ${KUBE_TEMP}/skydns-rc.yaml
+  sed -e "s/{{ pillar\['dns_server'\] }}/${DNS_SERVER_IP}/g" ${skydns_svc_file} > ${KUBE_TEMP}/skydns-svc.yaml
+
+  (
+    echo "#!/bin/bash"
+    echo "mkdir -p ~/kube/addons"
+    echo "mv ~/kube/system:dns-secret ~/kube/skydns-rc.yaml ~/kube/skydns-svc.yaml ~/kube/addons"
+    echo "echo Creating dns secret..."
+    echo "sudo /opt/bin/kubectl create -f ~/kube/addons/system:dns-secret"
+    echo "echo Creating dns replication controller..."
+    echo "sudo /opt/bin/kubectl create -f ~/kube/addons/skydns-rc.yaml"
+    echo "echo Creating dns service..."
+    echo "sudo /opt/bin/kubectl create -f ~/kube/addons/skydns-svc.yaml"
+  ) > "${KUBE_TEMP}/addons-start.sh"
+  chmod a+x ${KUBE_TEMP}/addons-start.sh
+
+  # Copy addon configurationss and startup script to master instance under ~/kube.
+  scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+      ${KUBE_TEMP}/addons-start.sh \
+      ${KUBE_TEMP}/system:dns-secret \
+      ${KUBE_TEMP}/skydns-rc.yaml \
+      ${KUBE_TEMP}/skydns-svc.yaml \
+      "ubuntu@${MASTER_EIP}":~/kube
+
+  # Calling 'addons-start.sh' to start addons.
+    expect <<EOF
+set timeout 360
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ubuntu@${MASTER_EIP} "sudo ./kube/addons-start.sh"
+expect "*assword for*"
+send -- "${KUBE_INSTANCE_PASSWORD}\r"
+expect eof
+EOF
 }
 
 
@@ -389,7 +436,7 @@ EOF
 #   VXNET_NAME
 #
 # Vars set:
-#   PRIVATE_INTERFACE - The interface created by the SDN network
+#   PRIVATE_SDN_INTERFACE - The interface created by the SDN network
 function create-sdn-network {
   # Create a private SDN network.
   local vxnet_info=$(${ANCHNET_CMD} createvxnets ${VXNET_NAME})
@@ -407,7 +454,7 @@ function create-sdn-network {
   sleep 5                       # Some grace period
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
-  PRIVATE_INTERFACE="eth1"
+  PRIVATE_SDN_INTERFACE="eth1"
 }
 
 
@@ -442,7 +489,7 @@ function create-etcd-initial-cluster {
 #   MASTER_INTERNAL_IP
 #   ETCD_INITIAL_CLUSTER
 #   SERVICE_CLUSTER_IP_RANGE
-#   PRIVATE_INTERFACE
+#   PRIVATE_SDN_INTERFACE
 function provision-master {
   echo "+++++ Start provisioning master"
 
@@ -459,11 +506,11 @@ function provision-master {
     echo "create-kube-apiserver-opts \"${SERVICE_CLUSTER_IP_RANGE}\""
     echo "create-kube-controller-manager-opts"
     echo "create-kube-scheduler-opts"
-    echo "create-flanneld-opts ${PRIVATE_INTERFACE}"
+    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
     # Function 'create-private-interface-opts' creates network options used to
     # configure private sdn network interface.
-    echo "create-private-interface-opts ${PRIVATE_INTERFACE} ${MASTER_INTERNAL_IP} ${INTERNAL_IP_MASK}"
-    # The following two lines organize file structure a little bit.
+    echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_INTERNAL_IP} ${INTERNAL_IP_MASK}"
+    # The following lines organize file structure a little bit.
     echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security"
     echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security"
     # Create the system directories used to hold the final data.
@@ -555,9 +602,9 @@ function provision-nodes {
       echo "create-etcd-opts kubernetes-node${i} \"${node_internal_ip}\" \"${ETCD_INITIAL_CLUSTER}\""
       echo "create-kubelet-opts ${node_internal_ip} \"${MASTER_INTERNAL_IP}\" \"${DNS_SERVER_IP}\" \"${DNS_DOMAIN}\" \"${POD_INFRA_CONTAINER}\""
       echo "create-kube-proxy-opts \"${MASTER_INTERNAL_IP}\""
-      echo "create-flanneld-opts ${PRIVATE_INTERFACE}"
+      echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
       # Create network options.
-      echo "create-private-interface-opts ${PRIVATE_INTERFACE} ${node_internal_ip} ${INTERNAL_IP_MASK}"
+      echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${node_internal_ip} ${INTERNAL_IP_MASK}"
       # Organize files a little bit.
       echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security"
       # Create the system directories used to hold the final data.
@@ -657,6 +704,7 @@ EOF
 #   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/kubectl.key
 function create-certs-and-credentials {
   # TODO: Figure out this name.
+  echo "Creating certificats and credentials"
   MASTER_NAME="master"
 
   # 'octects' will be an arrary of segregated IP, e.g. 192.168.3.0/24 => 192 168 3 0
@@ -770,4 +818,68 @@ EOF
     umask 077
     echo "${KUBE_PASSWORD},${KUBE_USER},admin" > "${KUBE_TEMP}/basic-auth.csv"
   )
+
+  echo "Creating service accounts secrets..."
+  # Create tokens for service accounts. 'service_accounts' refers to things that
+  # provide services based on apiserver, including scheduler, controller_manager
+  # and addons (Note scheduler and controller_manager are not actually used in
+  # our setup, but we keep it here for tracking. The reason for having such secrets
+  # for these service accounts is to run them as Pod, aka, self-hosting).
+  local -r service_accounts=("system:scheduler" "system:controller_manager" "system:dns")
+  for account in "${service_accounts[@]}"; do
+    token=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
+    # TODO: Fix hardcoded port.
+    create-kubeconfig-secret "${token}" "${account}" "https://${MASTER_EIP}:6443" "${KUBE_TEMP}/${account}-secret"
+    echo "${token},${account},${account}" >> "${KUBE_TEMP}/known-tokens.csv"
+  done
+}
+
+
+# Create a kubeconfig file used for addons to contact apiserver. Note this is not
+# used to create kubeconfig for kubelet and kube-proxy, since they have slightly
+# different contents.
+#
+# Input:
+#   $1 The base64 encoded token
+#   $2 Username, e.g. system:dns
+#   $3 Server to connect to, e.g. master_ip:port
+#   $4 File to write the secret.
+function create-kubeconfig-secret {
+  local -r token=$1
+  local -r username=$2
+  local -r server=$3
+  local -r file=$4
+  local -r safe_username=$(tr -s ':_' '--' <<< "${username}")
+
+  # Make a kubeconfig file with token.
+  cat > "${KUBE_TEMP}/kubeconfig" <<EOF
+apiVersion: v1
+kind: Config
+users:
+- name: ${username}
+  user:
+    token: ${token}
+clusters:
+- name: local
+  cluster:
+     server: ${server}
+     certificate-authority-data: ${CA_CERT_BASE64}
+contexts:
+- context:
+    cluster: local
+    user: ${username}
+  name: service-account-context
+current-context: service-account-context
+EOF
+
+  local -r kubeconfig_base64=$(cat "${KUBE_TEMP}/kubeconfig" | base64 | tr -d '\r\n')
+  cat > $4 <<EOF
+apiVersion: v1
+data:
+  kubeconfig: ${kubeconfig_base64}
+kind: Secret
+metadata:
+  name: token-${safe_username}
+type: Opaque
+EOF
 }

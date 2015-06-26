@@ -61,6 +61,8 @@ function main {
   # Create a file used to install nodes. NOTE: The script will be ran multiple
   # times to make sure things are installed properly.
   (
+    echo "cp ~/kube/common/* ~/kube/master"
+    echo "cp ~/kube/common/* ~/kube/node"
     echo "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9"
     echo "sudo sh -c \"echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list\""
     echo "sudo apt-get update"
@@ -74,8 +76,10 @@ function main {
       "ubuntu@${eip}" "mkdir -p ~/kube"
   # Copy master/node components to the instance; can be very slow based on network.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-      ${KUBE_TEMP}/master ${KUBE_TEMP}/node ${KUBE_TEMP}/install.sh "ubuntu@${eip}":~/kube
+      ${KUBE_TEMP}/master ${KUBE_TEMP}/node ${KUBE_TEMP}/common ${KUBE_TEMP}/install.sh \
+      "ubuntu@${eip}":~/kube
   # Run the installation script twice.
+  # TODO: Running the script can be very slow, so we may have password prompt again.
   expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
@@ -91,9 +95,10 @@ EOF
 }
 
 
-# Download release to a temp dir, organized by master and node. E.g.
+# Download release to a temp dir, organized by master, node and common. E.g.
 #  /tmp/kubernetes.EuWJ4M/master
 #  /tmp/kubernetes.EuWJ4M/node
+#  /tmp/kubernetes.EuWJ4M/common
 #
 # TODO: We should use our own k8s release, of course :)
 #
@@ -109,6 +114,7 @@ function download-release {
 
   mkdir "${KUBE_TEMP}"/master
   mkdir "${KUBE_TEMP}"/node
+  mkdir "${KUBE_TEMP}"/common
 
   (cd "${KUBE_TEMP}"
    echo "Download flannel release ..."
@@ -117,8 +123,7 @@ function download-release {
      tar xzf flannel.tar.gz
    fi
    # Put flanneld in master also we can use kubectl proxy.
-   cp flannel-${FLANNEL_VERSION}/flanneld master
-   cp flannel-${FLANNEL_VERSION}/flanneld node
+   cp flannel-${FLANNEL_VERSION}/flanneld common
 
    echo "Download etcd release ..."
    ETCD="etcd-${ETCD_VERSION}-linux-amd64"
@@ -126,8 +131,7 @@ function download-release {
      curl -L https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/${ETCD}.tar.gz -o etcd.tar.gz
      tar xzf etcd.tar.gz
    fi
-   cp $ETCD/etcd $ETCD/etcdctl master
-   cp $ETCD/etcd $ETCD/etcdctl node
+   cp $ETCD/etcd $ETCD/etcdctl common
 
    echo "Download kubernetes release ..."
    if [ ! -f kubernetes.tar.gz ] ; then
@@ -142,6 +146,7 @@ function download-release {
       kubernetes/server/kubernetes/server/bin/kube-scheduler master
    cp kubernetes/server/kubernetes/server/bin/kubelet \
       kubernetes/server/kubernetes/server/bin/kube-proxy node
+   cp kubernetes/server/kubernetes/server/bin/kubectl common
    rm -rf flannel* kubernetes* etcd*
 
    echo "Done! Downloaded all components in ${KUBE_TEMP}"

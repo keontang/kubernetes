@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Reconfigure docker network setting
+# Reconfigure docker network setting.
 
 function reconfig-docker-net {
   if [ "$(id -u)" != "0" ]; then
@@ -28,7 +28,7 @@ function reconfig-docker-net {
     if [[ "$?" == 0 ]]; then
       break
     else
-      # TODO: Timeout seems arbitrary
+      # TODO: Timeout seems arbitrary.
       if (( attempt > 600 )); then
         echo "timeout for waiting network config" > ~/kube/err.log
         exit 2
@@ -40,8 +40,16 @@ function reconfig-docker-net {
     fi
   done
 
-  # Wait for /run/flannel/subnet.env to be ready
+  # Wait for /run/flannel/subnet.env to be ready.
+  # TODO: Sleep seems arbitrary.
   sleep 15
+
+  # In order for docker to correctly use flannel setting, we first stop docker,
+  # flush nat table, delete docker0 and then start docker. Missing any one of
+  # the steps may result in wrong iptable rules, see:
+  # https://github.com/caicloud/caicloud-kubernetes/issues/25
+  sudo service docker stop
+  iptables -t nat -F
   sudo ip link set dev docker0 down
   sudo brctl delbr docker0
 
@@ -49,5 +57,5 @@ function reconfig-docker-net {
 
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
        --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU}\" > /etc/default/docker
-  sudo service docker restart
+  sudo service docker start
 }

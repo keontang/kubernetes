@@ -294,7 +294,7 @@ function create-master-instance {
 #   NODE_EIP_IDS - comma separated string of instance external IP IDs
 #   NODE_EIPS - comma separated string of instance external IPs
 function create-node-instances {
-  for (( i=0; i<${NUM_MINIONS}; i++)); do
+  for (( i=0; i<${NUM_MINIONS}; i++ )); do
     echo "+++++ Creating kubernetes node-${i} from anchnet"
 
     # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
@@ -562,9 +562,10 @@ function provision-master {
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
       "ubuntu@${MASTER_EIP}":~/kube
 
-  # Call master-start.sh to start master.
+  # Call master-start.sh to start master. Note since we don't run flanneld on master,
+  # we don't need to run expect in background.
   expect <<EOF
-set timeout 360
+set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@${MASTER_EIP} "sudo ~/kube/master-start.sh"
 expect "*assword for*"
@@ -590,9 +591,10 @@ EOF
 #   POD_INFRA_CONTAINER
 #   PER_USER_CONFIG_FILE
 function provision-nodes {
+  local pids=""
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
 
-  for ((i=0; i<${NUM_MINIONS}; i++)); do
+  for (( i=0; i<${NUM_MINIONS}; i++ )); do
     echo "+++++ Start provisioning node-${i}"
     local node_internal_ip="${NODE_INTERNAL_IP_PREFIX}.${i}"
     local node_eip=${node_eip_arr[${i}]}
@@ -650,17 +652,31 @@ function provision-nodes {
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
         "ubuntu@${node_eip}":~/kube
+  done
 
-    # Call node${i}-start.sh to start node.
-    expect <<EOF
-set timeout 360
+  local i=0
+  for node_eip in "${node_eip_arr[@]}"; do
+    echo "+++++ Start provisioning node-${i}"
+    # Call node${i}-start.sh to start node. Note we must run expect in background;
+    # otherwise, there will be a deadlock: node0-start.sh keeps retrying for etcd
+    # connection (for docker-flannel reconfiguration) because other nodes aren't
+    # ready. If we run expect in foreground, we can't start other nodes; thus node0
+    # will wait until timeout.
+    expect <<EOF &
+set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@${node_eip} "sudo ./kube/node${i}-start.sh"
 expect "*assword for*"
 send -- "${KUBE_INSTANCE_PASSWORD}\r"
 expect eof
 EOF
+    pids="$pids $!"
+    i=$(($i+1))
   done
+
+  echo "Wait for all nodes to be provisioned..."
+  wait $pids
+  echo "All nodes have been provisioned..."
 }
 
 

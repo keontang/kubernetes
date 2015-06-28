@@ -66,9 +66,14 @@ function kube-up {
   # Make sure we have a public/private key pair used to provision the machine.
   ensure-pub-key
 
-  # Get all cluster configuration parameters from config-default.
   KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
+  DEFAULT_PER_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
+  PER_USER_CONFIG_FILE=${PER_USER_CONFIG_FILE:-${DEFAULT_PER_USER_CONFIG_FILE}}
+  echo "Reading per user configuration from ${PER_USER_CONFIG_FILE}"
+  
+  # Get all cluster configuration parameters from config-default and per user config.
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+  source "${PER_USER_CONFIG_FILE}"
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
@@ -249,6 +254,8 @@ function json_val {
 #   KUBE_ROOT
 #   KUBE_TEMP
 #   KUBE_INSTANCE_PASSWORD
+#   MASTER_CPU_CORES
+#   MASTER_MEM_SIZE
 #
 # Vars set:
 #   MASTER_INSTANCE_ID
@@ -258,7 +265,8 @@ function create-master-instance {
   echo "+++++ Creating kubernetes master from anchnet"
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
-  local master_info=$(${ANCHNET_CMD} runinstance master -p="${KUBE_INSTANCE_PASSWORD}" -i="${INSTANCE_IMAGE}")
+  local master_info=$(${ANCHNET_CMD} runinstance master -p="${KUBE_INSTANCE_PASSWORD}" -i="${INSTANCE_IMAGE}" \
+                      -m=${MASTER_MEM} -c=${MASTER_CPU_CORES})
   MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
   MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
 
@@ -278,6 +286,8 @@ function create-master-instance {
 #
 # Assumed vars:
 #   NUM_MINIONS
+#   NODE_MEM
+#   NODE_CPU_CORES
 #
 # Vars set:
 #   NODE_INSTANCE_IDS - comma separated string of instance IDs
@@ -288,7 +298,8 @@ function create-node-instances {
     echo "+++++ Creating kubernetes node-${i} from anchnet"
 
     # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
-    local node_info=$(${ANCHNET_CMD} runinstance node-${i} -p="${KUBE_INSTANCE_PASSWORD}" -i="${INSTANCE_IMAGE}")
+    local node_info=$(${ANCHNET_CMD} runinstance node-${i} -p="${KUBE_INSTANCE_PASSWORD}" -i="${INSTANCE_IMAGE}" \
+                      -m="${NODE_MEM}" -c="${NODE_CPU_CORES}")
     local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
     local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
 
@@ -462,17 +473,16 @@ function create-sdn-network {
 #
 # Assumed vars:
 #   MASTER_INTERNAL_IP
-#   NODE_INTERNAL_IPS
+#   NODE_INTERNAL_IP_PREFIX
 #
 # Vars set:
 #   ETCD_INITIAL_CLUSTER - variable supplied to etcd for static cluster discovery.
 function create-etcd-initial-cluster {
   ETCD_INITIAL_CLUSTER="kubernetes-master=http://${MASTER_INTERNAL_IP}:2380"
-  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
-  local i=0
-  for node_internal_ip in "${node_iip_arr[@]}"; do
+  # Assuming NUM_MINIONS < 255.
+  for ((i=0; i<${NUM_MINIONS}; i++)); do
+    local node_internal_ip="${NODE_INTERNAL_IP_PREFIX}.${i}"
     ETCD_INITIAL_CLUSTER="$ETCD_INITIAL_CLUSTER,kubernetes-node${i}=http://${node_internal_ip}:2380"
-    i=$(($i+1))
   done
 }
 
@@ -490,6 +500,7 @@ function create-etcd-initial-cluster {
 #   ETCD_INITIAL_CLUSTER
 #   SERVICE_CLUSTER_IP_RANGE
 #   PRIVATE_SDN_INTERFACE
+#   PER_USER_CONFIG_FILE
 function provision-master {
   echo "+++++ Start provisioning master"
 
@@ -499,6 +510,7 @@ function provision-master {
     echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+    grep -v "^#" "${PER_USER_CONFIG_FILE}"
     echo ""
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
@@ -571,18 +583,18 @@ EOF
 #   KUBE_ROOT
 #   KUBE_TEMP
 #   NODE_EIPS
-#   NODE_INTERNAL_IPS
+#   NODE_INTERNAL_IP_PREFIX
 #   ETCD_INITIAL_CLUSTER
 #   DNS_SERVER_IP
 #   DNS_DOMAIN
 #   POD_INFRA_CONTAINER
+#   PER_USER_CONFIG_FILE
 function provision-nodes {
-  local i=0
-  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
 
-  for node_internal_ip in "${node_iip_arr[@]}"; do
+  for ((i=0; i<${NUM_MINIONS}; i++)); do
     echo "+++++ Start provisioning node-${i}"
+    local node_internal_ip="${NODE_INTERNAL_IP_PREFIX}.${i}"
     local node_eip=${node_eip_arr[${i}]}
     # TODO: In 'create-kubelet-opts', we use ${node_internal_ip} as kubelet host
     #   override due to lack of cloudprovider support. This essentially means that
@@ -648,7 +660,6 @@ expect "*assword for*"
 send -- "${KUBE_INSTANCE_PASSWORD}\r"
 expect eof
 EOF
-    i=$(($i+1))
   done
 }
 

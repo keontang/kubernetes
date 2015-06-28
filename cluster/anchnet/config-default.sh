@@ -24,10 +24,10 @@ export FLANNEL_NET=172.16.0.0/12
 # Define the private SDN network name in anchnet.
 export VXNET_NAME="caicloud"
 # Define the internal IPs for instances in the above private SDN network.
-export INTERNAL_IP_RANGE=10.244.0.1/16
+export INTERNAL_IP_RANGE=10.244.0.0/16
 export INTERNAL_IP_MASK=255.255.0.0
-export MASTER_INTERNAL_IP="10.244.0.1"
-export NODE_INTERNAL_IP_PREFIX="10.244.1"
+export MASTER_INTERNAL_IP=10.244.0.1
+export NODE_INTERNAL_IP_RANGE=10.244.1.0/16
 
 # Admission Controllers to invoke prior to persisting objects in cluster
 ADMISSION_CONTROL=NamespaceLifecycle,NamespaceAutoProvision,LimitRanger,ServiceAccount,ResourceQuota

@@ -16,8 +16,6 @@
 
 ## Contains configuration values for the Ubuntu cluster
 
-# Define number of nodes (minions). There will be only one master.
-export NUM_MINIONS=${NUM_MINIONS:-2}
 # Define the IP range used for service cluster IPs. If this is ever changed,
 # fixed cluster service IP needs to be changed as well, including DNS_SERVER_IP.
 export SERVICE_CLUSTER_IP_RANGE=10.254.0.0/16  # formerly PORTAL_NET
@@ -26,13 +24,10 @@ export FLANNEL_NET=172.16.0.0/12
 # Define the private SDN network name in anchnet.
 export VXNET_NAME="caicloud"
 # Define the internal IPs for instances in the above private SDN network.
-# TODO: Make it easier to specify internal IPs. There can be a specific
-#   pattern here, e.g. node IP starts from 10.244.1.0 and increment by 1
-#   for subsequent nodes. So a helper shell function should suffice.
 export INTERNAL_IP_RANGE=10.244.0.1/16
 export INTERNAL_IP_MASK=255.255.0.0
 export MASTER_INTERNAL_IP="10.244.0.1"
-export NODE_INTERNAL_IPS="10.244.1.0,10.244.1.1"
+export NODE_INTERNAL_IP_PREFIX="10.244.1"
 
 # Admission Controllers to invoke prior to persisting objects in cluster
 ADMISSION_CONTROL=NamespaceLifecycle,NamespaceAutoProvision,LimitRanger,ServiceAccount,ResourceQuota

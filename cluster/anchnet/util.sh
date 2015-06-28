@@ -70,7 +70,7 @@ function kube-up {
   DEFAULT_PER_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
   PER_USER_CONFIG_FILE=${PER_USER_CONFIG_FILE:-${DEFAULT_PER_USER_CONFIG_FILE}}
   echo "Reading per user configuration from ${PER_USER_CONFIG_FILE}"
-  
+
   # Get all cluster configuration parameters from config-default and per user config.
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
   source "${PER_USER_CONFIG_FILE}"
@@ -93,15 +93,20 @@ function kube-up {
     # TODO: Firewall setup, need a method create-firewall.
     create-master-instance
     create-node-instances
-    # Create a private SDN. Add master, nodes to it. The IP address of the machines
-    # in this network are based on MASTER_INTERNAL_IP and NODE_INTERNAL_IPS. The
-    # method will create one var:
-    #   PRIVATE_SDN_INTERFACE
+    # Create a private SDN; then add master, nodes to it. The IP address of the
+    # machines in this network are not set yet, but will be set during provision
+    # based on two variables: MASTER_INTERNAL_IP and NODE_INTERNAL_IPS. This method
+    # will create one var:
+    #   PRIVATE_SDN_INTERFACE - the interface created on each machine for the sdn network.
     create-sdn-network
   fi
 
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
+  # The following methods generate variables used to provision master and nodes:
+  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
+  #   NODE_INTERNAL_IPS - comma separated string of node internal ips
+  create-node-internal-ips
   create-etcd-initial-cluster
 
   # Now start provisioning master and nodes.
@@ -469,19 +474,95 @@ function create-sdn-network {
 }
 
 
+# Create a comma separated string of node internal ips based on the cluster
+# config NODE_INTERNAL_IP_RANGE and NUM_MINIONS. E.g. if NODE_INTERNAL_IP_RANGE
+# is 10.244.1.0/16 and NUM_MINIONS is 2, then output: "10.244.1.0,10.244.1.1".
+#
+# Assumed vars:
+#   NODE_INTERNAL_IP_RANGE
+#   NUM_MINIONS
+#
+# Vars set:
+#   NODE_INTERNAL_IPS
+function create-node-internal-ips {
+  # Transform NODE_INTERNAL_IP_RANGE into different info, e.g. 10.244.1.0/16 =>
+  #   cidr = 16
+  #   ip_octects = 10 244 1 0
+  #   mask_octects = 255 255 0 0
+  cidr=($(echo "$NODE_INTERNAL_IP_RANGE" | sed -e 's|.*/||'))
+  ip_octects=($(echo "$NODE_INTERNAL_IP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
+  mask_octects=($(cdr2mask ${cidr} | sed -e 's/\./ /g'))
+
+  # Total Number of hosts in this subnet. e.g. 10.244.1.0/16 => 65534. This number
+  # excludes address *.0.0 and *.255.255.
+  total_count=$(((2**(32-${cidr}))-2))
+
+  # Number of used hosts in this subnet. E.g. For 10.244.1.0/16, there are already
+  # 256 addresses used (10.244.0.1, 10.244.0.2, etc), we need to exclude these IP
+  # addresses when counting the real number of nodes we can use.
+  used_count=0
+  weight=($((2**32)) $((2**16)) $((2**8)) 1)
+  for (( i=0; i<4; i++ )); do
+    current=$(( ((255 - mask_octects[i]) & ip_octects[i]) * weight[i] ))
+    used_count=$(( used_count + current))
+  done
+
+  if (( NUM_MINIONS > (total_count - used_count) )); then
+    echo "Number of nodes is larger than allowed node internal IP address"
+    exit 1
+  fi
+
+  # Since we've checked the required number of hosts < total number of hosts,
+  # we can just simply add 1 to previous IP.
+  for (( i=0; i<${NUM_MINIONS}; i++ )); do
+    local ip=$(echo "${ip_octects[*]}" | sed 's/ /./g')
+    if [[ -z "${NODE_INTERNAL_IPS-}" ]]; then
+      NODE_INTERNAL_IPS="${ip}"
+    else
+      NODE_INTERNAL_IPS="${NODE_INTERNAL_IPS},${ip}"
+    fi
+    ((ip_octects[3]+=1))
+    if [[ "${ip_octects[3]}" == "256" ]]; then
+      ip_octects[3]=0
+      ((ip_octects[2]+=1))
+    fi
+    if [[ "${ip_octects[2]}" == "256" ]]; then
+      ip_octects[2]=0
+      ((ip_octects[1]+=1))
+    fi
+    if [[ "${ip_octects[1]}" == "256" ]]; then
+      ip_octects[1]=0
+      ((ip_octects[0]+=1))
+    fi
+  done
+}
+
+
+# Convert cidr to netmask, e.g. 16 -> 255.255.0.0
+#
+# Input:
+#   $1 cidr
+function cdr2mask {
+  # Number of args to shift, 255..255, first non-255 byte, zeroes
+  set -- $(( 5 - ($1 / 8) )) 255 255 255 255 $(( (255 << (8 - ($1 % 8))) & 255 )) 0 0 0
+  [ $1 -gt 1 ] && shift $1 || shift
+  echo ${1-0}.${2-0}.${3-0}.${4-0}
+}
+
+
 # Create static etcd cluster.
 #
 # Assumed vars:
 #   MASTER_INTERNAL_IP
-#   NODE_INTERNAL_IP_PREFIX
+#   NODE_INTERNAL_IPS
 #
 # Vars set:
 #   ETCD_INITIAL_CLUSTER - variable supplied to etcd for static cluster discovery.
 function create-etcd-initial-cluster {
   ETCD_INITIAL_CLUSTER="kubernetes-master=http://${MASTER_INTERNAL_IP}:2380"
-  # Assuming NUM_MINIONS < 255.
-  for ((i=0; i<${NUM_MINIONS}; i++)); do
-    local node_internal_ip="${NODE_INTERNAL_IP_PREFIX}.${i}"
+  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
+  for (( i=0; i<${NUM_MINIONS}; i++ )); do
+    node_internal_ip="${node_iip_arr[i]}"
     ETCD_INITIAL_CLUSTER="$ETCD_INITIAL_CLUSTER,kubernetes-node${i}=http://${node_internal_ip}:2380"
   done
 }
@@ -584,7 +665,7 @@ EOF
 #   KUBE_ROOT
 #   KUBE_TEMP
 #   NODE_EIPS
-#   NODE_INTERNAL_IP_PREFIX
+#   NODE_INTERNAL_IPS
 #   ETCD_INITIAL_CLUSTER
 #   DNS_SERVER_IP
 #   DNS_DOMAIN
@@ -592,11 +673,12 @@ EOF
 #   PER_USER_CONFIG_FILE
 function provision-nodes {
   local pids=""
+  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
 
   for (( i=0; i<${NUM_MINIONS}; i++ )); do
     echo "+++++ Start provisioning node-${i}"
-    local node_internal_ip="${NODE_INTERNAL_IP_PREFIX}.${i}"
+    local node_internal_ip=${node_iip_arr[${i}]}
     local node_eip=${node_eip_arr[${i}]}
     # TODO: In 'create-kubelet-opts', we use ${node_internal_ip} as kubelet host
     #   override due to lack of cloudprovider support. This essentially means that

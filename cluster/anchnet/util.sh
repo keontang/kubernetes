@@ -104,8 +104,8 @@ function kube-up {
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
   # The following methods generate variables used to provision master and nodes:
-  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
   #   NODE_INTERNAL_IPS - comma separated string of node internal ips
+  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
   create-node-internal-ips
   create-etcd-initial-cluster
 
@@ -299,7 +299,7 @@ function create-master-instance {
 #   NODE_EIP_IDS - comma separated string of instance external IP IDs
 #   NODE_EIPS - comma separated string of instance external IPs
 function create-node-instances {
-  for (( i=0; i<${NUM_MINIONS}; i++ )); do
+  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
     echo "+++++ Creating kubernetes node-${i} from anchnet"
 
     # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
@@ -493,19 +493,32 @@ function create-node-internal-ips {
   ip_octects=($(echo "$NODE_INTERNAL_IP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
   mask_octects=($(cdr2mask ${cidr} | sed -e 's/\./ /g'))
 
-  # Total Number of hosts in this subnet. e.g. 10.244.1.0/16 => 65534. This number
-  # excludes address *.0.0 and *.255.255.
-  total_count=$(((2**(32-${cidr}))-2))
+  # Total Number of hosts in this subnet. e.g. 10.244.1.0/16 => 65535. This number
+  # excludes address all-ones address (*.255.255); for all-zeros address (*.0.0),
+  # we decides how to exclude it below.
+  total_count=$(((2**(32-${cidr}))-1))
 
   # Number of used hosts in this subnet. E.g. For 10.244.1.0/16, there are already
-  # 256 addresses used (10.244.0.1, 10.244.0.2, etc), we need to exclude these IP
-  # addresses when counting the real number of nodes we can use.
+  # 256 addresses allocated (10.244.0.1, 10.244.0.2, etc, typically for master
+  # instances), we need to exclude these IP addresses when counting the real number
+  # of nodes we can use. See below comment above how we handle all-zeros address.
   used_count=0
   weight=($((2**32)) $((2**16)) $((2**8)) 1)
-  for (( i=0; i<4; i++ )); do
+  for (( i = 0; i < 4; i++ )); do
     current=$(( ((255 - mask_octects[i]) & ip_octects[i]) * weight[i] ))
-    used_count=$(( used_count + current))
+    used_count=$(( used_count + current ))
   done
+
+  # If used_count is 0, then our format must be something like 10.244.0.0/16, where
+  # host part is all-zeros. In this case, we add one to used_count to exclude the
+  # all-zeros address. If used_count is not 0, then we already excluded all-zeros
+  # address in the above calculation, e.g. for 10.244.1.0/16, we get 256 used addresses,
+  # which includes all-zero address.
+  local host_zeros=false
+  if [[ ${used_count} == 0 ]]; then
+    ((used_count+=1))
+    host_zeros=true
+  fi
 
   if (( NUM_MINIONS > (total_count - used_count) )); then
     echo "Number of nodes is larger than allowed node internal IP address"
@@ -514,7 +527,11 @@ function create-node-internal-ips {
 
   # Since we've checked the required number of hosts < total number of hosts,
   # we can just simply add 1 to previous IP.
-  for (( i=0; i<${NUM_MINIONS}; i++ )); do
+  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
+    # Avoid using all-zeros address for CIDR like 10.244.0.0/16.
+    if [[ ${i} == 0 && ${host_zeros} == true ]]; then
+      ((ip_octects[3]+=1))
+    fi
     local ip=$(echo "${ip_octects[*]}" | sed 's/ /./g')
     if [[ -z "${NODE_INTERNAL_IPS-}" ]]; then
       NODE_INTERNAL_IPS="${ip}"
@@ -522,18 +539,12 @@ function create-node-internal-ips {
       NODE_INTERNAL_IPS="${NODE_INTERNAL_IPS},${ip}"
     fi
     ((ip_octects[3]+=1))
-    if [[ "${ip_octects[3]}" == "256" ]]; then
-      ip_octects[3]=0
-      ((ip_octects[2]+=1))
-    fi
-    if [[ "${ip_octects[2]}" == "256" ]]; then
-      ip_octects[2]=0
-      ((ip_octects[1]+=1))
-    fi
-    if [[ "${ip_octects[1]}" == "256" ]]; then
-      ip_octects[1]=0
-      ((ip_octects[0]+=1))
-    fi
+    for (( k = 3; k > 0; k--)); do
+      if [[ "${ip_octects[k]}" == "256" ]]; then
+        ip_octects[k]=0
+        ((ip_octects[k-1]+=1))
+      fi
+    done
   done
 }
 
@@ -561,7 +572,7 @@ function cdr2mask {
 function create-etcd-initial-cluster {
   ETCD_INITIAL_CLUSTER="kubernetes-master=http://${MASTER_INTERNAL_IP}:2380"
   IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
-  for (( i=0; i<${NUM_MINIONS}; i++ )); do
+  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
     node_internal_ip="${node_iip_arr[i]}"
     ETCD_INITIAL_CLUSTER="$ETCD_INITIAL_CLUSTER,kubernetes-node${i}=http://${node_internal_ip}:2380"
   done
@@ -676,7 +687,7 @@ function provision-nodes {
   IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
 
-  for (( i=0; i<${NUM_MINIONS}; i++ )); do
+  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
     echo "+++++ Start provisioning node-${i}"
     local node_internal_ip=${node_iip_arr[${i}]}
     local node_eip=${node_eip_arr[${i}]}

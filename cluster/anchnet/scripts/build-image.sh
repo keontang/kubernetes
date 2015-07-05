@@ -31,7 +31,7 @@ K8S_VERSION="v0.19.3"
 DOCKER_VERSION="1.6.2"
 KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../../..
 source "${KUBE_ROOT}/cluster/anchnet/util.sh"
 
 

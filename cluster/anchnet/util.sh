@@ -152,17 +152,8 @@ function deploy-addons {
   sed -e "s/{{ pillar\['dns_replicas'\] }}/${DNS_REPLICAS}/g;s/{{ pillar\['dns_domain'\] }}/${DNS_DOMAIN}/g" ${skydns_rc_file} > ${KUBE_TEMP}/skydns-rc.yaml
   sed -e "s/{{ pillar\['dns_server'\] }}/${DNS_SERVER_IP}/g" ${skydns_svc_file} > ${KUBE_TEMP}/skydns-svc.yaml
 
-  (
-    echo "#!/bin/bash"
-    echo "mkdir -p ~/kube/addons"
-    echo "mv ~/kube/system:dns-secret ~/kube/skydns-rc.yaml ~/kube/skydns-svc.yaml ~/kube/addons"
-    echo "echo Creating dns secret..."
-    echo "sudo /opt/bin/kubectl create -f ~/kube/addons/system:dns-secret"
-    echo "echo Creating dns replication controller..."
-    echo "sudo /opt/bin/kubectl create -f ~/kube/addons/skydns-rc.yaml"
-    echo "echo Creating dns service..."
-    echo "sudo /opt/bin/kubectl create -f ~/kube/addons/skydns-svc.yaml"
-  ) > "${KUBE_TEMP}/addons-start.sh"
+  # Move addons-start script to temp directory to get copied to master
+  mv ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh ${KUBE_TEMP}/addons-start.sh
   chmod a+x ${KUBE_TEMP}/addons-start.sh
 
   # Copy addon configurationss and startup script to master instance under ~/kube.

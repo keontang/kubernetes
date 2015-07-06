@@ -1,0 +1,78 @@
+// Copyright 2015 anchnet-go authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"strings"
+
+	anchnet "github.com/caicloud/anchnet-go"
+	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
+)
+
+func execCreateVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Vxnet name required")
+		os.Exit(1)
+	}
+
+	request := anchnet.CreateVxnetsRequest{
+		VxnetName: args[0],
+		VxnetType: anchnet.VxnetTypePriv,
+		Count:     1,
+	}
+	var response anchnet.CreateVxnetsResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}
+
+func execDescribeVxnets(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Vxnet IDs required")
+		os.Exit(1)
+	}
+
+	request := anchnet.DescribeVxnetsRequest{
+		Vxnets: strings.Split(args[0], ","),
+	}
+	var response anchnet.DescribeVxnetsResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}
+
+func execJoinVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) != 2 {
+		fmt.Fprintln(os.Stderr, "Vxnet and instances IDs required")
+		os.Exit(1)
+	}
+
+	request := anchnet.JoinVxnetRequest{
+		Vxnet:     args[0],
+		Instances: strings.Split(args[1], ","),
+	}
+	var response anchnet.JoinVxnetResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}

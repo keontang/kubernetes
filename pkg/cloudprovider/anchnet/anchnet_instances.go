@@ -26,6 +26,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/resource"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
+	"github.com/golang/glog"
 
 	anchnet_client "github.com/caicloud/anchnet-go"
 )
@@ -111,37 +112,52 @@ func (an *Anchnet) CurrentNodeName(hostname string) (string, error) {
 }
 
 // describeInstance returns details of node from anchnet; 'name' is instance id,
-// e.g. i-E7MPPDL7.  Querying anchnet can fail unexpectly, so we need retry.
+// e.g. i-E7MPPDL7. Querying anchnet can fail unexpectly, so we need retry.
 func (an *Anchnet) describeInstance(name string) (*anchnet_client.DescribeInstancesResponse, error) {
-	for i := 0; i < 5; i++ {
+	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.DescribeInstancesRequest{
-			Instances:  []string{name},
-			Verbose:    1,
-			Offset:     0,
-			SearchWord: "",
-			Limit:      1,
+			Instances: []string{name},
+			Verbose:   1,
 		}
-		response, err := an.client.DescribeInstances(request)
-		if err != nil {
-			return nil, err
+		var response anchnet_client.DescribeInstancesResponse
+		err := an.client.SendRequest(request, &response)
+		if err == nil {
+			if len(response.ItemSet) == 0 {
+				return nil, fmt.Errorf("Instance %v doesn't exist\n", name)
+			} else {
+				return &response, nil
+			}
 		}
-		if len(response.ItemSet) != 0 {
-			return response, nil
-		}
-		fmt.Printf("Attemp %d: no response for %v\n", i, name)
-		time.Sleep(2 * time.Second)
+		glog.Errorf("Attemp %d: failed to send request for %v: %v\n", i, name, err)
+		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, errors.New("Not Found")
+	return nil, fmt.Errorf("Unable to find instance %v\n", name)
 }
 
 // searchInstances returns nodes matching search_word.
 func (an *Anchnet) searchInstances(search_word string) (*anchnet_client.DescribeInstancesResponse, error) {
-	request := anchnet_client.DescribeInstancesRequest{
-		Verbose:    1,
-		SearchWord: search_word,
-		Status:     []string{"running"},
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.DescribeInstancesRequest{
+			SearchWord: search_word,
+			// We must give 'running' status; otherwise, we may find terminated instance.
+			Status: []anchnet_client.InstanceStatus{
+				anchnet_client.InstanceStatusRunning,
+			},
+			Verbose: 1,
+		}
+		var response anchnet_client.DescribeInstancesResponse
+		err := an.client.SendRequest(request, &response)
+		if err == nil {
+			if len(response.ItemSet) == 0 {
+				return nil, fmt.Errorf("Instance with name %v doesn't exist\n", search_word)
+			} else {
+				return &response, nil
+			}
+		}
+		glog.Errorf("Attemp %d: failed to get instance with name %v: %v\n", i, search_word, err)
+		time.Sleep(RetryIntervalOnError)
 	}
-	return an.client.DescribeInstances(request)
+	return nil, fmt.Errorf("Unable to find instance with name %v\n", search_word)
 }
 
 // makeResources converts bare resources to api spec'd resource, cpu is in cores, memory is in GiB.

@@ -10,6 +10,96 @@ import (
 	"testing"
 )
 
+// TestDescribeVolumes tests that we send correct request to describe volumes.
+func TestDescribeVolumes(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "limit": 10,
+  "search_word": "hh",
+  "status": ["pending", "available", "in-use", "suspended"],
+  "volumes": ["vol-75LIXUQD"],
+  "token": "E5I9QKJF1O2B5PXE68LG",
+  "action": "DescribeVolumes",
+  "zone": "ac1"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code": 0,
+  "action": "DescribeVolumesResponse",
+  "item_set": [
+    {
+      "volume_id": "vol-75LIXUQD",
+      "volume_name": "hh",
+      "description": "51idc",
+      "size": 10,
+      "status": "in-use",
+      "status_time": "2015-02-26 15:19:48",
+      "volume_type": 0,
+      "create_time": "2015-02-26 13:24:44",
+      "instance": {
+        "instance_id": "i-UN3CH6YH",
+        "instance_name": "yy"
+      }
+    }
+  ],
+  "code": 0,
+  "total_count": 1
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := DescribeVolumesRequest{
+		Volumes:    []string{"vol-75LIXUQD"},
+		Limit:      10,
+		Offset:     0,
+		SearchWord: "hh",
+		Status:     []VolumeStatus{VolumeStatusPending, VolumeStatusAvailable, VolumeStatusInUse, VolumeStatusSuspended},
+	}
+	var response DescribeVolumesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := DescribeVolumesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "DescribeVolumesResponse",
+			RetCode: 0,
+			Code:    0,
+		},
+		TotalCount: 1,
+		ItemSet: []DescribeVolumesItem{
+			{
+				VolumeID:    "vol-75LIXUQD",
+				VolumeName:  "hh",
+				Description: "51idc",
+				Size:        10,
+				Status:      VolumeStatusInUse,
+				StatusTime:  "2015-02-2615:19:48",
+				VolumeType:  VolumeTypePerformance,
+				CreateTime:  "2015-02-2613:24:44",
+				Instance: DescribeVolumesInstance{
+					InstanceID:   "i-UN3CH6YH",
+					InstanceName: "yy",
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
 // TestCreateVolumes tests that we send correct request to create volumes.
 func TestCreateVolumes(t *testing.T) {
 	expectedJson := RemoveWhitespaces(`
@@ -39,26 +129,25 @@ func TestCreateVolumes(t *testing.T) {
 	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
 	defer testServer.Close()
 
-	body := CreateVolumesRequest{
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := CreateVolumesRequest{
 		VolumeName: "21",
 		Count:      1,
 		Size:       10,
 		VolumeType: VolumeTypePerformance,
 	}
+	var response CreateVolumesResponse
 
-	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	err = c.SendRequest(request, &response)
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	resp, err := c.CreateVolumes(body)
-	if err != nil {
-		t.Errorf("Unexpected non-nil error %v", err)
-	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
 
-	expectedResponseBody := &CreateVolumesResponse{
+	expectedResponse := CreateVolumesResponse{
 		ResponseCommon: ResponseCommon{
 			Action:  "CreateVolumesResponse",
 			RetCode: 0,
@@ -67,8 +156,8 @@ func TestCreateVolumes(t *testing.T) {
 		Volumes: []string{"vol-SHPH11TH"},
 		JobID:   "job-G554X3LT",
 	}
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
 	}
 }
 
@@ -97,23 +186,22 @@ func TestDeleteVolumes(t *testing.T) {
 	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
 	defer testServer.Close()
 
-	body := DeleteVolumesRequest{
-		Volumes: []string{"vol-A8RXJQRC"},
-	}
-
 	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	resp, err := c.DeleteVolumes(body)
+
+	request := DeleteVolumesRequest{
+		Volumes: []string{"vol-A8RXJQRC"},
+	}
+	var response DeleteVolumesResponse
+
+	err = c.SendRequest(request, &response)
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
 
-	expectedResponseBody := &DeleteVolumesResponse{
+	expectedResponse := DeleteVolumesResponse{
 		ResponseCommon: ResponseCommon{
 			Action:  "DeleteVolumesResponse",
 			RetCode: 0,
@@ -121,8 +209,8 @@ func TestDeleteVolumes(t *testing.T) {
 		},
 		JobID: "job-V2SOOFXR",
 	}
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
 	}
 }
 
@@ -130,7 +218,7 @@ func TestDeleteVolumes(t *testing.T) {
 func TestAttachVolumes(t *testing.T) {
 	expectedJson := RemoveWhitespaces(`
 {
-  "zone" :"ac1",
+  "zone": "ac1",
   "volumes": [
     "vol-EAWEJ5RI",
     "vol-A8RXJQRC"
@@ -153,24 +241,23 @@ func TestAttachVolumes(t *testing.T) {
 	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
 	defer testServer.Close()
 
-	body := AttachVolumesRequest{
-		Instance: "i-7QAQCZ2E",
-		Volumes:  []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
-	}
-
 	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	resp, err := c.AttachVolumes(body)
+
+	request := AttachVolumesRequest{
+		Instance: "i-7QAQCZ2E",
+		Volumes:  []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
+	}
+	var response AttachVolumesResponse
+
+	err = c.SendRequest(request, &response)
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
 
-	expectedResponseBody := &AttachVolumesResponse{
+	expectedResponse := AttachVolumesResponse{
 		ResponseCommon: ResponseCommon{
 			Action:  "AttachVolumesResponse",
 			RetCode: 0,
@@ -178,8 +265,8 @@ func TestAttachVolumes(t *testing.T) {
 		},
 		JobID: "job-OT7LFB3I",
 	}
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
 	}
 }
 
@@ -187,12 +274,12 @@ func TestAttachVolumes(t *testing.T) {
 func TestDetachVolumes(t *testing.T) {
 	expectedJson := RemoveWhitespaces(`
 {
-  "zone" :"ac1",
-  "volumes":[
+  "zone": "ac1",
+  "volumes": [
     "vol-EAWEJ5RI",
     "vol-A8RXJQRC"
   ],
-  "token":"E5I9QKJF1O2B5PXE68LG",
+  "token": "E5I9QKJF1O2B5PXE68LG",
   "action": "DetachVolumes"
 }
 `)
@@ -209,23 +296,22 @@ func TestDetachVolumes(t *testing.T) {
 	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
 	defer testServer.Close()
 
-	body := DetachVolumesRequest{
-		Volumes: []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
-	}
-
 	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	resp, err := c.DetachVolumes(body)
+
+	request := DetachVolumesRequest{
+		Volumes: []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
+	}
+	var response DetachVolumesResponse
+
+	err = c.SendRequest(request, &response)
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
 
-	expectedResponseBody := &DetachVolumesResponse{
+	expectedResponse := DetachVolumesResponse{
 		ResponseCommon: ResponseCommon{
 			Action:  "DetachVolumesResponse",
 			RetCode: 0,
@@ -233,7 +319,118 @@ func TestDetachVolumes(t *testing.T) {
 		},
 		JobID: "job-JRB87I5T",
 	}
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestResizeVolumes tests that we send correct request to resize volumes.
+func TestResizeVolumes(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "zone": "ac1",
+  "volumes": [
+    "vol-EAWEJ5RI"
+  ],
+  "size": 30,
+  "token": "E5I9QKJF1O2B5PXE68LG",
+  "action": "ResizeVolumes"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code": 0,
+  "action":" ResizeVolumesResponse",
+  "code":0,
+  "job_id": "job-OZNXSPZO"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := ResizeVolumesRequest{
+		Volumes: []string{"vol-EAWEJ5RI"},
+		Size:    30,
+	}
+	var response ResizeVolumesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := ResizeVolumesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "ResizeVolumesResponse",
+			RetCode: 0,
+			Code:    0,
+		},
+		JobID: "job-OZNXSPZO",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestModifyVolumeAttributes tests that we send correct request to modify volume attributes.
+func TestModifyVolumeAttributes(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "zone":"ac1",
+  "volume":"vol-GTQZP5KW",
+  "volume_name":"hh",
+  "description":"bobo",
+  "token":"E5I9QKJF1O2B5PXE68LG",
+  "action":"ModifyVolumeAttributes"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code":0,
+  "volume_id":"vol-GTQZP5KW",
+  "action":"ModifyVolumeAttributesResponse",
+  "code":0,
+  "job_id":"job-6AHS7MN3"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := ModifyVolumeAttributesRequest{
+		Volume:      "vol-GTQZP5KW",
+		VolumeName:  "hh",
+		Description: "bobo",
+	}
+	var response ModifyVolumeAttributesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := ModifyVolumeAttributesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "ModifyVolumeAttributesResponse",
+			RetCode: 0,
+			Code:    0,
+		},
+		JobID: "job-6AHS7MN3",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
 	}
 }

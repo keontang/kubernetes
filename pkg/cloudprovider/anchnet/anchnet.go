@@ -19,13 +19,26 @@ package anchnet_cloud
 import (
 	"encoding/json"
 	"io"
+	"time"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
 
 	anchnet_client "github.com/caicloud/anchnet-go"
 )
 
-const ProviderName = "anchnet"
+const (
+	ProviderName = "anchnet"
+
+	// Number of retries when getting errors while accessing anchnet, e.g. request too frequent.
+	RetryCountOnError = 5
+	// Interval between two retries for the above situation.
+	RetryIntervalOnError = 4 * time.Second
+
+	// Number of retries when waitting on resources to become ready.
+	RetryCountOnWaitReady = 30
+	// Interval between two retries for the above situation.
+	RetryIntervalOnWaitReady = 8 * time.Second
+)
 
 // TODO: Create cache layer to reduce calls to anchnet.
 type Anchnet struct {

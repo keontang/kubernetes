@@ -8,9 +8,7 @@ import (
 	"io"
 	"os"
 
-	anchnet "github.com/caicloud/anchnet-go"
 	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
-	"github.com/golang/glog"
 )
 
 func main() {
@@ -36,7 +34,7 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 		Short: "Create an instance",
 		Long:  "Create an instance with flag parameters. Output error or instance/eip IDs",
 		Run: func(cmd *cobra.Command, args []string) {
-			execRunInstance(cmd, args, out)
+			execRunInstance(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 	var cpu, memory, bandwidth int
@@ -51,7 +49,7 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "describeinstance id",
 		Short: "Get information of an instance",
 		Run: func(cmd *cobra.Command, args []string) {
-			execDescribeInstance(cmd, args, out)
+			execDescribeInstance(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -59,7 +57,7 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "terminateinstances ids",
 		Short: "Terminate a comma separated list of instances",
 		Run: func(cmd *cobra.Command, args []string) {
-			execTerminateInstances(cmd, args, out)
+			execTerminateInstances(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -67,7 +65,7 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "stopinstances ids",
 		Short: "Stop a comma separated list of instances",
 		Run: func(cmd *cobra.Command, args []string) {
-			execStopInstances(cmd, args, out)
+			execStopInstances(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -84,7 +82,7 @@ func addEipsCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "describeeips ids",
 		Short: "Describe a comma separated list of eips",
 		Run: func(cmd *cobra.Command, args []string) {
-			execDescribeEips(cmd, args, out)
+			execDescribeEips(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -92,7 +90,7 @@ func addEipsCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "releaseeips ids",
 		Short: "Release a comma separated list of eips",
 		Run: func(cmd *cobra.Command, args []string) {
-			execReleaseEips(cmd, args, out)
+			execReleaseEips(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -107,7 +105,7 @@ func addVxnetsCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "createvxnets id",
 		Short: "Create a private SDN network in anchnet",
 		Run: func(cmd *cobra.Command, args []string) {
-			execCreateVxnet(cmd, args, out)
+			execCreateVxnet(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -115,7 +113,7 @@ func addVxnetsCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "describevxnets id",
 		Short: "Describe a private SDN network in anchnet",
 		Run: func(cmd *cobra.Command, args []string) {
-			execDescribeVxnets(cmd, args, out)
+			execDescribeVxnets(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -123,7 +121,7 @@ func addVxnetsCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "joinvxnet vxnet_id instance_ids",
 		Short: "Join instancs to vxnet",
 		Run: func(cmd *cobra.Command, args []string) {
-			execJoinVxnet(cmd, args, out)
+			execJoinVxnet(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -139,24 +137,22 @@ func addLoadBalancerCLI(cmds *cobra.Command, out io.Writer) {
 		Use:   "createloadbalancer name ips",
 		Short: "Create a load balancer which binds to a comma separated list of ips",
 		Run: func(cmd *cobra.Command, args []string) {
-			execCreateLoadBalancer(cmd, args, out)
+			execCreateLoadBalancer(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+	var lb_type int
+	cmdCreateLoadBalancer.Flags().IntVarP(&lb_type, "type", "t", 1,
+		"Type of loadbalancer, i.e. max connection allowed. 1: 20k; 2: 40k; 3: 100k ")
+
+	cmdDeleteLoadBalancer := &cobra.Command{
+		Use:   "deleteloadbalancer id ips",
+		Short: "Delete a load balancer which binds to a comma separated list of ips",
+		Run: func(cmd *cobra.Command, args []string) {
+			execDeleteLoadBalancer(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
 	// Add all sub-commands
 	cmds.AddCommand(cmdCreateLoadBalancer)
-}
-
-// getConfigPath returns the path to configuration file.
-func getConfigPath(cmd *cobra.Command) string {
-	f := cmd.InheritedFlags().Lookup("config-path")
-	if f == nil {
-		glog.Fatalf("flag accessed but not defined for command %s: config-path", cmd.Name())
-	}
-	path := f.Value.String()
-	if path == "" {
-		return anchnet.DefaultConfigPath()
-	} else {
-		return path
-	}
+	cmds.AddCommand(cmdDeleteLoadBalancer)
 }

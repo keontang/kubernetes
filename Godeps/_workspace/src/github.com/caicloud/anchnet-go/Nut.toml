@@ -6,5 +6,4 @@ authors = ["Deyuan Deng <deyuan.deng@gmail.com>"]
 
 
 [dependencies]
-"github.com/mitchellh/mapstructure" = ""
 "github.com/spf13/cobra" = ""

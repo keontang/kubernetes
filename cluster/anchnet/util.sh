@@ -152,13 +152,9 @@ function deploy-addons {
   sed -e "s/{{ pillar\['dns_replicas'\] }}/${DNS_REPLICAS}/g;s/{{ pillar\['dns_domain'\] }}/${DNS_DOMAIN}/g" ${skydns_rc_file} > ${KUBE_TEMP}/skydns-rc.yaml
   sed -e "s/{{ pillar\['dns_server'\] }}/${DNS_SERVER_IP}/g" ${skydns_svc_file} > ${KUBE_TEMP}/skydns-svc.yaml
 
-  # Move addons-start script to temp directory to get copied to master
-  mv ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh ${KUBE_TEMP}/addons-start.sh
-  chmod a+x ${KUBE_TEMP}/addons-start.sh
-
   # Copy addon configurationss and startup script to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-      ${KUBE_TEMP}/addons-start.sh \
+      ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh \
       ${KUBE_TEMP}/system:dns-secret \
       ${KUBE_TEMP}/skydns-rc.yaml \
       ${KUBE_TEMP}/skydns-svc.yaml \

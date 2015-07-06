@@ -4,81 +4,71 @@
 
 package anchnet
 
-import (
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/mitchellh/mapstructure"
-)
-
-// Implements all anchnet instance related APIs. [x] means done, [ ] means not done yet.
-//   [x] DescribeEips
-//   [x] AllocateEips
-//   [x] ReleaseEips
-//   [x] AssociateEip
-//   [x] DissociateEips
-//   [ ] ChangeEipsBandwidth
+// Implements all anchnet instance related APIs.
 
 type DescribeEipsRequest struct {
 	RequestCommon `json:",inline"`
-	Eips          []string `json:"eips,omitempty" mapstructure:"eips"`
-	Status        []string `json:"status,omitempty"`
-	SearchWord    string   `json:"search_word,omitemtpy"`
-	Offset        int      `json:"offset,omitemtpy"`
-	Limit         int      `json:"limit,omitemtpy"`
+	Eips          []string    `json:"eips,omitempty"`
+	Status        []EipStatus `json:"status,omitempty"`
+	SearchWord    string      `json:"search_word,omitempty"`
+	Offset        int         `json:"offset,omitempty"`
+	Limit         int         `json:"limit,omitempty"`
 }
 
 type DescribeEipsResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	TotalCount     int                   `json:"total_count,omitemtpy" mapstructure:"total_count"`
-	ItemSet        []DescribeEipsItemSet `json:"item_set,omitemtpy" mapstructure:"item_set"`
+	ResponseCommon `json:",inline"`
+	TotalCount     int                `json:"total_count,omitempty"`
+	ItemSet        []DescribeEipsItem `json:"item_set,omitempty"`
 }
 
-type DescribeEipsItemSet struct {
-	Attachon    int                  `json:"attachon" mapstructure:"attachon"`
-	Bandwidth   int                  `json:"bandwidth" mapstructure:"bandwidth"`
-	Description string               `json:"description" mapstructure:"description"`
-	CreateTime  string               `json:"create_time" mapstructure:"create_time"`
-	StatusTime  string               `json:"status_time" mapstructure:"status_time"`
-	Status      string               `json:"status" mapstructure:"status"` // One of "pending", ”available”, ”associated”, ”suspended”
-	NeedIcp     int                  `json:"need_icp" mapstructure:"need_icp"`
-	EipID       string               `json:"eip_id" mapstructure:"eip_id"`
-	EipName     string               `json:"eip_name" mapstructure:"eip_name"`
-	EipAddr     string               `json:"eip_addr" mapstructure:"eip_addr"`
-	Resource    DescribeEipsResource `json:"resource" mapstructure:"resource"`
-	EipGroup    DescribeEipsEipGroup `json:"eip_group" mapstructure:"eip_group"`
+type DescribeEipsItem struct {
+	Attachon    int                  `json:"attachon,omitempty"`
+	Bandwidth   int                  `json:"bandwidth,omitempty"`
+	Description string               `json:"description,omitempty"`
+	CreateTime  string               `json:"create_time,omitempty"`
+	StatusTime  string               `json:"status_time,omitempty"`
+	Status      EipStatus            `json:"status,omitempty"`
+	NeedIcp     int                  `json:"need_icp,omitempty"`
+	EipID       string               `json:"eip_id,omitempty"`
+	EipName     string               `json:"eip_name,omitempty"`
+	EipAddr     string               `json:"eip_addr,omitempty"`
+	Resource    DescribeEipsResource `json:"resource,omitempty"`
+	EipGroup    DescribeEipsEipGroup `json:"eip_group,omitempty"`
 }
 
 type DescribeEipsResource struct {
-	ResourceID   string `json:"resource_id" mapstructure:"resource_id"`
-	ResourceName string `json:"resource_name" mapstructure:"resource_name"`
-	ResourceType string `json:"resource_type" mapstructure:"resource_type"`
+	ResourceID   string `json:"resource_id,omitempty"`
+	ResourceName string `json:"resource_name,omitempty"`
+	ResourceType string `json:"resource_type,omitempty"`
 }
 
 type DescribeEipsEipGroup struct {
-	EipGroupID   string `json:"eip_group_id" mapstructure:"eip_group_id"`
-	EipGroupName string `json:"eip_group_name" mapstructure:"eip_group_name"`
+	EipGroupID   string `json:"eip_group_id,omitempty"`
+	EipGroupName string `json:"eip_group_name,omitempty"`
 }
 
-// DescribeEips describes external IPs.
-// http://cloud.51idc.com/help/api/eip/DescribeEips.html
-func (c *Client) DescribeEips(request DescribeEipsRequest) (*DescribeEipsResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "DescribeEips"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
+type EipStatus string
 
-	var result DescribeEipsResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
+const (
+	EipStatusPending    EipStatus = "pending"
+	EipStatusAvailable  EipStatus = "available"
+	EipStatusAssociated EipStatus = "associated"
+	EipStatusSuspended  EipStatus = "suspended"
+)
 
-	return &result, nil
+type AllocateEipsRequest struct {
+	RequestCommon `json:",inline"`
+	Product       AllocateEipsProduct `json:"product,omitempty"`
+}
+
+type AllocateEipsResponse struct {
+	ResponseCommon `json:",inline"`
+	Eips           []string `json:"eips,omitempty"`
+	JobID          string   `json:"job_id,omitempty"`
 }
 
 type AllocateEipsProduct struct {
-	IPs AllocateEipsIP `json:"ip,omitempty"`
+	IP AllocateEipsIP `json:"ip,omitempty"`
 }
 
 type AllocateEipsIP struct {
@@ -87,66 +77,14 @@ type AllocateEipsIP struct {
 	Amount    int    `json:"amount,omitempty"`   // Default 1
 }
 
-type AllocateEipsRequest struct {
-	RequestCommon `json:",inline"`
-	Product       AllocateEipsProduct `json:"product,omitempty"`
-}
-
-type AllocateEipsResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	Eips           []string `json:"eips,omitempty" mapstructure:"eips"`
-	JobID          string   `json:"job_id,omitempty" mapstructure:"job_id"`
-}
-
-// AllocateEips allocates external IPs.
-// http://cloud.51idc.com/help/api/eip/AllocateEips.html
-func (c *Client) AllocateEips(request AllocateEipsRequest) (*AllocateEipsResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "AllocateEips"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
-
-	var result AllocateEipsResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
-}
-
 type ReleaseEipsRequest struct {
 	RequestCommon `json:",inline"`
 	Eips          []string `json:"eips,omitempty"`
 }
 
 type ReleaseEipsResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	JobID          string `json:"job_id,omitempty" mapstructure:"job_id"`
-}
-
-// ReleaseEips releases external IPs. The external IPs will be dissociated with
-// instance or LB before being released.
-// http://cloud.51idc.com/help/api/eip/ReleaseEips.html
-func (c *Client) ReleaseEips(request ReleaseEipsRequest) (*ReleaseEipsResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "ReleaseEips"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
-
-	var result ReleaseEipsResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
 }
 
 type AssociateEipRequest struct {
@@ -156,28 +94,8 @@ type AssociateEipRequest struct {
 }
 
 type AssociateEipResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	JobID          string `json:"job_id,omitempty" mapstructure:"job_id"`
-}
-
-// AssociateEip associates external IP with an instance
-// http://cloud.51idc.com/help/api/eip/AssociateEip.html
-func (c *Client) AssociateEip(request AssociateEipRequest) (*AssociateEipResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "AssociateEip"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
-
-	var result AssociateEipResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
 }
 
 type DissociateEipsRequest struct {
@@ -186,26 +104,17 @@ type DissociateEipsRequest struct {
 }
 
 type DissociateEipsResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	JobID          string `json:"job_id,omitempty" mapstructure:"job_id"`
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
 }
 
-// DissociateEips dissociates external IPs.
-// http://cloud.51idc.com/help/api/eip/DissociateEips.html
-func (c *Client) DissociateEips(request DissociateEipsRequest) (*DissociateEipsResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "DissociateEips"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
+type ChangeEipsBandwidthRequest struct {
+	RequestCommon `json:",inline"`
+	Eips          []string `json:"eips,omitempty"`
+	Bandwidth     int      `json:"bandwidth,omitempty"` // In Mbps
+}
 
-	var result DissociateEipsResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+type ChangeEipsBandwidthResponse struct {
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
 }

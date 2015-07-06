@@ -4,20 +4,51 @@
 
 package anchnet
 
-import (
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/mitchellh/mapstructure"
+// Implements all anchnet instance related APIs.
+
+type DescribeVolumesRequest struct {
+	RequestCommon `json:",inline"`
+	Volumes       []string       `json:"volumes,omitempty"`
+	Status        []VolumeStatus `json:"status,omitempty"`
+	SearchWord    string         `json:"search_word,omitempty"`
+	Offset        int            `json:"offset,omitempty"`
+	Limit         int            `json:"limit,omitempty"`
+}
+
+type DescribeVolumesResponse struct {
+	ResponseCommon `json:",inline"`
+	TotalCount     int                   `json:"total_count,omitempty"`
+	ItemSet        []DescribeVolumesItem `json:"item_set,omitempty"`
+}
+
+type DescribeVolumesItem struct {
+	VolumeID    string                  `json:"volume_id,omitempty"`
+	VolumeName  string                  `json:"volume_name,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Size        int                     `json:"size,omitempty"` // Unit: GB
+	Status      VolumeStatus            `json:"status,omitempty"`
+	StatusTime  string                  `json:"status_time,omitempty"`
+	VolumeType  VolumeType              `json:"volume_type"`
+	CreateTime  string                  `json:"create_time,omitempty"`
+	Instance    DescribeVolumesInstance `json:"instance,omitempty"`
+}
+
+type DescribeVolumesInstance struct {
+	InstanceID   string `json:"instance_id,omitempty"`
+	InstanceName string `json:"instance_name,omitempty"`
+}
+
+type VolumeStatus string
+
+const (
+	VolumeStatusPending   VolumeStatus = "pending"
+	VolumeStatusAvailable VolumeStatus = "available"
+	VolumeStatusInUse     VolumeStatus = "in-use"
+	VolumeStatusSuspended VolumeStatus = "suspended"
+	VolumeStatusDeleted   VolumeStatus = "deleted"
 )
 
-// Implements all anchnet instance related APIs. [x] means done, [ ] means not done yet.
-//   [ ] DescribeVolumes
-//   [x] CreateVolumes
-//   [x] DeleteVolumes
-//   [x] AttachVolumes
-//   [x] DetachVolumes
-//   [ ] ResizeVolumes
-//   [ ] ModifyVolumeAttributes
-
-// Note VolumeType is the same as HDType. We separate them out due to inconsistency in anchnet.
+// Note VolumeType is the same as HDType. We separate them out due inconsistent naming in anchnet.
 type VolumeType int
 
 const (
@@ -28,36 +59,18 @@ const (
 // CreateVolumesRequest contains all information needed to create volumes.
 type CreateVolumesRequest struct {
 	RequestCommon `json:",inline"`
-	VolumeName    string     `json:"volume_name,omitempty"`
-	Count         int        `json:"count,omitempty"`
-	Size          int        `json:"size,omitempty"` // min 10GB, max 1000GB, unit:GB
-	VolumeType    VolumeType `json:"volume_type"`    // Do not omit empty due to type 0
+	VolumeName    string `json:"volume_name,omitempty"`
+	Count         int    `json:"count,omitempty"`
+	Size          int    `json:"size,omitempty"` // min 10GB, max 1000GB, unit:GB
+	// Do not omit empty due to type 0.
+	VolumeType VolumeType `json:"volume_type"`
 }
 
 // CreateVolumesResponse contains all information returned from anchnet server.
 type CreateVolumesResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	Volumes        []string `json:"volumes,omitempty" mapstructure:"volumes"` // IDs of created volumes
-	JobID          string   `json:"job_id,omitempty" mapstructure:"job_id"`   // Job ID in anchnet
-}
-
-// CreateVolumes creates volumes.
-func (c *Client) CreateVolumes(request CreateVolumesRequest) (*CreateVolumesResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "CreateVolumes"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
-
-	var result CreateVolumesResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	ResponseCommon `json:",inline"`
+	Volumes        []string `json:"volumes,omitempty"` // IDs of created volumes
+	JobID          string   `json:"job_id,omitempty"`  // Job ID in anchnet
 }
 
 // DeleteVolumesRequest contains all information needed to delete volumes.
@@ -68,27 +81,8 @@ type DeleteVolumesRequest struct {
 
 // DeleteVolumesResponse contains all information returned from anchnet server.
 type DeleteVolumesResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	JobID          string `json:"job_id,omitempty" mapstructure:"job_id"` // Job ID in anchnet
-}
-
-// DeleteVolumes deletes volumes. Volume needs to be detached from instance before deleting.
-func (c *Client) DeleteVolumes(request DeleteVolumesRequest) (*DeleteVolumesResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "DeleteVolumes"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
-
-	var result DeleteVolumesResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"` // Job ID in anchnet
 }
 
 type AttachVolumesRequest struct {
@@ -98,28 +92,8 @@ type AttachVolumesRequest struct {
 }
 
 type AttachVolumesResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	JobID          string `json:"job_id,omitempty" mapstructure:"job_id"`
-}
-
-// AttachVolumes attach volumes to an instance.
-// http://cloud.51idc.com/help/api/network/Attachvolume.html
-func (c *Client) AttachVolumes(request AttachVolumesRequest) (*AttachVolumesResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "AttachVolumes"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
-
-	var result AttachVolumesResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
 }
 
 type DetachVolumesRequest struct {
@@ -128,26 +102,29 @@ type DetachVolumesRequest struct {
 }
 
 type DetachVolumesResponse struct {
-	ResponseCommon `json:",inline" mapstructure:",squash"`
-	JobID          string `json:"job_id,omitempty" mapstructure:"job_id"`
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
 }
 
-// DetachVolumes detach volumes; no instance id is needed.
-// http://cloud.51idc.com/help/api/network/Detachvolume.html
-func (c *Client) DetachVolumes(request DetachVolumesRequest) (*DetachVolumesResponse, error) {
-	request.RequestCommon.Token = c.auth.PublicKey
-	request.RequestCommon.Action = "DetachVolumes"
-	request.RequestCommon.Zone = "ac1" // Only one zone for now
-	resp, err := c.sendRequest(request)
-	if err != nil {
-		return nil, err
-	}
+type ResizeVolumesRequest struct {
+	RequestCommon `json:",inline"`
+	Volumes       []string `json:"volumes,omitempty"` // IDs of volumes to resize
+	Size          int      `json:"size,omitempty"`    // Allow increase size only
+}
 
-	var result DetachVolumesResponse
-	err = mapstructure.Decode(resp, &result)
-	if err != nil {
-		return nil, err
-	}
+type ResizeVolumesResponse struct {
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
+}
 
-	return &result, nil
+type ModifyVolumeAttributesRequest struct {
+	RequestCommon `json:",inline"`
+	Volume        string `json:"volume,omitempty"`
+	VolumeName    string `json:"volume_name,omitempty"`
+	Description   string `json:"description,omitempty"`
+}
+
+type ModifyVolumeAttributesResponse struct {
+	ResponseCommon `json:",inline"`
+	JobID          string `json:"job_id,omitempty"`
 }

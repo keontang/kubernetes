@@ -10,209 +10,13 @@ import (
 	"testing"
 )
 
-// TestRunInstance tests that we send correct request to run instance.
-func TestRunInstance(t *testing.T) {
-	expectedJson := RemoveWhitespaces(`
-{
-  "product": {
-    "cloud": {
-      "vm": {
-        "name": "test",
-        "login_mode": "pwd",
-        "mem": 1024,
-        "cpu": 1,
-        "image_id": "centos65x64d",
-        "password": "1111ssSS"
-      },
-      "hd": [
-        {
-          "name": "test1",
-          "type": 0,
-          "unit": 10
-        },
-        {
-          "name": "test2",
-          "type": 0,
-          "unit": 10
-        }
-      ],
-      "net0": true,
-      "net1": [
-        {
-          "vxnet_name": "test",
-          "checked": true
-        }
-      ],
-      "ip": {
-        "bw": 1,
-        "ip_group": "eipg-00000000"
-      }
-    }
-  },
-  "token": "E5I9QKJF1O2B5PXE68LG",
-  "action": "RunInstances",
-  "zone": "ac1"
-}
-`)
-
-	fakeResponse := RemoveWhitespaces(`
-{
-  "ret_code": 0,
-  "action": "RunInstancesResponse",
-  "code": 0,
-  "volumes": [
-    "vol-ZEU3OAQ7",
-    "vol-TSNPJC5F",
-    "vol-687S884C"
-  ],
-  "instances": [
-    "i-PX4SFNMW",
-    "i-88G1K070",
-    "i-Q42TL4J4"
-  ],
-  "eips": [
-    "eip-52QPTREJ",
-    "eip-Q2C2067R",
-    "eip-4OQM5GDN"
-  ],
-  "job_id": "job-X9FQT4CS"
-}
-`)
-
-	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
-	defer testServer.Close()
-
-	body := RunInstancesRequest{
-		Product: RunInstancesProduct{
-			Cloud: RunInstancesCloud{
-				VM: RunInstancesVM{
-					Name:      "test",
-					LoginMode: LoginModePwd,
-					Mem:       1024,
-					Cpu:       1,
-					Password:  "1111ssSS",
-					ImageId:   "centos65x64d",
-				},
-				HD: []RunInstancesHardDisk{
-					{
-						Name: "test1",
-						Unit: 10,
-						Type: HDTypePerformance,
-					},
-					{
-						Name: "test2",
-						Unit: 10,
-						Type: HDTypePerformance,
-					},
-				},
-				Net0: true,
-				Net1: []RunInstancesNet1{
-					{
-						VxnetName: "test",
-						Checked:   true,
-					},
-				},
-				IP: RunInstancesIP{
-					IPGroup:   "eipg-00000000",
-					Bandwidth: 1,
-				},
-			},
-		},
-	}
-
-	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
-	if err != nil {
-		t.Errorf("Unexpected non-nil error %v", err)
-	}
-	resp, err := c.RunInstances(body)
-	if err != nil {
-		t.Errorf("Unexpected non-nil error %v", err)
-	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
-
-	expectedResponseBody := &RunInstancesResponse{
-		ResponseCommon: ResponseCommon{
-			Action:  "RunInstancesResponse",
-			RetCode: 0,
-			Code:    0,
-		},
-		Instances: []string{"i-PX4SFNMW", "i-88G1K070", "i-Q42TL4J4"},
-		Volumes:   []string{"vol-ZEU3OAQ7", "vol-TSNPJC5F", "vol-687S884C"},
-		EIPs:      []string{"eip-52QPTREJ", "eip-Q2C2067R", "eip-4OQM5GDN"},
-		JobID:     "job-X9FQT4CS",
-	}
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
-	}
-}
-
-// TestTerminateInstance tests that we send correct request to terminate instance.
-func TestTerminateInstance(t *testing.T) {
-	// Note "ips" and "vols" are empty.
-	expectedJson := RemoveWhitespaces(`
-{
-  "instances": [
-    "i-TXQ59KVB",
-    "i-69CFY6RK",
-    "i-LQQUNEJX"
-  ],
-  "zone": "ac1",
-  "token":"E5I9QKJF1O2B5PXE68LG",
-  "action": "TerminateInstances"
-}
-`)
-
-	fakeResponse := RemoveWhitespaces(`
-{
-  "ret_code":0,
-  "action": "TerminateInstancesResponse",
-  "code": 0,
-  "job_id": "job-0FP96OHD"
-}
-`)
-
-	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
-	defer testServer.Close()
-
-	body := TerminateInstancesRequest{
-		Instances: []string{"i-TXQ59KVB", "i-69CFY6RK", "i-LQQUNEJX"},
-	}
-
-	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
-	if err != nil {
-		t.Errorf("Unexpected non-nil error %v", err)
-	}
-	resp, err := c.TerminateInstances(body)
-	if err != nil {
-		t.Errorf("Unexpected non-nil error %v", err)
-	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
-
-	expectedResponseBody := &TerminateInstancesResponse{
-		ResponseCommon: ResponseCommon{
-			Action:  "TerminateInstancesResponse",
-			Code:    0,
-			RetCode: 0,
-		},
-		JobID: "job-0FP96OHD",
-	}
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
-	}
-}
-
-// TestDescribeInstance tests that we send correct request to terminate instance.
-func TestDescribeInstance(t *testing.T) {
+// TestDescribeInstances tests that we send correct request to describe instances.
+func TestDescribeInstances(t *testing.T) {
 	expectedJson := RemoveWhitespaces(`
 {
   "limit": 10,
   "status": ["pending", "running", "stopped", "suspended"],
   "search_word":"wet",
-  "offset": 0,
   "token":"E5I9QKJF1O2B5PXE68LG",
   "verbose":1,
   "zone": "ac1",
@@ -303,43 +107,46 @@ func TestDescribeInstance(t *testing.T) {
 	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
 	defer testServer.Close()
 
-	body := DescribeInstancesRequest{
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := DescribeInstancesRequest{
 		Instances:  []string{"i-HNFNPM56"},
 		Verbose:    1,
 		Offset:     0,
 		SearchWord: "wet",
 		Limit:      10,
-		Status:     []string{"pending", "running", "stopped", "suspended"},
+		Status:     []InstanceStatus{InstanceStatusPending, InstanceStatusRunning, InstanceStatusStopped, InstanceStatusSuspended},
 	}
+	var response DescribeInstancesResponse
 
-	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	err = c.SendRequest(request, &response)
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	resp, err := c.DescribeInstances(body)
-	if err != nil {
-		t.Errorf("Unexpected non-nil error %v", err)
-	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
 
-	expectedResponseBody := &DescribeInstancesResponse{
+	expectedResponse := DescribeInstancesResponse{
 		ResponseCommon: ResponseCommon{
-			Action: "DescribeInstancesResponse", Code: 0, RetCode: 0, Message: ""},
+			Action:  "DescribeInstancesResponse",
+			Code:    0,
+			RetCode: 0,
+			Message: "",
+		},
 		TotalCount: 1,
-		ItemSet: []DescribeInstanceItemSet{
-			DescribeInstanceItemSet{
+		ItemSet: []DescribeInstancesItem{
+			{
 				InstanceID:    "i-GQZBQ6CP",
 				InstanceName:  "gao_cent",
 				Description:   "",
-				Status:        "running",
+				Status:        InstanceStatusRunning,
 				VcpusCurrent:  1,
 				MemoryCurrent: 1024,
 				StatusTime:    "2015-02-1511:10:37",
 				CreateTime:    "2015-02-1511:10:37",
-				Vxnets: []DescribeInstanceVxnets{
-					DescribeInstanceVxnets{
+				Vxnets: []DescribeInstancesVxnet{
+					{
 						VxnetID:   "vxnet-0",
 						VxnetName: "vxnet1",
 						VxnetType: 1,
@@ -347,7 +154,7 @@ func TestDescribeInstance(t *testing.T) {
 						PrivateIP: "10.57.20.131",
 						Systype:   "pub",
 					},
-					DescribeInstanceVxnets{
+					{
 						VxnetID:   "vxnet-VD3VL0YT",
 						VxnetName: "vxnet2",
 						VxnetType: 0,
@@ -355,7 +162,7 @@ func TestDescribeInstance(t *testing.T) {
 						PrivateIP: "",
 						Systype:   "priv",
 					},
-					DescribeInstanceVxnets{
+					{
 						VxnetID:   "vxnet-MTQX70SU",
 						VxnetName: "vxnet3",
 						VxnetType: 0,
@@ -364,12 +171,12 @@ func TestDescribeInstance(t *testing.T) {
 						Systype:   "priv",
 					},
 				},
-				EIP: DescribeInstanceEIP{
+				EIP: DescribeInstancesEIP{
 					EipID:   "eip-2Q76L2B9",
 					EipName: "103.21.116.122",
 					EipAddr: "103.21.116.122",
 				},
-				Image: DescribeInstanceImage{
+				Image: DescribeInstancesImage{
 					ImageID:       "centos65x64d",
 					ImageName:     "CentOS6.564bit",
 					ImageSize:     20,
@@ -377,16 +184,16 @@ func TestDescribeInstance(t *testing.T) {
 					Platform:      "linux",
 					ProcessorType: "64bit",
 					Provider:      "system"},
-				VolumeIds: []string{"vom-QBU4NHSP"},
-				Volumes: []DescribeInstanceVolume{
-					DescribeInstanceVolume{
+				VolumeIDs: []string{"vom-QBU4NHSP"},
+				Volumes: []DescribeInstancesVolume{
+					{
 						Size:       "10",
 						VolumeID:   "vom-QBU4NHSP",
 						VolumeName: "gao",
 						VolumeType: "1",
 					},
 				},
-				SecurityGroup: DescribeInstanceSecurityGroup{
+				SecurityGroup: DescribeInstancesSecurityGroup{
 					Attachon:          634824,
 					IsDefault:         1,
 					SecurityGroupID:   "sg-ZEVKCIAT",
@@ -396,12 +203,261 @@ func TestDescribeInstance(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
 	}
 }
 
-// TestStopInstance tests that we send correct request to stop instance.
+// TestRunInstances tests that we send correct request to run instances.
+func TestRunInstances(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "product": {
+    "cloud": {
+      "amount": 1,
+      "vm": {
+        "name": "test",
+        "login_mode": "pwd",
+        "mem": 1024,
+        "cpu": 1,
+        "image_id": "centos65x64d",
+        "password": "1111ssSS"
+      },
+      "hd": [
+        {
+          "name": "test1",
+          "type": 0,
+          "unit": 10
+        },
+        {
+          "name": "test2",
+          "type": 0,
+          "unit": 10
+        }
+      ],
+      "net0": true,
+      "net1": [
+        {
+          "vxnet_name": "test",
+          "checked": true
+        }
+      ],
+      "ip": {
+        "bw": 1,
+        "ip_group": "eipg-00000000"
+      }
+    }
+  },
+  "token": "E5I9QKJF1O2B5PXE68LG",
+  "action": "RunInstances",
+  "zone": "ac1"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code": 0,
+  "action": "RunInstancesResponse",
+  "code": 0,
+  "volumes": [
+    "vol-ZEU3OAQ7",
+    "vol-TSNPJC5F",
+    "vol-687S884C"
+  ],
+  "instances": [
+    "i-PX4SFNMW",
+    "i-88G1K070",
+    "i-Q42TL4J4"
+  ],
+  "eips": [
+    "eip-52QPTREJ",
+    "eip-Q2C2067R",
+    "eip-4OQM5GDN"
+  ],
+  "job_id": "job-X9FQT4CS"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := RunInstancesRequest{
+		Product: RunInstancesProduct{
+			Cloud: RunInstancesCloud{
+				Amount: 1,
+				VM: RunInstancesVM{
+					Name:      "test",
+					LoginMode: LoginModePwd,
+					Mem:       1024,
+					Cpu:       1,
+					Password:  "1111ssSS",
+					ImageID:   "centos65x64d",
+				},
+				HD: []RunInstancesHardDisk{
+					{
+						Name: "test1",
+						Unit: 10,
+						Type: HDTypePerformance,
+					},
+					{
+						Name: "test2",
+						Unit: 10,
+						Type: HDTypePerformance,
+					},
+				},
+				Net0: true,
+				Net1: []RunInstancesNet1{
+					{
+						VxnetName: "test",
+						Checked:   true,
+					},
+				},
+				IP: RunInstancesIP{
+					IPGroup:   "eipg-00000000",
+					Bandwidth: 1,
+				},
+			},
+		},
+	}
+	var response RunInstancesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := RunInstancesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "RunInstancesResponse",
+			RetCode: 0,
+			Code:    0,
+		},
+		Instances: []string{"i-PX4SFNMW", "i-88G1K070", "i-Q42TL4J4"},
+		Volumes:   []string{"vol-ZEU3OAQ7", "vol-TSNPJC5F", "vol-687S884C"},
+		EIPs:      []string{"eip-52QPTREJ", "eip-Q2C2067R", "eip-4OQM5GDN"},
+		JobID:     "job-X9FQT4CS",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestTerminateInstances tests that we send correct request to terminate instances.
+func TestTerminateInstances(t *testing.T) {
+	// Note "ips" and "vols" are empty.
+	expectedJson := RemoveWhitespaces(`
+{
+  "instances": [
+    "i-TXQ59KVB",
+    "i-69CFY6RK",
+    "i-LQQUNEJX"
+  ],
+  "zone": "ac1",
+  "token":"E5I9QKJF1O2B5PXE68LG",
+  "action": "TerminateInstances"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code": 0,
+  "action": "TerminateInstancesResponse",
+  "code": 0,
+  "job_id": "job-0FP96OHD"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := TerminateInstancesRequest{
+		Instances: []string{"i-TXQ59KVB", "i-69CFY6RK", "i-LQQUNEJX"},
+	}
+	var response TerminateInstancesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := TerminateInstancesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "TerminateInstancesResponse",
+			Code:    0,
+			RetCode: 0,
+		},
+		JobID: "job-0FP96OHD",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestStartInstances tests that we send correct request to start instances.
+func TestStartInstances(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "instances": [
+    "i-G74Q69NJ",
+    "i-OAEZPC6C"
+  ],
+  "zone": "ac1",
+  "token":"E5I9QKJF1O2B5PXE68LG",
+  "action": "StartInstances"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code":0,
+  "action": "StartInstancesResponse",
+  "code": 0,
+  "job_id": "job-IAGIH7TT"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := StartInstancesRequest{
+		Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
+	}
+	var response StartInstancesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := StartInstancesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "StartInstancesResponse",
+			Code:    0,
+			RetCode: 0,
+		},
+		JobID: "job-IAGIH7TT",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestStopInstances tests that we send correct request to stop instances.
 func TestStopInstance(t *testing.T) {
 	// Note "ips" and "vols" are empty.
 	expectedJson := RemoveWhitespaces(`
@@ -419,7 +475,7 @@ func TestStopInstance(t *testing.T) {
 
 	fakeResponse := RemoveWhitespaces(`
 {
-  "ret_code":0 ,
+  "ret_code": 0,
   "action": "StopInstancesResponse",
   "code": 0,
   "job_id": "job-ZUBILH5I"
@@ -429,24 +485,23 @@ func TestStopInstance(t *testing.T) {
 	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
 	defer testServer.Close()
 
-	body := StopInstancesRequest{
-		Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
-		Force:     ForceStop,
-	}
-
 	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	resp, err := c.StopInstances(body)
+
+	request := StopInstancesRequest{
+		Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
+		Force:     ForceStop,
+	}
+	var response StopInstancesResponse
+
+	err = c.SendRequest(request, &response)
 	if err != nil {
 		t.Errorf("Unexpected non-nil error %v", err)
 	}
-	if resp == nil {
-		t.Errorf("Unexpected nil response")
-	}
 
-	expectedResponseBody := &StopInstancesResponse{
+	expectedResponse := StopInstancesResponse{
 		ResponseCommon: ResponseCommon{
 			Action:  "StopInstancesResponse",
 			Code:    0,
@@ -454,7 +509,173 @@ func TestStopInstance(t *testing.T) {
 		},
 		JobID: "job-ZUBILH5I",
 	}
-	if !reflect.DeepEqual(expectedResponseBody, resp) {
-		t.Errorf("Error: expected \n%v, got \n%v", expectedResponseBody, resp)
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestRestartInstances tests that we send correct request to restart instances.
+func TestRestartInstances(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "instances": [
+    "i-G74Q69NJ",
+    "i-OAEZPC6C"
+  ],
+  "zone": "ac1",
+  "token":"E5I9QKJF1O2B5PXE68LG",
+  "action": "RestartInstances"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code":0,
+  "action": "RestartInstancesResponse",
+  "code": 0,
+  "job_id": "job-R9HV3XDU"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := RestartInstancesRequest{
+		Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
+	}
+	var response RestartInstancesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := RestartInstancesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "RestartInstancesResponse",
+			Code:    0,
+			RetCode: 0,
+		},
+		JobID: "job-R9HV3XDU",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestResetLoginPasswd tests that we send correct request to reset instance password.
+func TestResetLoginPasswd(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "instances": [
+    "i-G74Q69NJ"
+  ],
+  "login_passwd": "2222ssSS",
+  "token":"E5I9QKJF1O2B5PXE68LG",
+  "action": "ResetLoginPasswd",
+  "zone":"ac1"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code": 0,
+  "action": "ResetLoginPasswdResponse",
+  "code ": 0,
+  "job_id": "job-GKQTYZR4"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := ResetLoginPasswdRequest{
+		Instances:   []string{"i-G74Q69NJ"},
+		LoginPasswd: "2222ssSS",
+	}
+	var response ResetLoginPasswdResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := ResetLoginPasswdResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "ResetLoginPasswdResponse",
+			Code:    0,
+			RetCode: 0,
+		},
+		JobID: "job-GKQTYZR4",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
+	}
+}
+
+// TestModifyInstanceAttributes tests that we send correct request to modify instance attributes.
+func TestModifyInstanceAttributes(t *testing.T) {
+	expectedJson := RemoveWhitespaces(`
+{
+  "instance": "i-G74Q69NJ",
+  "instance_name": "test",
+  "description": "testtest",
+  "zone": "ac1",
+  "token": "E5I9QKJF1O2B5PXE68LG",
+  "action": "ModifyInstanceAttributes"
+}
+`)
+
+	fakeResponse := RemoveWhitespaces(`
+{
+  "ret_code": 0,
+  "action": "ModifyInstanceAttributesResponse",
+  "code": 0,
+  "instance_id": "i-G74Q69NJ",
+  "job_id": "job-8ZZVXC5O"
+}
+`)
+
+	testServer := httptest.NewServer(&FakeHandler{t: t, ExpectedJson: expectedJson, FakeResponse: fakeResponse})
+	defer testServer.Close()
+
+	c, err := NewClient(testServer.URL, &AuthConfiguration{PublicKey: "E5I9QKJF1O2B5PXE68LG", PrivateKey: "secret"})
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	request := ModifyInstanceAttributesRequest{
+		Instance:     "i-G74Q69NJ",
+		InstanceName: "test",
+		Description:  "testtest",
+	}
+	var response ModifyInstanceAttributesResponse
+
+	err = c.SendRequest(request, &response)
+	if err != nil {
+		t.Errorf("Unexpected non-nil error %v", err)
+	}
+
+	expectedResponse := ModifyInstanceAttributesResponse{
+		ResponseCommon: ResponseCommon{
+			Action:  "ModifyInstanceAttributesResponse",
+			Code:    0,
+			RetCode: 0,
+		},
+		InstanceID: "i-G74Q69NJ",
+		JobID:      "job-8ZZVXC5O",
+	}
+	if !reflect.DeepEqual(expectedResponse, response) {
+		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
 	}
 }

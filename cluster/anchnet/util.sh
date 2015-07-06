@@ -173,7 +173,7 @@ function deploy-addons {
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
 
   # Calling 'addons-start.sh' to start addons.
-    expect <<EOF
+  expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "sudo ./kube/addons-start.sh"

@@ -5,43 +5,87 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
 	"strconv"
 
+	"github.com/caicloud/anchnet-go"
 	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
 	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/pflag"
-	"github.com/golang/glog"
 )
 
-func getFlag(cmd *cobra.Command, flag string) *pflag.Flag {
-	f := cmd.Flags().Lookup(flag)
-	if f == nil {
-		glog.Fatalf("flag accessed but not defined for command %s: %s", cmd.Name(), flag)
-	}
-	return f
-}
-
-func GetFlagString(cmd *cobra.Command, flag string) string {
+func getFlagString(cmd *cobra.Command, flag string) string {
 	f := getFlag(cmd, flag)
 	return f.Value.String()
 }
 
-func GetFlagBool(cmd *cobra.Command, flag string) bool {
+func getFlagBool(cmd *cobra.Command, flag string) bool {
 	f := getFlag(cmd, flag)
 	result, err := strconv.ParseBool(f.Value.String())
 	if err != nil {
-		glog.Fatalf("Invalid value for a boolean flag: %s", f.Value.String())
+		fmt.Fprintln(os.Stderr, "Invalid value for a boolean flag: %s", f.Value.String())
+		os.Exit(1)
 	}
 	return result
 }
 
-func GetFlagInt(cmd *cobra.Command, flag string) int {
+func getFlagInt(cmd *cobra.Command, flag string) int {
 	f := getFlag(cmd, flag)
 	// Assumes the flag has a default value.
 	v, err := strconv.Atoi(f.Value.String())
 	// This is likely not a sufficiently friendly error message, but cobra
 	// should prevent non-integer values from reaching here.
 	if err != nil {
-		glog.Fatalf("unable to convert flag value to int: %v", err)
+		fmt.Fprintln(os.Stderr, "unable to convert flag value to int: %v", err)
+		os.Exit(1)
 	}
 	return v
+}
+
+func getFlag(cmd *cobra.Command, flag string) *pflag.Flag {
+	f := cmd.Flags().Lookup(flag)
+	if f == nil {
+		fmt.Fprintln(os.Stderr, "flag accessed but not defined for command %s: %s", cmd.Name(), flag)
+		os.Exit(1)
+	}
+	return f
+}
+
+// getAnchnetClient returns the path to configuration file.
+func getAnchnetClient(cmd *cobra.Command) *anchnet.Client {
+	f := cmd.InheritedFlags().Lookup("config-path")
+	if f == nil {
+		fmt.Fprintln(os.Stderr, "flag accessed but not defined for command %s: config-path", cmd.Name())
+		os.Exit(1)
+	}
+	path := f.Value.String()
+	if path == "" {
+		path = anchnet.DefaultConfigPath()
+	}
+
+	auth, err := anchnet.LoadConfig(path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error loading auth config: %v", err)
+		os.Exit(1)
+	}
+
+	client, err := anchnet.NewClient(anchnet.DefaultEndpoint, auth)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error creating client: %v", err)
+		os.Exit(1)
+	}
+
+	return client
+}
+
+// sendResult sends result to out
+func sendResult(response interface{}, out io.Writer) {
+	output, err := json.Marshal(response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unexpected error marshaling output %v", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(out, "%v", string(output))
 }

@@ -6,6 +6,7 @@ package anchnet
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path"
 )
@@ -15,7 +16,7 @@ type AuthConfiguration struct {
 	PrivateKey string `json:"privatekey"`
 }
 
-// LoadConfig loads API keys from ConfigDir.
+// LoadConfig loads API keys from given path.
 func LoadConfig(path string) (*AuthConfiguration, error) {
 	r, err := os.Open(path)
 	if err != nil {
@@ -23,6 +24,15 @@ func LoadConfig(path string) (*AuthConfiguration, error) {
 	}
 	var auth AuthConfiguration
 	if err := json.NewDecoder(r).Decode(&auth); err != nil {
+		return nil, err
+	}
+	return &auth, nil
+}
+
+// LoadConfigReader loads API keys from given reader.
+func LoadConfigReader(config io.Reader) (*AuthConfiguration, error) {
+	var auth AuthConfiguration
+	if err := json.NewDecoder(config).Decode(&auth); err != nil {
 		return nil, err
 	}
 	return &auth, nil

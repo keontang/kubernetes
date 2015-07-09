@@ -17,16 +17,16 @@
 ## Contains configuration values that vary per user.
 
 # Define number of nodes (minions). There will be only one master.
-export NUM_MINIONS=2
+export NUM_MINIONS=1
 
 # The memory size of master node (in MB).
-export MASTER_MEM=2048
+export MASTER_MEM=1024
 
 # The number of CPUs of the master.
-export MASTER_CPU_CORES=2
+export MASTER_CPU_CORES=1
 
 # The memory size of master node (in MB).
-export NODE_MEM=2048
+export NODE_MEM=1024
 
 # The number of CPUs of a node.
-export NODE_CPU_CORES=2
+export NODE_CPU_CORES=1

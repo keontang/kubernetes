@@ -22,7 +22,8 @@ set -e
 DEV_MODE=false
 
 # The base image used to create master and node instance. This image is created
-# from build-image.sh, which installs caicloud-k8s release binaries, docker, etc.
+# from scripts like 'image-from-devserver.sh', which install caicloud-k8s release
+# binaries, docker, etc.
 # This approach avoids downloading/installing when bootstrapping a cluster, which
 # saves a lot of time. The image must be created from ubuntu, and has:
 #   ~/kube/master - Directory containing all master binaries
@@ -33,6 +34,7 @@ INSTANCE_IMAGE="img-OBKRMWB4"
 
 # Helper constants.
 ANCHNET_CMD="anchnet"
+DEFAULT_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
 
 
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
@@ -44,11 +46,16 @@ function verify-prereqs {
   fi
   if [[ "$(which expect)" == "" ]]; then
     echo "Can't find expect binary in PATH, please fix and retry."
-    echo "For ubuntu, if you have root access, run: sudo apt-get install expect."
+    echo "For ubuntu/debian, if you have root access, run: sudo apt-get install expect."
+    exit 1
+  fi
+  if [[ "$(which kubectl)" == "" ]]; then
+    echo "Can't find kubectl binary in PATH, please fix and retry."
     exit 1
   fi
   if [[ ! -f ~/.anchnet/config  ]]; then
     echo "Can't find anchnet config file in ~/.anchnet, please fix and retry."
+    echo "File ~/.anchnet/config contains credentials used to access anchnet API."
     exit 1
   fi
 }
@@ -71,13 +78,12 @@ function kube-up {
   ensure-pub-key
 
   KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
-  DEFAULT_PER_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
-  PER_USER_CONFIG_FILE=${PER_USER_CONFIG_FILE:-${DEFAULT_PER_USER_CONFIG_FILE}}
-  echo "Reading per user configuration from ${PER_USER_CONFIG_FILE}"
+  USER_CONFIG_FILE=${USER_CONFIG_FILE:-${DEFAULT_USER_CONFIG_FILE}}
+  echo "Reading user configuration from ${USER_CONFIG_FILE}"
 
-  # Get all cluster configuration parameters from config-default and per user config.
+  # Get all cluster configuration parameters from config-default and user config.
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-  source "${PER_USER_CONFIG_FILE}"
+  source "${USER_CONFIG_FILE}"
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
@@ -113,9 +119,8 @@ function kube-up {
   create-node-internal-ips
   create-etcd-initial-cluster
 
-  # Now start installing master and nodes.
-  install-master
-  install-nodes
+  # Now start installing master/nodes all together.
+  install-instances
 
   # Start master/nodes all together.
   provision-k8s
@@ -165,9 +170,13 @@ function deploy-addons {
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@${MASTER_EIP} "sudo ./kube/addons-start.sh"
-expect "*assword for*"
-send -- "${KUBE_INSTANCE_PASSWORD}\r"
-expect eof
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
 EOF
 }
 
@@ -239,9 +248,21 @@ function ensure-temp-dir {
 # $ RunInstance
 #
 # Input:
-#   $1 A valid json string.
+#   $1 A valid string for indexing json string.
+#   stdin: A json string
+#
+# Output:
+#   stdout: value at given index (empty if error occurs).
+#   stderr: any parsing error
 function json_val {
-  python -c 'import json,sys;obj=json.load(sys.stdin);print obj'$1''
+  python -c '
+import json,sys
+try:
+  obj=json.load(sys.stdin)
+  print obj'$1'
+except:
+  sys.stderr.write("Unable to parse json string, please retry\n")
+'
 }
 
 
@@ -282,6 +303,8 @@ function create-master-instance {
 
 
 # Create node instances from anchnet.
+#
+# TODO: Create nodes at once (In anchnet API, it's possible to create N instances at once).
 #
 # Assumed vars:
 #   NUM_MINIONS
@@ -407,7 +430,7 @@ set timeout -1
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   $HOME/.ssh/id_rsa.pub ubuntu@$1:~/host_rsa.pub
 expect {
-  "*?assword:" {
+  "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
@@ -416,7 +439,7 @@ expect {
 spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@$1 "umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub"
 expect {
-  "*?assword:" {
+  "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
@@ -581,30 +604,41 @@ function create-etcd-initial-cluster {
 }
 
 
-# The method assumes master instance is running. It does the following two things:
+# The method assumes instances are running. It does the following things:
 # 1. Copies master component configurations to working directory (~/kube).
 # 2. Create a master-start.sh file which applies the configs, setup network, and
 #   starts k8s master. The base image we use have the binaries in place.
+# 3. Copies node component configurations to working directory (~/kube).
+# 4. Create a node${i}-start.sh file which applies the configs, setup network, and
+#   starts k8s node. The base image we use have the binaries in place.
+#
+# This is a long method, but it helps use do the installation concurrently.
 #
 # Assumed vars:
 #   KUBE_ROOT
 #   KUBE_TEMP
 #   MASTER_EIP
 #   MASTER_INTERNAL_IP
+#   NODE_EIPS
+#   NODE_INTERNAL_IPS
 #   ETCD_INITIAL_CLUSTER
 #   SERVICE_CLUSTER_IP_RANGE
 #   PRIVATE_SDN_INTERFACE
-#   PER_USER_CONFIG_FILE
-function install-master {
-  echo "+++++ Start installing master"
+#   USER_CONFIG_FILE
+#   DNS_SERVER_IP
+#   DNS_DOMAIN
+#   POD_INFRA_CONTAINER
+function install-instances {
+  local pids=""
 
+  echo "+++++ Start installing master"
   # Create master startup script.
   (
     echo "#!/bin/bash"
     echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-    grep -v "^#" "${PER_USER_CONFIG_FILE}"
+    grep -v "^#" "${USER_CONFIG_FILE}"
     echo ""
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
@@ -657,26 +691,10 @@ function install-master {
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
       ~/.anchnet/config \
-      "ubuntu@${MASTER_EIP}":~/kube
-}
+      "ubuntu@${MASTER_EIP}":~/kube &
+  pids="$pids $!"
 
-
-# The method assumes node instances are running. It does the similar thing as
-# install-master, but to nodes.
-#
-# TODO: Create caicloud registry to host images like caicloud/k8s-pause:0.8.0.
-#
-# Assumed vars:
-#   KUBE_ROOT
-#   KUBE_TEMP
-#   NODE_EIPS
-#   NODE_INTERNAL_IPS
-#   ETCD_INITIAL_CLUSTER
-#   DNS_SERVER_IP
-#   DNS_DOMAIN
-#   POD_INFRA_CONTAINER
-#   PER_USER_CONFIG_FILE
-function install-nodes {
+  # Start installing nodes.
   IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
   IFS=',' read -ra node_instance_arr <<< "${NODE_INSTANCE_IDS}"
@@ -740,8 +758,13 @@ function install-nodes {
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
         ~/.anchnet/config \
-        "ubuntu@${node_eip}":~/kube
+        "ubuntu@${node_eip}":~/kube &
+    pids="$pids $!"
   done
+
+  echo "+++++ Wait for all instances to be installed..."
+  wait $pids
+  echo "+++++ All instances have been installed...."
 }
 
 
@@ -761,9 +784,13 @@ function provision-k8s {
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@${MASTER_EIP} "sudo ~/kube/master-start.sh"
-expect "*assword for*"
-send -- "${KUBE_INSTANCE_PASSWORD}\r"
-expect eof
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
 EOF
   pids="$pids $!"
 
@@ -780,9 +807,13 @@ EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ubuntu@${node_eip} "sudo ./kube/node${i}-start.sh"
-expect "*assword for*"
-send -- "${KUBE_INSTANCE_PASSWORD}\r"
-expect eof
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
 EOF
     pids="$pids $!"
     i=$(($i+1))

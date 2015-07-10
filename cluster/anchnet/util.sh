@@ -14,12 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+
+# TODO: Create a clean up script to stop all services, delete old configs, etc.
 
 # When running dev, no machine will be created. Developer is responsible to
 # specify the instance IDs, eip IDs, etc.
-# TODO: Create a clean up script to stop all services, delete old configs, etc.
-DEV_MODE=false
+DEV_MODE=${DEV_MODE:-false}
 
 # The base image used to create master and node instance. This image is created
 # from scripts like 'image-from-devserver.sh', which install caicloud-k8s release
@@ -31,6 +31,7 @@ DEV_MODE=false
 #   Installed docker
 #   Installed bridge-utils
 INSTANCE_IMAGE="img-OBKRMWB4"
+INSTANCE_USER="ubuntu"
 
 # Helper constants.
 ANCHNET_CMD="anchnet"
@@ -63,13 +64,14 @@ function verify-prereqs {
 
 # Step2 of cluster bootstrapping: create all machines and provision them.
 function kube-up {
-  # For dev, use a constant password.
-  if [[ "${DEV_MODE}" = true ]]; then
-    KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
-  else
-    # Create KUBE_INSTANCE_PASSWORD, which will be used to login into anchnet instances.
+  KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
+
+  # Create KUBE_INSTANCE_PASSWORD, which will be used to login into anchnet instances.
+  if false; then
+    # Disable to save some typing.
     prompt-instance-password
   fi
+  KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
 
   # Make sure we have a staging area.
   ensure-temp-dir
@@ -77,13 +79,19 @@ function kube-up {
   # Make sure we have a public/private key pair used to provision the machine.
   ensure-pub-key
 
-  KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
+  # Get all cluster configuration parameters from config-default and user-config;
+  # also create useful vars based on the information:
+  #   MASTER_NAME, NODE_NAME_PREFIX
+  # Note that master_name and node_name are name of the instances in anchnet, which
+  # is helpful to group instances; however, anchnet API works well with instance id,
+  # so we provide instance id to kubernetes as nodename and hostname, which makes it
+  # easy to query anchnet in kubernetes.
   USER_CONFIG_FILE=${USER_CONFIG_FILE:-${DEFAULT_USER_CONFIG_FILE}}
   echo "Reading user configuration from ${USER_CONFIG_FILE}"
-
-  # Get all cluster configuration parameters from config-default and user config.
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
   source "${USER_CONFIG_FILE}"
+  MASTER_NAME="${CLUSTER_ID}-master"
+  NODE_NAME_PREFIX="${CLUSTER_ID}-node"
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
@@ -99,7 +107,6 @@ function kube-up {
     # two methods will create a set of vars to be used later:
     #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
     #   NODE_INSTANCE_IDS,   NODE_EIP_IDS,   NODE_EIPS
-    # TODO: The process can run concurrently to speed up bootstrapping.
     # TODO: Firewall setup, need a method create-firewall.
     create-master-instance
     create-node-instances
@@ -119,19 +126,19 @@ function kube-up {
   create-node-internal-ips
   create-etcd-initial-cluster
 
+  # TODO: Add retry logic to install instances and provision instances.
+
   # Now start installing master/nodes all together.
   install-instances
 
   # Start master/nodes all together.
-  provision-k8s
+  provision-instances
 
-  # common.sh defines create-kubeconfig, which is used to create client kubeconfig
-  # for kubectl. To properly create kubeconfig, make sure to supply it with assumed
-  # vars.
-  # TODO: Fix hardcoded port in KUBE_MASTER_IP
+  # common.sh defines create-kubeconfig, which is used to create client kubeconfig for
+  # kubectl. To properly create kubeconfig, make sure to supply it with assumed vars.
   # TODO: Fix hardcoded CONTEXT
   source "${KUBE_ROOT}/cluster/common.sh"
-  KUBE_MASTER_IP="${MASTER_EIP}:6443"
+  KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
   CONTEXT="anchnet_kubernetes"
   create-kubeconfig
 }
@@ -163,13 +170,13 @@ function deploy-addons {
       ${KUBE_TEMP}/system:dns-secret \
       ${KUBE_TEMP}/skydns-rc.yaml \
       ${KUBE_TEMP}/skydns-svc.yaml \
-      "ubuntu@${MASTER_EIP}":~/kube
+      "${INSTANCE_USER}@${MASTER_EIP}":~/kube
 
   # Calling 'addons-start.sh' to start addons.
     expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ubuntu@${MASTER_EIP} "sudo ./kube/addons-start.sh"
+  ${INSTANCE_USER}@${MASTER_EIP} "sudo ./kube/addons-start.sh"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -200,6 +207,7 @@ function prompt-instance-password {
 # Create ~/.ssh/id_rsa.pub if it doesn't exist.
 function ensure-pub-key {
   if [[ ! -f ~/.ssh/id_rsa.pub ]]; then
+    echo "+++++ Creating public key..."
     expect <<EOF
 spawn ssh-keygen -t rsa -b 4096
 expect "*rsa key*"
@@ -274,6 +282,7 @@ except:
 #   KUBE_ROOT
 #   KUBE_TEMP
 #   KUBE_INSTANCE_PASSWORD
+#   MASTER_NAME
 #   MASTER_CPU_CORES
 #   MASTER_MEM_SIZE
 #
@@ -282,11 +291,12 @@ except:
 #   MASTER_EIP_ID
 #   MASTER_EIP
 function create-master-instance {
-  echo "+++++ Creating kubernetes master from anchnet"
+  echo "+++++ Creating kubernetes master from anchnet, master name: ${MASTER_NAME}"
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
-  local master_info=$(${ANCHNET_CMD} runinstance master -p="${KUBE_INSTANCE_PASSWORD}" -i="${INSTANCE_IMAGE}" \
-                      -m=${MASTER_MEM} -c=${MASTER_CPU_CORES})
+  local master_info=$(
+    ${ANCHNET_CMD} runinstance "${MASTER_NAME}" -p="${KUBE_INSTANCE_PASSWORD}" \
+                   -i="${INSTANCE_IMAGE}" -m="${MASTER_MEM}" -c="${MASTER_CPU_CORES}")
   MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
   MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
 
@@ -310,6 +320,7 @@ function create-master-instance {
 #   NUM_MINIONS
 #   NODE_MEM
 #   NODE_CPU_CORES
+#   NODE_NAME_PREFIX
 #
 # Vars set:
 #   NODE_INSTANCE_IDS - comma separated string of instance IDs
@@ -317,11 +328,12 @@ function create-master-instance {
 #   NODE_EIPS - comma separated string of instance external IPs
 function create-node-instances {
   for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    echo "+++++ Creating kubernetes node-${i} from anchnet"
+    echo "+++++ Creating kubernetes ${i}th node from anchnet, node name: ${NODE_NAME_PREFIX}-${i}"
 
     # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
-    local node_info=$(${ANCHNET_CMD} runinstance node-${i} -p="${KUBE_INSTANCE_PASSWORD}" -i="${INSTANCE_IMAGE}" \
-                      -m="${NODE_MEM}" -c="${NODE_CPU_CORES}")
+    local node_info=$(
+      ${ANCHNET_CMD} runinstance "${NODE_NAME_PREFIX}-${i}" -p="${KUBE_INSTANCE_PASSWORD}" \
+                     -i="${INSTANCE_IMAGE}" -m="${NODE_MEM}" -c="${NODE_CPU_CORES}")
     local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
     local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
 
@@ -362,7 +374,7 @@ function check-instance-status {
     echo "Attempt $(($attempt+1)) to check for instance running"
     local status=$(${ANCHNET_CMD} describeinstance $1 | json_val '["item_set"][0]["status"]')
     if [[ ${status} != "running" ]]; then
-      if (( attempt > 30 )); then
+      if (( attempt > 20 )); then
         echo
         echo -e "${color_red}Instance $1 failed to start (sorry!)${color_norm}" >&2
         exit 1
@@ -372,7 +384,7 @@ function check-instance-status {
       break
     fi
     attempt=$(($attempt+1))
-    sleep 10
+    sleep $(($attempt*2))
   done
 }
 
@@ -393,7 +405,7 @@ function get-ip-address-from-eipid {
     local eip=$(${ANCHNET_CMD} describeeips $1 | json_val '["item_set"][0]["eip_addr"]')
     # Test the return value roughly matches ipv4 format.
     if [[ ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-      if (( attempt > 30 )); then
+      if (( attempt > 20 )); then
         echo
         echo -e "${color_red}failed to get eip address (sorry!)${color_norm}" >&2
         exit 1
@@ -404,7 +416,7 @@ function get-ip-address-from-eipid {
       break
     fi
     attempt=$(($attempt+1))
-    sleep 10
+    sleep $(($attempt*2))
   done
 }
 
@@ -420,52 +432,49 @@ function get-ip-address-from-eipid {
 # Assumed vars:
 #   KUBE_INSTANCE_PASSWORD
 function setup-instance-ssh {
-  # TODO: Refine expect script to take care of timeout, lost connection, etc. Now
-  # we use a simple sleep to give some grace period for sshd to up.
-  sleep 20
-  # TODO: Use ubuntu image for now. If we use different image, user name can be 'root'.
-  # Use a large timeout to tolerate ssh connection delay; otherwise, expect script will mess up.
-  expect <<EOF
-set timeout -1
+  attempt=0
+  while true; do
+    echo "Attempt $(($attempt+1)) to setup instance ssh for $1"
+    local ok=1
+    expect <<EOF || ok=0
+set timeout $((($attempt+1)*3))
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  $HOME/.ssh/id_rsa.pub ubuntu@$1:~/host_rsa.pub
+  $HOME/.ssh/id_rsa.pub ${INSTANCE_USER}@$1:~/host_rsa.pub
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
+  timeout { exit 1 }
   eof {}
 }
 spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ubuntu@$1 "umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub"
+  ${INSTANCE_USER}@$1 "umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
+  timeout { exit 1 }
   eof {}
 }
 EOF
-
-  attempt=0
-  while true; do
-    echo -n "Attempt $(($attempt+1)) to check for SSH to instance $1"
-    local output
-    local ok=1
-    output=$(ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet ubuntu@$1 uptime) || ok=0
-    if [[ ${ok} == 0 ]]; then
-      if (( attempt > 30 )); then
+    if [[ "${ok}" == "0" ]]; then
+      # We give more attempts for setting up ssh to allow slow startup.
+      if (( attempt > 40 )); then
         echo
-        echo -e "${color_red}Unable to ssh to instance on $1, output was ${output} (sorry!)${color_norm}" >&2
+        echo -e "${color_red}Unable to setup instance ssh for $1 (sorry!)${color_norm}" >&2
         exit 1
       fi
     else
       echo -e " ${color_green}[ssh to instance working]${color_norm}"
       break
     fi
+    # No need to sleep here, we increment timout in expect.
     echo -e " ${color_yellow}[ssh to instance not working yet]${color_norm}"
     attempt=$(($attempt+1))
-    sleep 5
   done
 }
 
@@ -636,8 +645,8 @@ function install-instances {
   (
     echo "#!/bin/bash"
     echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
-    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${USER_CONFIG_FILE}"
     echo ""
     # The following create-*-opts functions create component options (flags).
@@ -691,7 +700,7 @@ function install-instances {
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
       ~/.anchnet/config \
-      "ubuntu@${MASTER_EIP}":~/kube &
+      "${INSTANCE_USER}@${MASTER_EIP}":~/kube &
   pids="$pids $!"
 
   # Start installing nodes.
@@ -710,9 +719,8 @@ function install-instances {
     (
       echo "#!/bin/bash"
       echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
-      grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-      grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/reconf-docker.sh"
+      grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
       echo ""
       # Create component options. Note in 'create-kubelet-opts', we use
       # ${node_instance_id} as hostname override for each node - see
@@ -745,8 +753,8 @@ function install-instances {
       echo "sleep 10"
       # Finally, start kubernetes cluster.
       echo "sudo service etcd start"
-      # Reconfigure docker network to use flannel overlay.
-      echo "reconfig-docker-net"
+      # Configure docker network to use flannel overlay.
+      echo "config-docker-net"
     ) > "${KUBE_TEMP}/node${i}-start.sh"
     chmod a+x ${KUBE_TEMP}/node${i}-start.sh
 
@@ -758,7 +766,7 @@ function install-instances {
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
         ~/.anchnet/config \
-        "ubuntu@${node_eip}":~/kube &
+        "${INSTANCE_USER}@${node_eip}":~/kube &
     pids="$pids $!"
   done
 
@@ -774,16 +782,15 @@ function install-instances {
 #   KUBE_INSTANCE_PASSWORD
 #   MASTER_EIP
 #   NODE_EIPS
-function provision-k8s {
+function provision-instances {
   local pids=""
 
   echo "+++++ Start provisioning master"
-  # Call master-start.sh to start master. Note since we don't run flanneld on master,
-  # we don't need to run expect in background.
+  # Call master-start.sh to start master.
   expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ubuntu@${MASTER_EIP} "sudo ~/kube/master-start.sh"
+  ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -800,13 +807,13 @@ EOF
     echo "+++++ Start provisioning node-${i}"
     # Call node${i}-start.sh to start node. Note we must run expect in background;
     # otherwise, there will be a deadlock: node0-start.sh keeps retrying for etcd
-    # connection (for docker-flannel reconfiguration) because other nodes aren't
+    # connection (for docker-flannel configuration) because other nodes aren't
     # ready. If we run expect in foreground, we can't start other nodes; thus node0
     # will wait until timeout.
     expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ubuntu@${node_eip} "sudo ./kube/node${i}-start.sh"
+  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node${i}-start.sh"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -875,9 +882,7 @@ EOF
 #   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/kubectl.crt
 #   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/kubectl.key
 function create-certs-and-credentials {
-  # TODO: Figure out this name.
-  echo "Creating certificats and credentials"
-  MASTER_NAME="master"
+  echo "+++++ Creating certificats and credentials"
 
   # 'octects' will be an arrary of segregated IP, e.g. 192.168.3.0/24 => 192 168 3 0
   # 'service_ip' is the first IP address in SERVICE_CLUSTER_IP_RANGE; it is the service
@@ -890,7 +895,7 @@ function create-certs-and-credentials {
   local service_ip=$(echo "${octects[*]}" | sed 's/ /./g')
   local sans="IP:${MASTER_EIP},IP:${MASTER_INTERNAL_IP},IP:${service_ip}"
   sans="${sans},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc"
-  sans="${sans},DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME}"
+  sans="${sans},DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME},DNS:master"
 
   # Create cluster certificates.
   (
@@ -904,8 +909,7 @@ function create-certs-and-credentials {
     ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
     ./easyrsa build-client-full kubectl nopass > /dev/null 2>&1
   ) || {
-    # TODO: Better error handling.
-    echo "=== Failed to generate certificates: Aborting ==="
+    echo "${color_red}=== Failed to generate certificates: Aborting ===${color_norm}"
     exit 2
   }
   CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
@@ -1000,8 +1004,7 @@ EOF
   local -r service_accounts=("system:scheduler" "system:controller_manager" "system:dns")
   for account in "${service_accounts[@]}"; do
     token=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
-    # TODO: Fix hardcoded port.
-    create-kubeconfig-secret "${token}" "${account}" "https://${MASTER_EIP}:6443" "${KUBE_TEMP}/${account}-secret"
+    create-kubeconfig-secret "${token}" "${account}" "https://${MASTER_EIP}:${MASTER_SECURE_PORT}" "${KUBE_TEMP}/${account}-secret"
     echo "${token},${account},${account}" >> "${KUBE_TEMP}/known-tokens.csv"
   done
 }

@@ -89,11 +89,13 @@ EOF
 #   $5 Pod infra image, i.e. the pause. Default pause image comes from gcr, which is
 #      sometimes blocked by GFW.
 function create-kubelet-opts {
+  # Lowercase input value.
+  local hostname=$(echo $1 | tr '[:upper:]' '[:lower:]')
   cat <<EOF > ~/kube/default/kubelet
 KUBELET_OPTS="--logtostderr=true \
 --address=0.0.0.0 \
 --port=10250 \
---hostname_override=${1} \
+--hostname_override=${hostname} \
 --api_servers=https://${2}:${MASTER_SECURE_PORT} \
 --cluster_dns=${3} \
 --cluster_domain=${4} \
@@ -158,7 +160,7 @@ function config-docker-net {
       # Give a large timeout since this depends on status of etcd on
       # other machines.
       if (( attempt > 600 )); then
-        echo "timeout for waiting network config" > ~/kube/err.log
+        echo "timeout waiting for network config"
         exit 2
       fi
       /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"${FLANNEL_NET}\"}"
@@ -177,7 +179,7 @@ function config-docker-net {
       break
     else
       if (( attempt > 60 )); then
-        echo "timeout for waiting subnet.env from flannel" > ~/kube/err.log
+        echo "timeout waiting for subnet.env from flannel"
         exit 2
       fi
       attempt=$((attempt+1))
@@ -198,4 +200,31 @@ function config-docker-net {
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
        --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU}\" > /etc/default/docker
   sudo service docker start
+}
+
+# Set hostname of an instance. In anchnet, hostname has the same format but
+# different value than instance ID. We don't need the random hostname given
+# by anchnet.
+#
+# Input:
+#   $1 instance ID
+function config-hostname {
+  # Lowercase input value.
+  local new_hostname=$(echo $1 | tr '[:upper:]' '[:lower:]')
+
+  # Return early if hostname is already new.
+  if [[ "`hostname`" == "${new_hostname}" ]]; then
+    return
+  fi
+
+  # Change /etc/hostname and /etc/hosts to persist hostname change.
+  local old_hostname=$(hostname)
+  if grep -q "${old_hostname}" /etc/hosts; then
+    sudo sed -i "s/${old_hostname}/${new_hostname}/g" /etc/hosts
+  else
+    sudo sh -c "echo \"\" >> /etc/hosts"
+    sudo sh -c "echo \"127.0.0.1 ${new_hostname}\" >> /etc/hosts"
+  fi
+  sudo sed -i "s/${old_hostname}/${new_hostname}/g" /etc/hostname
+  sudo hostname ${new_hostname}
 }

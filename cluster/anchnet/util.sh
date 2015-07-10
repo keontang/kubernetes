@@ -628,6 +628,7 @@ function create-etcd-initial-cluster {
 #   KUBE_TEMP
 #   MASTER_EIP
 #   MASTER_INTERNAL_IP
+#   MASTER_INSTANCE_ID
 #   NODE_EIPS
 #   NODE_INTERNAL_IPS
 #   ETCD_INITIAL_CLUSTER
@@ -649,6 +650,7 @@ function install-instances {
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${USER_CONFIG_FILE}"
     echo ""
+    echo "config-hostname ${MASTER_INSTANCE_ID}"
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
     echo "create-etcd-opts kubernetes-master \"${MASTER_INTERNAL_IP}\" \"${ETCD_INITIAL_CLUSTER}\""
@@ -722,6 +724,7 @@ function install-instances {
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
       echo ""
+      echo "config-hostname ${node_instance_id}"
       # Create component options. Note in 'create-kubelet-opts', we use
       # ${node_instance_id} as hostname override for each node - see
       # 'pkg/cloudprovider/anchnet/anchnet_instances.go' for how this works.

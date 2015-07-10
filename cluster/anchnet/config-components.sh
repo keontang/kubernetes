@@ -14,16 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-# MASTER_INSECURE_* is used to serve insecure connection. It is either
-# localhost, blocked by firewall, or use with nginx, etc. MASTER_SECURE_*
-# is accessed directly from outside world, serving HTTPS. Thses configs
-# should rarely change.
-MASTER_INSECURE_ADDRESS="127.0.0.1"
-MASTER_INSECURE_PORT=8080
-MASTER_SECURE_ADDRESS="0.0.0.0"
-MASTER_SECURE_PORT=6443
-
+# Assumed vars (defined in config-default.sh):
+#   MASTER_INSECURE_ADDRESS
+#   MASTER_INSECURE_PORT
+#   MASTER_SECURE_ADDRESS
+#   MASTER_SECURE_PORT
 
 # Create etcd options used to start etcd on master/nodes.
 # https://github.com/coreos/etcd/blob/master/Documentation/clustering.md
@@ -148,4 +143,59 @@ iface ${1} inet static
 address ${2}
 netmask ${3}
 EOF
+}
+
+# Configure docker network settings to use flannel overlay network.
+function config-docker-net {
+  # Set flannel configuration to etcd.
+  attempt=0
+  while true; do
+    echo "Attempt $(($attempt+1)) to set flannel configuration in etcd"
+    /opt/bin/etcdctl get "/coreos.com/network/config"
+    if [[ "$?" == 0 ]]; then
+      break
+    else
+      # Give a large timeout since this depends on status of etcd on
+      # other machines.
+      if (( attempt > 600 )); then
+        echo "timeout for waiting network config" > ~/kube/err.log
+        exit 2
+      fi
+      /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"${FLANNEL_NET}\"}"
+      attempt=$((attempt+1))
+      sleep 3
+    fi
+  done
+
+  # Wait for /run/flannel/subnet.env to be ready.
+  attempt=0
+  while true; do
+    echo "Attempt $(($attempt+1)) to check for subnet.env set by flannel"
+    if [[ -f /run/flannel/subnet.env ]] && \
+         grep -q "FLANNEL_SUBNET" /run/flannel/subnet.env && \
+         grep -q "FLANNEL_MTU" /run/flannel/subnet.env ; then
+      break
+    else
+      if (( attempt > 60 )); then
+        echo "timeout for waiting subnet.env from flannel" > ~/kube/err.log
+        exit 2
+      fi
+      attempt=$((attempt+1))
+      sleep 3
+    fi
+  done
+
+  # In order for docker to correctly use flannel setting, we first stop docker,
+  # flush nat table, delete docker0 and then start docker. Missing any one of
+  # the steps may result in wrong iptable rules, see:
+  # https://github.com/caicloud/caicloud-kubernetes/issues/25
+  sudo service docker stop
+  sudo iptables -t nat -F
+  sudo ip link set dev docker0 down
+  sudo brctl delbr docker0
+
+  source /run/flannel/subnet.env
+  echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
+       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU}\" > /etc/default/docker
+  sudo service docker start
 }

@@ -14,19 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-## Contains configuration values that vary per user.
+# The file contains configuration values that vary per user. Some values
+# are specified by users, e.g. NODE_MEM; and some values are specified by
+# cluster executor.
+
+# Unique ID of the cluster.
+export CLUSTER_ID="default"
 
 # Define number of nodes (minions). There will be only one master.
 export NUM_MINIONS=1
 
 # The memory size of master node (in MB).
 export MASTER_MEM=1024
-
 # The number of CPUs of the master.
 export MASTER_CPU_CORES=1
 
 # The memory size of master node (in MB).
 export NODE_MEM=1024
-
 # The number of CPUs of a node.
 export NODE_CPU_CORES=1

@@ -1,27 +1,42 @@
 #!/bin/bash
 
+SYSTEM_NAMESPACE=kube-system
+
+# Do retries when failing in objects creation from yaml files.
+#
+# $1 path to yaml file
+# $2 max retries
+# $3 delay between retries
+# $4 namespace in which the object should be created
 function create_resource_from_file() {
+  config_file=$1
   tries=$2
   delay=$3
+  namespace=$4
   while [ ${tries} -gt 0 ]; do
-    sudo /opt/bin/kubectl create -f $1 && \
-      echo "== Successfully started $1 at $(date -Is)" && \
+    /opt/bin/kubectl --namespace="${namespace}" create -f "${config_file}" && \
+      echo "== Successfully started ${config_file} in namespace ${namespace} at $(date -Is)" && \
       return 0;
     let tries=tries-1;
-    echo "== Failed to start $1. ${tries} tries remaining. =="
+    echo "== Failed to start ${config_file}. ${tries} tries remaining. =="
     sleep ${delay};
   done
   return 1;
 }
 
-mkdir -p ~/kube/addons
-mv ~/kube/system:dns-secret ~/kube/skydns-rc.yaml ~/kube/skydns-svc.yaml ~/kube/addons
+# Currently we put secrets, addons and namespace in separate folders
+mkdir -p ~/kube/addons ~/kube/namespace ~/kube/secrets
+mv ~/kube/system:dns-secret ~/kube/secrets
+mv ~/kube/skydns-rc.yaml ~/kube/skydns-svc.yaml ~/kube/addons
+mv ~/kube/namespace.yaml ~/kube/namespace
+
+# Create the namespace that will be used to host the cluster-level add-ons.
+create_resource_from_file ~/kube/namespace/namespace.yaml 100 10 ""
 
 # Create secret before the addons which have dependencies on it.
-create_resource_from_file ~/kube/addons/system:dns-secret 10 10
+create_resource_from_file ~/kube/secrets/system:dns-secret 10 10 "${SYSTEM_NAMESPACE}"
 
 # Create addons from file
 for obj in $(find ~/kube/addons -type f -name \*.yaml -o -name \*.json);do
-  create_resource_from_file ${obj} 10 10
-  echo "++ obj ${obj} is created ++"
+  create_resource_from_file ${obj} 10 10 "${SYSTEM_NAMESPACE}"
 done

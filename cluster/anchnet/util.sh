@@ -36,7 +36,7 @@ INSTANCE_USER="ubuntu"
 # Helper constants.
 ANCHNET_CMD="anchnet"
 DEFAULT_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
-
+SYSTEM_NAMESPACE=kube-system
 
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
 function verify-prereqs {
@@ -167,6 +167,7 @@ function deploy-addons {
   # Copy addon configurationss and startup script to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh \
+      ${KUBE_ROOT}/cluster/anchnet/addons/namespace.yaml \
       ${KUBE_TEMP}/system:dns-secret \
       ${KUBE_TEMP}/skydns-rc.yaml \
       ${KUBE_TEMP}/skydns-svc.yaml \
@@ -1046,6 +1047,7 @@ contexts:
 - context:
     cluster: local
     user: ${username}
+    namespace: ${SYSTEM_NAMESPACE}
   name: service-account-context
 current-context: service-account-context
 EOF

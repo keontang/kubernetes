@@ -37,7 +37,7 @@ import (
 // is no relationship between the two names. Therefore, we establish the convention
 // that node name equals to lower-cased instance id (i-ff830wku), and hostname is
 // overridden to node name as well (i-ff830wku). The hostname assigned by anchnet
-// is thus not used. Note we use all lowercase'd name since kubernetes expects DNS
+// is thus not used. Note all of the names are lowercased since kubernetes expects DNS
 // subdomain format.
 
 //

@@ -217,14 +217,18 @@ function config-hostname {
     return
   fi
 
-  # Change /etc/hostname and /etc/hosts to persist hostname change.
-  local old_hostname=$(hostname)
-  if grep -q "${old_hostname}" /etc/hosts; then
-    sudo sed -i "s/${old_hostname}/${new_hostname}/g" /etc/hosts
+  if which hostnamectl > /dev/null; then
+    hostnamectl set-hostname "${new_hostname}"
   else
-    sudo sh -c "echo \"\" >> /etc/hosts"
-    sudo sh -c "echo \"127.0.0.1 ${new_hostname}\" >> /etc/hosts"
+    echo "${new_hostname}" > /etc/hostname
+    hostname "${new_hostname}"
   fi
-  sudo sed -i "s/${old_hostname}/${new_hostname}/g" /etc/hostname
-  sudo hostname ${new_hostname}
+
+  if grep '127\.0\.1\.1' /etc/hosts > /dev/null; then
+    sed -i "s/127\.0\.1\.1.*/127.0.1.1 ${new_hostname}/g" /etc/hosts
+  else
+    echo -e "127.0.1.1\t${new_hostname}" >> /etc/hosts
+  fi
+
+  echo "Hostname settings have been changed to ${new_hostname}."
 }

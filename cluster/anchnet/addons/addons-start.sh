@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Copyright 2014 The Kubernetes Authors All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 SYSTEM_NAMESPACE=kube-system
 
 # Do retries when failing in objects creation from yaml files.
@@ -37,6 +51,6 @@ create_resource_from_file ~/kube/namespace/namespace.yaml 100 10 ""
 create_resource_from_file ~/kube/secrets/system:dns-secret 10 10 "${SYSTEM_NAMESPACE}"
 
 # Create addons from file
-for obj in $(find ~/kube/addons -type f -name \*.yaml -o -name \*.json);do
+for obj in $(find ~/kube/addons -type f -name \*.yaml -o -name \*.json); do
   create_resource_from_file ${obj} 10 10 "${SYSTEM_NAMESPACE}"
 done

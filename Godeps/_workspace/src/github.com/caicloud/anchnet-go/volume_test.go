@@ -58,7 +58,7 @@ func TestDescribeVolumes(t *testing.T) {
 	}
 
 	request := DescribeVolumesRequest{
-		Volumes:    []string{"vol-75LIXUQD"},
+		VolumeIDs:  []string{"vol-75LIXUQD"},
 		Limit:      10,
 		Offset:     0,
 		SearchWord: "hh",
@@ -136,9 +136,9 @@ func TestCreateVolumes(t *testing.T) {
 
 	request := CreateVolumesRequest{
 		VolumeName: "21",
+		VolumeType: VolumeTypePerformance,
 		Count:      1,
 		Size:       10,
-		VolumeType: VolumeTypePerformance,
 	}
 	var response CreateVolumesResponse
 
@@ -153,8 +153,8 @@ func TestCreateVolumes(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		Volumes: []string{"vol-SHPH11TH"},
-		JobID:   "job-G554X3LT",
+		VolumeIDs: []string{"vol-SHPH11TH"},
+		JobID:     "job-G554X3LT",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -192,7 +192,7 @@ func TestDeleteVolumes(t *testing.T) {
 	}
 
 	request := DeleteVolumesRequest{
-		Volumes: []string{"vol-A8RXJQRC"},
+		VolumeIDs: []string{"vol-A8RXJQRC"},
 	}
 	var response DeleteVolumesResponse
 
@@ -247,8 +247,8 @@ func TestAttachVolumes(t *testing.T) {
 	}
 
 	request := AttachVolumesRequest{
-		Instance: "i-7QAQCZ2E",
-		Volumes:  []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
+		InstanceID: "i-7QAQCZ2E",
+		VolumeIDs:  []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
 	}
 	var response AttachVolumesResponse
 
@@ -302,7 +302,7 @@ func TestDetachVolumes(t *testing.T) {
 	}
 
 	request := DetachVolumesRequest{
-		Volumes: []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
+		VolumeIDs: []string{"vol-EAWEJ5RI", "vol-A8RXJQRC"},
 	}
 	var response DetachVolumesResponse
 
@@ -356,8 +356,8 @@ func TestResizeVolumes(t *testing.T) {
 	}
 
 	request := ResizeVolumesRequest{
-		Volumes: []string{"vol-EAWEJ5RI"},
-		Size:    30,
+		VolumeIDs: []string{"vol-EAWEJ5RI"},
+		Size:      30,
 	}
 	var response ResizeVolumesResponse
 
@@ -411,7 +411,7 @@ func TestModifyVolumeAttributes(t *testing.T) {
 	}
 
 	request := ModifyVolumeAttributesRequest{
-		Volume:      "vol-GTQZP5KW",
+		VolumeID:    "vol-GTQZP5KW",
 		VolumeName:  "hh",
 		Description: "bobo",
 	}

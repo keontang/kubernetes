@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	anchnet "github.com/caicloud/anchnet-go"
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
 
 func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -63,8 +63,8 @@ func execDescribeInstance(cmd *cobra.Command, args []string, client *anchnet.Cli
 	}
 
 	request := anchnet.DescribeInstancesRequest{
-		Instances: []string{args[0]},
-		Verbose:   1,
+		InstanceIDs: []string{args[0]},
+		Verbose:     1,
 	}
 	var response anchnet.DescribeInstancesResponse
 
@@ -84,7 +84,7 @@ func execTerminateInstances(cmd *cobra.Command, args []string, client *anchnet.C
 	}
 
 	request := anchnet.TerminateInstancesRequest{
-		Instances: strings.Split(args[0], ","),
+		InstanceIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.TerminateInstancesResponse
 
@@ -104,7 +104,7 @@ func execStopInstances(cmd *cobra.Command, args []string, client *anchnet.Client
 	}
 
 	request := anchnet.StopInstancesRequest{
-		Instances: strings.Split(args[0], ","),
+		InstanceIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.StopInstancesResponse
 

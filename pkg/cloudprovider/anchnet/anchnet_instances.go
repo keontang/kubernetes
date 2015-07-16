@@ -116,8 +116,8 @@ func (an *Anchnet) CurrentNodeName(hostname string) (string, error) {
 func (an *Anchnet) describeInstance(name string) (*anchnet_client.DescribeInstancesResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.DescribeInstancesRequest{
-			Instances: []string{name},
-			Verbose:   1,
+			InstanceIDs: []string{name},
+			Verbose:     1,
 		}
 		var response anchnet_client.DescribeInstancesResponse
 		err := an.client.SendRequest(request, &response)

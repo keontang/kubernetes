@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	anchnet "github.com/caicloud/anchnet-go"
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
 
 func execCreateVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -43,7 +43,7 @@ func execDescribeVxnets(cmd *cobra.Command, args []string, client *anchnet.Clien
 	}
 
 	request := anchnet.DescribeVxnetsRequest{
-		Vxnets: strings.Split(args[0], ","),
+		VxnetIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.DescribeVxnetsResponse
 
@@ -63,8 +63,8 @@ func execJoinVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, ou
 	}
 
 	request := anchnet.JoinVxnetRequest{
-		Vxnet:     args[0],
-		Instances: strings.Split(args[1], ","),
+		VxnetID:     args[0],
+		InstanceIDs: strings.Split(args[1], ","),
 	}
 	var response anchnet.JoinVxnetResponse
 

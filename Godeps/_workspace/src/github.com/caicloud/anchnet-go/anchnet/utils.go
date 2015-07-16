@@ -12,8 +12,8 @@ import (
 	"strconv"
 
 	"github.com/caicloud/anchnet-go"
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/pflag"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func getFlagString(cmd *cobra.Command, flag string) string {

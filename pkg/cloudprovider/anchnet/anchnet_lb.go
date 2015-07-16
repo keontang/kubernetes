@@ -71,7 +71,6 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 // 2. create a loadbalancer with that ip;
 // 3. add listeners for the loadbalancer, number of listeners = number of service ports;
 // 4. add backends for each listener.
-// TODO: Try to apply affinityType.
 func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP, ports []*api.ServicePort, hosts []string, affinityType api.ServiceAffinity) (*api.LoadBalancerStatus, error) {
 	glog.Infof("Anchnet: received create loadbalancer request with name %v\n", name)
 
@@ -81,6 +80,14 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 		if port.Protocol != api.ProtocolTCP {
 			return nil, fmt.Errorf("external load balancers for non TCP services are not currently supported.")
 		}
+	}
+
+	if affinityType != api.ServiceAffinityNone {
+		// Anchnet supports sticky sessions, but only when configured for HTTP/HTTPS (cookies based).
+		// Although session affinity is calculated in kube-proxy, where it determines which pod to
+		// response a request, we still need to hit the same kube-proxy (the node). Other kube-proxy
+		// do not have the knowledge.
+		return nil, fmt.Errorf("unsupported load balancer affinity: %v", affinityType)
 	}
 
 	// Create a public IP address resource. The externalIP field is thus ignored.
@@ -100,7 +107,7 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	// loadbalancer to apply the changes do require.
 	err = an.waitForLoadBalancerReady(lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 		return nil, err
 	}
 
@@ -113,7 +120,7 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	for _, port := range ports {
 		listener_response, err := an.addLoadBalancerListeners(lb_response.LoadbalancerID, port.Port)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 			return nil, err
 		}
 		backends := []anchnet_client.AddLoadBalancerBackendsBackend{}
@@ -127,20 +134,20 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 		}
 		_, err = an.addLoadBalancerBackends(listener_response.ListenerIDs[0], backends)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 			return nil, err
 		}
 	}
 
 	_, err = an.updateLoadBalancer(lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 		return nil, err
 	}
 
 	response, err := an.describeEip(ip_response.EipIDs[0])
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 		return nil, err
 	}
 
@@ -162,7 +169,20 @@ func (an *Anchnet) UpdateTCPLoadBalancer(name, region string, hosts []string) er
 // have multiple underlying components, meaning a Get could say that the LB
 // doesn't exist even if some part of it is still laying around.
 func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
-	return nil
+	lb_response, exists, err := an.searchLoadBalancer(name)
+	if err != nil {
+		return err
+	}
+	if exists == false {
+		glog.Info("Load balancer %v already deleted", name)
+		return nil
+	}
+	var eip_ids []string
+	for _, eip := range lb_response.ItemSet[0].Eips {
+		eip_ids = append(eip_ids, eip.EipID)
+	}
+	_, err = an.deleteLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, eip_ids)
+	return err
 }
 
 // allocateEIP creates an external IP from anchnet, with retry.
@@ -255,11 +275,11 @@ func (an *Anchnet) createLoadBalancer(name string, eip string) (*anchnet_client.
 	return nil, fmt.Errorf("Unable to create loadbalancer %v with eip %v\n", name, eip)
 }
 
-// createLoadBalancer deletes a loadbalancer and its eip, with retry.
-func (an *Anchnet) deleteLoadBalancer(lbID, eip string) (*anchnet_client.DeleteLoadBalancersResponse, error) {
+// deleteLoadbalancer deletes a loadbalancer and its eips, with retry.
+func (an *Anchnet) deleteLoadBalancer(lbID string, eips []string) (*anchnet_client.DeleteLoadBalancersResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.DeleteLoadBalancersRequest{
-			EipIDs:          []string{eip},
+			EipIDs:          eips,
 			LoadbalancerIDs: []string{lbID},
 		}
 		var response anchnet_client.DeleteLoadBalancersResponse
@@ -272,7 +292,7 @@ func (an *Anchnet) deleteLoadBalancer(lbID, eip string) (*anchnet_client.DeleteL
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, fmt.Errorf("Unable to delete loadbalancer %v with eip %v\n", lbID, eip)
+	return nil, fmt.Errorf("Unable to delete loadbalancer %v with eips %v\n", lbID, eips)
 }
 
 // describeLoadBalancer gets a loadbalancer and its eip, with retry.

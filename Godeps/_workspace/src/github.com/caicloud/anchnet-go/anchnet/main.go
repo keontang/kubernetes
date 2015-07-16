@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
 
 func main() {

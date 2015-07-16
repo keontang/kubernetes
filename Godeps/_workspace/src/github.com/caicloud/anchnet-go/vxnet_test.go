@@ -70,8 +70,8 @@ func TestDescribeVxnets(t *testing.T) {
 	}
 
 	request := DescribeVxnetsRequest{
-		Vxnets:  []string{"vxnet-RL0ICH3P"},
-		Verbose: 1,
+		VxnetIDs: []string{"vxnet-RL0ICH3P"},
+		Verbose:  1,
 	}
 	var response DescribeVxnetsResponse
 
@@ -156,8 +156,8 @@ func TestCreateVxnets(t *testing.T) {
 
 	request := CreateVxnetsRequest{
 		VxnetName: "21",
-		Count:     1,
 		VxnetType: VxnetTypePriv,
+		Count:     1,
 	}
 	var response CreateVxnetsResponse
 
@@ -172,8 +172,8 @@ func TestCreateVxnets(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		Vxnets: []string{"vxnet-9IAPUWZN"},
-		JobID:  "job-I0HU0S3U",
+		VxnetIDs: []string{"vxnet-9IAPUWZN"},
+		JobID:    "job-I0HU0S3U",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -212,7 +212,7 @@ func TestDeleteVxnets(t *testing.T) {
 	}
 
 	request := DeleteVxnetsRequest{
-		Vxnets: []string{"vxnet-SAUO93R1", "vxnet-ABC"},
+		VxnetIDs: []string{"vxnet-SAUO93R1", "vxnet-ABC"},
 	}
 	var response DeleteVxnetsResponse
 
@@ -266,8 +266,8 @@ func TestJoinVxnet(t *testing.T) {
 	}
 
 	request := JoinVxnetRequest{
-		Vxnet:     "vxnet-SAUD093R1",
-		Instances: []string{"i-RDARAR8K"},
+		VxnetID:     "vxnet-SAUD093R1",
+		InstanceIDs: []string{"i-RDARAR8K"},
 	}
 	var response JoinVxnetResponse
 
@@ -321,8 +321,8 @@ func TestLeaveVxnet(t *testing.T) {
 	}
 
 	request := LeaveVxnetRequest{
-		Vxnet:     "vxnet-SAUD093R1",
-		Instances: []string{"i-RDARAR8K"},
+		VxnetID:     "vxnet-SAUD093R1",
+		InstanceIDs: []string{"i-RDARAR8K"},
 	}
 	var response LeaveVxnetResponse
 
@@ -376,7 +376,7 @@ func TestModifyVxnetAttributes(t *testing.T) {
 	}
 
 	request := ModifyVxnetAttributesRequest{
-		Vxnet:       "vxnet-SAUO93R1",
+		VxnetID:     "vxnet-SAUO93R1",
 		VxnetName:   "yuyu",
 		Description: "51idc",
 	}

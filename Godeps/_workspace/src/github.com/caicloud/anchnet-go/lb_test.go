@@ -210,16 +210,16 @@ func TestCreateLoadBalancer(t *testing.T) {
 
 	request := CreateLoadBalancerRequest{
 		Product: CreateLoadBalancerProduct{
-			FW: CreateLoadBalancerFW{
-				Ref: "sg-EFBL5JC2",
+			Firewall: CreateLoadBalancerFW{
+				RefID: "sg-EFBL5JC2",
 			},
-			LB: CreateLoadBalancerLB{
+			Loadbalancer: CreateLoadBalancerLB{
 				Name: "wang_test",
 				Type: 1,
 			},
-			IP: []CreateLoadBalancerIP{
+			Eips: []CreateLoadBalancerIP{
 				{
-					Ref: "eip-2WA55DIC",
+					RefID: "eip-2WA55DIC",
 				},
 			},
 		},
@@ -237,8 +237,8 @@ func TestCreateLoadBalancer(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		LBID:  "lb-XU9DCS95",
-		JobID: "job-MO0OBCMY",
+		LoadbalancerID: "lb-XU9DCS95",
+		JobID:          "job-MO0OBCMY",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -276,8 +276,8 @@ func TestDeleteLoadBalancers(t *testing.T) {
 	}
 
 	request := DeleteLoadBalancersRequest{
-		IPs:           []string{},
-		Loadbalancers: []string{"lb-FPB98Z0Z"},
+		EipIDs:          []string{},
+		LoadbalancerIDs: []string{"lb-FPB98Z0Z"},
 	}
 	var response DeleteLoadBalancersResponse
 
@@ -332,7 +332,7 @@ func TestModifyLoadBalancerAttributes(t *testing.T) {
 	}
 
 	request := ModifyLoadBalancerAttributesRequest{
-		Loadbalancer:     "lb-1ZVNHRG5",
+		LoadbalancerID:   "lb-1ZVNHRG5",
 		LoadbalancerName: "b-01",
 		Description:      "gggg",
 	}
@@ -349,8 +349,8 @@ func TestModifyLoadBalancerAttributes(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		Loadbalancer: "lb-1ZVNHRG5",
-		JobID:        "job-RFEVKUUP",
+		LoadbalancerID: "lb-1ZVNHRG5",
+		JobID:          "job-RFEVKUUP",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -400,18 +400,20 @@ func TestAddLoadBalancerListeners(t *testing.T) {
 	}
 
 	request := AddLoadBalancerListenersRequest{
-		Loadbalancer: "lb-XU9DCS95",
+		LoadbalancerID: "lb-XU9DCS95",
 		Listeners: []AddLoadBalancerListenersListener{
 			{
-				LoadbalancerListenerName: "gt",
-				BalanceMode:              BalanceModeRoundRobin,
-				HealthyCheckMethod:       "tcp",
-				HealthyCheckOption:       "10|5|2|5",
-				ListenerProtocol:         ListenerProtocolTypeTCP,
-				BackendProtocol:          BackendProtocolTypeTCP,
-				SessionStick:             "insert|50",
-				ListenerPort:             80,
-				Timeout:                  50,
+				ListenerName: "gt",
+				ListenerOptions: ListenerOptions{
+					BalanceMode:        BalanceModeRoundRobin,
+					HealthyCheckMethod: "tcp",
+					HealthyCheckOption: "10|5|2|5",
+					ListenerProtocol:   ListenerProtocolTypeTCP,
+					BackendProtocol:    BackendProtocolTypeTCP,
+					SessionStick:       "insert|50",
+					ListenerPort:       80,
+					Timeout:            50,
+				},
 			},
 		},
 	}
@@ -428,8 +430,8 @@ func TestAddLoadBalancerListeners(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		LoadbalancerListeners: []string{"lbl-OKI5C36Z"},
-		JobID: "job-3QHN28QY",
+		ListenerIDs: []string{"lbl-OKI5C36Z"},
+		JobID:       "job-3QHN28QY",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -467,7 +469,7 @@ func TestDeleteLoadBalancerListeners(t *testing.T) {
 	}
 
 	request := DeleteLoadBalancerListenersRequest{
-		LoadbalancerListeners: []string{"lbl-OKI5C36Z"},
+		ListenerIDs: []string{"lbl-OKI5C36Z"},
 	}
 	var response DeleteLoadBalancerListenersResponse
 
@@ -546,8 +548,8 @@ func TestDescribeLoadBalancerListeners(t *testing.T) {
 	}
 
 	request := DescribeLoadBalancerListenersRequest{
-		Loadbalancer: "lb-XU9DCS95",
-		Verbose:      1,
+		LoadbalancerID: "lb-XU9DCS95",
+		Verbose:        1,
 	}
 	var response DescribeLoadBalancerListenersResponse
 
@@ -564,26 +566,29 @@ func TestDescribeLoadBalancerListeners(t *testing.T) {
 		},
 		ItemSet: []DescribeLoadBalancerListenersItem{
 			{
-				BalanceMode:              BalanceModeRoundRobin,
-				Disabled:                 0,
-				ForwardFor:               0,
-				CreateTime:               "2015-04-1613:43:34",
-				Loadbalancer:             "lb-TBA0YUMM",
-				LoadbalancerListener:     "lbl-SV2DLPI3",
-				LoadbalancerListenerName: "yy",
-				Description:              "51idc",
-				HealthyCheckMethod:       "tcp",
-				HealthyCheckOption:       "10|5|2|5",
-				ListenerProtocol:         ListenerProtocolTypeHTTP,
-				SessionStick:             "insert|50",
-				ListenerPort:             80,
+				LoadbalancerID: "lb-TBA0YUMM",
+				ListenerID:     "lbl-SV2DLPI3",
+				ListenerName:   "yy",
+				CreateTime:     "2015-04-1613:43:34",
+				Description:    "51idc",
+				Disabled:       0,
+				ListenerOptions: ListenerOptions{
+					BalanceMode:        BalanceModeRoundRobin,
+					ForwardFor:         0,
+					HealthyCheckMethod: "tcp",
+					HealthyCheckOption: "10|5|2|5",
+					ListenerProtocol:   ListenerProtocolTypeHTTP,
+					SessionStick:       "insert|50",
+					ListenerPort:       80,
+					Timeout:            50,
+				},
 				Backends: []DescribeLoadBalancerListenersBackend{
 					{
-						LoadbalancerListener:     "lbb-A19KZ5KU",
-						LoadbalancerListenerName: "yy",
-						CreateTime:               "2015-04-1613:46:39",
-						Port:                     8080,
-						Weight:                   1,
+						ListenerID:   "lbb-A19KZ5KU",
+						ListenerName: "yy",
+						CreateTime:   "2015-04-1613:46:39",
+						Port:         8080,
+						Weight:       1,
 					},
 				},
 			},
@@ -631,7 +636,7 @@ func TestAddLoadBalancerBackends(t *testing.T) {
 	}
 
 	request := AddLoadBalancerBackendsRequest{
-		LoadbalancerListener: "lbl-OKI5C36Z",
+		ListenerID: "lbl-OKI5C36Z",
 		Backends: []AddLoadBalancerBackendsBackend{
 			{
 				ResourceID: "i-2H143W3Z",
@@ -653,8 +658,8 @@ func TestAddLoadBalancerBackends(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		LoadbalancerBackends: []string{"lbb-V0FF855K"},
-		JobID:                "job-F2WO22V1",
+		BackendIDs: []string{"lbb-V0FF855K"},
+		JobID:      "job-F2WO22V1",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -709,7 +714,7 @@ func TestDescribeLoadBalancerBackends(t *testing.T) {
 	}
 
 	request := DescribeLoadBalancerBackendsRequest{
-		LoadbalancerListener: "lbl-OKI5C36Z",
+		ListenerID: "lbl-OKI5C36Z",
 	}
 	var response DescribeLoadBalancerBackendsResponse
 
@@ -726,17 +731,17 @@ func TestDescribeLoadBalancerBackends(t *testing.T) {
 		},
 		ItemSet: []DescribeLoadBalancerBackendsItem{
 			{
-				Disabled:                0,
-				LoadbalancerBackend:     "lbb-9J15HR4F",
-				LoadbalancerBackendName: "yy",
-				Description:             "51idc",
-				LoadbalancerPolicy:      "lbp-DST416LN",
-				Port:                    799,
-				ResourceID:              "i-SW55FS5W",
-				Status:                  BackendStatusDown,
-				Weight:                  1,
-				CreateTime:              "2015-04-1615:07:43",
-				LoadbalancerListener:    "lbl-OKI5C36Z",
+				Disabled:    0,
+				BackendID:   "lbb-9J15HR4F",
+				BackendName: "yy",
+				Description: "51idc",
+				PolicyID:    "lbp-DST416LN",
+				Port:        799,
+				ResourceID:  "i-SW55FS5W",
+				Status:      BackendStatusDown,
+				Weight:      1,
+				CreateTime:  "2015-04-1615:07:43",
+				ListenerID:  "lbl-OKI5C36Z",
 				Resource: DescribeLoadBalancerBackendsResource{
 					ResourceID:   "i-SW55FS5W",
 					ResourceName: "4gg",

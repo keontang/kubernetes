@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	anchnet "github.com/caicloud/anchnet-go"
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
 
 func execCreateLoadBalancer(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -24,18 +24,17 @@ func execCreateLoadBalancer(cmd *cobra.Command, args []string, client *anchnet.C
 
 	refs := strings.Split(args[1], ",")
 	ips := make([]anchnet.CreateLoadBalancerIP, len(refs))
-
 	for i, ip := range refs {
-		ips[i].Ref = ip
+		ips[i].RefID = ip
 	}
 
 	request := anchnet.CreateLoadBalancerRequest{
 		Product: anchnet.CreateLoadBalancerProduct{
-			LB: anchnet.CreateLoadBalancerLB{
+			Loadbalancer: anchnet.CreateLoadBalancerLB{
 				Name: args[0],
 				Type: anchnet.LoadBalancerType(lb_type),
 			},
-			IP: ips,
+			Eips: ips,
 		},
 	}
 	var response anchnet.CreateLoadBalancerResponse
@@ -59,8 +58,8 @@ func execDeleteLoadBalancer(cmd *cobra.Command, args []string, client *anchnet.C
 	ips := strings.Split(args[1], ",")
 
 	request := anchnet.DeleteLoadBalancersRequest{
-		IPs:           ips,
-		Loadbalancers: lbs,
+		LoadbalancerIDs: lbs,
+		EipIDs:          ips,
 	}
 	var response anchnet.DeleteLoadBalancersResponse
 

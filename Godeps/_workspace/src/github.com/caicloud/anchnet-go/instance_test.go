@@ -113,12 +113,12 @@ func TestDescribeInstances(t *testing.T) {
 	}
 
 	request := DescribeInstancesRequest{
-		Instances:  []string{"i-HNFNPM56"},
-		Verbose:    1,
-		Offset:     0,
-		SearchWord: "wet",
-		Limit:      10,
-		Status:     []InstanceStatus{InstanceStatusPending, InstanceStatusRunning, InstanceStatusStopped, InstanceStatusSuspended},
+		InstanceIDs: []string{"i-HNFNPM56"},
+		Verbose:     1,
+		Offset:      0,
+		SearchWord:  "wet",
+		Limit:       10,
+		Status:      []InstanceStatus{InstanceStatusPending, InstanceStatusRunning, InstanceStatusStopped, InstanceStatusSuspended},
 	}
 	var response DescribeInstancesResponse
 
@@ -337,10 +337,10 @@ func TestRunInstances(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		Instances: []string{"i-PX4SFNMW", "i-88G1K070", "i-Q42TL4J4"},
-		Volumes:   []string{"vol-ZEU3OAQ7", "vol-TSNPJC5F", "vol-687S884C"},
-		EIPs:      []string{"eip-52QPTREJ", "eip-Q2C2067R", "eip-4OQM5GDN"},
-		JobID:     "job-X9FQT4CS",
+		InstanceIDs: []string{"i-PX4SFNMW", "i-88G1K070", "i-Q42TL4J4"},
+		VolumeIDs:   []string{"vol-ZEU3OAQ7", "vol-TSNPJC5F", "vol-687S884C"},
+		EipIDs:      []string{"eip-52QPTREJ", "eip-Q2C2067R", "eip-4OQM5GDN"},
+		JobID:       "job-X9FQT4CS",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -381,7 +381,7 @@ func TestTerminateInstances(t *testing.T) {
 	}
 
 	request := TerminateInstancesRequest{
-		Instances: []string{"i-TXQ59KVB", "i-69CFY6RK", "i-LQQUNEJX"},
+		InstanceIDs: []string{"i-TXQ59KVB", "i-69CFY6RK", "i-LQQUNEJX"},
 	}
 	var response TerminateInstancesResponse
 
@@ -435,7 +435,7 @@ func TestStartInstances(t *testing.T) {
 	}
 
 	request := StartInstancesRequest{
-		Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
+		InstanceIDs: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
 	}
 	var response StartInstancesResponse
 
@@ -491,8 +491,8 @@ func TestStopInstance(t *testing.T) {
 	}
 
 	request := StopInstancesRequest{
-		Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
-		Force:     ForceStop,
+		InstanceIDs: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
+		Force:       ForceStop,
 	}
 	var response StopInstancesResponse
 
@@ -546,7 +546,7 @@ func TestRestartInstances(t *testing.T) {
 	}
 
 	request := RestartInstancesRequest{
-		Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
+		InstanceIDs: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
 	}
 	var response RestartInstancesResponse
 
@@ -600,7 +600,7 @@ func TestResetLoginPasswd(t *testing.T) {
 	}
 
 	request := ResetLoginPasswdRequest{
-		Instances:   []string{"i-G74Q69NJ"},
+		InstanceIDs: []string{"i-G74Q69NJ"},
 		LoginPasswd: "2222ssSS",
 	}
 	var response ResetLoginPasswdResponse
@@ -655,7 +655,7 @@ func TestModifyInstanceAttributes(t *testing.T) {
 	}
 
 	request := ModifyInstanceAttributesRequest{
-		Instance:     "i-G74Q69NJ",
+		InstanceID:   "i-G74Q69NJ",
 		InstanceName: "test",
 		Description:  "testtest",
 	}

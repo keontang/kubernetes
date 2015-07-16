@@ -17,7 +17,7 @@ Authentication is done reading a config file `~/.anchnet/config`. Example file:
 ```
 
 ## Dependency Management
-All dependencies in the client are vendored using [nut](https://github.com/jingweno/nut).
+All dependencies in the client are vendored using [godep](https://github.com/tools/godep).
 
 ## Notes
 The client library is not totally complete, but existing implementation has all the APIs necessary to bring up a cluster. We expect to add more as the project goes.

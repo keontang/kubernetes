@@ -47,7 +47,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 	if len(lb_response.ItemSet[0].Eips) == 0 {
 		return nil, false, fmt.Errorf("External loadbalancer has no public IP")
 	}
-	err = an.waitForLoadBalancerReady(lb_response.ItemSet[0].Loadbalancer)
+	err = an.waitForLoadBalancerReady(lb_response.ItemSet[0].LoadbalancerID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -90,17 +90,17 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	}
 
 	// Create a loadbalancer using the above external IP.
-	lb_response, err := an.createLoadBalancer(name, ip_response.Eips[0])
+	lb_response, err := an.createLoadBalancer(name, ip_response.EipIDs[0])
 	if err != nil {
-		an.releaseEIP(ip_response.Eips[0])
+		an.releaseEIP(ip_response.EipIDs[0])
 		return nil, err
 	}
 
 	// Adding listeners and backends do not need loadbalancer to be ready, but updating
 	// loadbalancer to apply the changes do require.
-	err = an.waitForLoadBalancerReady(lb_response.LBID)
+	err = an.waitForLoadBalancerReady(lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LBID, ip_response.Eips[0])
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
 		return nil, err
 	}
 
@@ -111,9 +111,9 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	// For every port, we need a listener. Note because we do not know the order of
 	// listener IDs returned from anchnet, we create listener one by one.
 	for _, port := range ports {
-		listener_response, err := an.addLoadBalancerListeners(lb_response.LBID, port.Port)
+		listener_response, err := an.addLoadBalancerListeners(lb_response.LoadbalancerID, port.Port)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LBID, ip_response.Eips[0])
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
 			return nil, err
 		}
 		backends := []anchnet_client.AddLoadBalancerBackendsBackend{}
@@ -125,22 +125,22 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 			}
 			backends = append(backends, backend)
 		}
-		_, err = an.addLoadBalancerBackends(listener_response.LoadbalancerListeners[0], backends)
+		_, err = an.addLoadBalancerBackends(listener_response.ListenerIDs[0], backends)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LBID, ip_response.Eips[0])
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
 			return nil, err
 		}
 	}
 
-	_, err = an.updateLoadBalancer(lb_response.LBID)
+	_, err = an.updateLoadBalancer(lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LBID, ip_response.Eips[0])
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
 		return nil, err
 	}
 
-	response, err := an.describeEip(ip_response.Eips[0])
+	response, err := an.describeEip(ip_response.EipIDs[0])
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LBID, ip_response.Eips[0])
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs[0])
 		return nil, err
 	}
 
@@ -180,10 +180,10 @@ func (an *Anchnet) allocateEIP() (*anchnet_client.AllocateEipsResponse, error) {
 		var response anchnet_client.AllocateEipsResponse
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
-			if len(response.Eips) == 0 {
+			if len(response.EipIDs) == 0 {
 				glog.Errorf("Attemp %d: received nil error but empty response while allocating eip\n", i)
 			} else {
-				glog.Infof("Allocated EIP with ID: %v", response.Eips[0])
+				glog.Infof("Allocated EIP with ID: %v", response.EipIDs[0])
 				return &response, nil
 			}
 		} else {
@@ -198,7 +198,7 @@ func (an *Anchnet) allocateEIP() (*anchnet_client.AllocateEipsResponse, error) {
 func (an *Anchnet) releaseEIP(eip string) (*anchnet_client.ReleaseEipsResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.ReleaseEipsRequest{
-			Eips: []string{eip},
+			EipIDs: []string{eip},
 		}
 		var response anchnet_client.ReleaseEipsResponse
 		err := an.client.SendRequest(request, &response)
@@ -216,7 +216,7 @@ func (an *Anchnet) releaseEIP(eip string) (*anchnet_client.ReleaseEipsResponse, 
 func (an *Anchnet) describeEip(eip string) (*anchnet_client.DescribeEipsResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.DescribeEipsRequest{
-			Eips: []string{eip},
+			EipIDs: []string{eip},
 		}
 		var response anchnet_client.DescribeEipsResponse
 		err := an.client.SendRequest(request, &response)
@@ -238,14 +238,14 @@ func (an *Anchnet) createLoadBalancer(name string, eip string) (*anchnet_client.
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.CreateLoadBalancerRequest{
 			Product: anchnet_client.CreateLoadBalancerProduct{
-				LB: anchnet_client.CreateLoadBalancerLB{Name: name, Type: 1}, // Hard-coded type
-				IP: []anchnet_client.CreateLoadBalancerIP{{Ref: eip}},
+				Loadbalancer: anchnet_client.CreateLoadBalancerLB{Name: name, Type: 1}, // Hard-coded type
+				Eips:         []anchnet_client.CreateLoadBalancerIP{{RefID: eip}},
 			},
 		}
 		var response anchnet_client.CreateLoadBalancerResponse
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
-			glog.Infof("Created loadbalancer with ID: %v", response.LBID)
+			glog.Infof("Created loadbalancer with ID: %v", response.LoadbalancerID)
 			return &response, nil
 		} else {
 			glog.Errorf("Attemp %d: failed to create loadbalancer: %v\n", i, err)
@@ -259,8 +259,8 @@ func (an *Anchnet) createLoadBalancer(name string, eip string) (*anchnet_client.
 func (an *Anchnet) deleteLoadBalancer(lbID, eip string) (*anchnet_client.DeleteLoadBalancersResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.DeleteLoadBalancersRequest{
-			IPs:           []string{eip},
-			Loadbalancers: []string{lbID},
+			EipIDs:          []string{eip},
+			LoadbalancerIDs: []string{lbID},
 		}
 		var response anchnet_client.DeleteLoadBalancersResponse
 		err := an.client.SendRequest(request, &response)
@@ -302,22 +302,25 @@ func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.Descr
 func (an *Anchnet) addLoadBalancerListeners(lbID string, port int) (*anchnet_client.AddLoadBalancerListenersResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.AddLoadBalancerListenersRequest{
-			Loadbalancer: lbID,
+			LoadbalancerID: lbID,
 			Listeners: []anchnet_client.AddLoadBalancerListenersListener{
 				{
-					ListenerProtocol: anchnet_client.ListenerProtocolTypeTCP, // We've made sure there is only TCP port
-					ListenerPort:     port,                                   // Port that listener (lb) will listen to
-					Timeout:          600,                                    // Connection timeout
+					ListenerName: fmt.Sprintf("%s-%d", lbID, port),
+					ListenerOptions: anchnet_client.ListenerOptions{
+						ListenerProtocol: anchnet_client.ListenerProtocolTypeTCP, // We've made sure there is only TCP port
+						ListenerPort:     port,                                   // Port that listener (lb) will listen to
+						Timeout:          600,                                    // Connection timeout
+					},
 				},
 			},
 		}
 		var response anchnet_client.AddLoadBalancerListenersResponse
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
-			if len(response.LoadbalancerListeners) == 0 {
+			if len(response.ListenerIDs) == 0 {
 				glog.Errorf("Attemp %d: received nil error but empty response while adding listeners\n", i)
 			} else {
-				glog.Infof("Created listener with ID: %v", response.LoadbalancerListeners[0])
+				glog.Infof("Created listener with ID: %v", response.ListenerIDs[0])
 				return &response, nil
 			}
 		} else {
@@ -332,16 +335,16 @@ func (an *Anchnet) addLoadBalancerListeners(lbID string, port int) (*anchnet_cli
 func (an *Anchnet) addLoadBalancerBackends(listenerID string, backends []anchnet_client.AddLoadBalancerBackendsBackend) (*anchnet_client.AddLoadBalancerBackendsResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.AddLoadBalancerBackendsRequest{
-			LoadbalancerListener: listenerID,
-			Backends:             backends,
+			ListenerID: listenerID,
+			Backends:   backends,
 		}
 		var response anchnet_client.AddLoadBalancerBackendsResponse
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
-			if len(response.LoadbalancerBackends) == 0 {
+			if len(response.BackendIDs) == 0 {
 				glog.Errorf("Attemp %d: received nil error but empty response while adding backends\n", i)
 			} else {
-				glog.Infof("Added backends with IDs: %+v", response.LoadbalancerBackends)
+				glog.Infof("Added backends with IDs: %+v", response.BackendIDs)
 				return &response, nil
 			}
 		} else {
@@ -356,7 +359,7 @@ func (an *Anchnet) addLoadBalancerBackends(listenerID string, backends []anchnet
 func (an *Anchnet) updateLoadBalancer(lbID string) (*anchnet_client.UpdateLoadBalancersResponse, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.UpdateLoadBalancersRequest{
-			Loadbalancers: []string{lbID},
+			LoadbalancerIDs: []string{lbID},
 		}
 		var response anchnet_client.UpdateLoadBalancersResponse
 		err := an.client.SendRequest(request, &response)
@@ -375,7 +378,7 @@ func (an *Anchnet) updateLoadBalancer(lbID string) (*anchnet_client.UpdateLoadBa
 func (an *Anchnet) waitForLoadBalancerReady(lbID string) error {
 	for i := 0; i < RetryCountOnWaitReady; i++ {
 		request := anchnet_client.DescribeLoadBalancersRequest{
-			Loadbalancers: []string{lbID},
+			LoadbalancerIDs: []string{lbID},
 		}
 		var response anchnet_client.DescribeLoadBalancersResponse
 		err := an.client.SendRequest(request, &response)

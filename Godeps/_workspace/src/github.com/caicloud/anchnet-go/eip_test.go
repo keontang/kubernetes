@@ -62,7 +62,7 @@ func TestDescribeEips(t *testing.T) {
 	}
 
 	request := DescribeEipsRequest{
-		Eips:   []string{"eip-L6I69DSQ"},
+		EipIDs: []string{"eip-L6I69DSQ"},
 		Limit:  10,
 		Offset: 0,
 		Status: []EipStatus{EipStatusPending, EipStatusAvailable, EipStatusAssociated, EipStatusSuspended},
@@ -169,8 +169,8 @@ func TestAllocateEips(t *testing.T) {
 			RetCode: 0,
 			Code:    0,
 		},
-		Eips:  []string{"eip-BMTMKDBT"},
-		JobID: "job-ZS1ZZVFF",
+		EipIDs: []string{"eip-BMTMKDBT"},
+		JobID:  "job-ZS1ZZVFF",
 	}
 	if !reflect.DeepEqual(expectedResponse, response) {
 		t.Errorf("Error: expected \n%v, got \n%v", expectedResponse, response)
@@ -208,7 +208,7 @@ func TestReleaseEips(t *testing.T) {
 	}
 
 	request := ReleaseEipsRequest{
-		Eips: []string{"eip-FSYW6I4Q"},
+		EipIDs: []string{"eip-FSYW6I4Q"},
 	}
 	var response ReleaseEipsResponse
 
@@ -260,8 +260,8 @@ func TestAssociateEip(t *testing.T) {
 	}
 
 	request := AssociateEipRequest{
-		Eip:      "eip-BMTMKDBT",
-		Instance: "i-7QAQCZ2E",
+		EipID:      "eip-BMTMKDBT",
+		InstanceID: "i-7QAQCZ2E",
 	}
 	var response AssociateEipResponse
 
@@ -314,7 +314,7 @@ func TestDissociateEips(t *testing.T) {
 	}
 
 	request := DissociateEipsRequest{
-		Eips: []string{"eip-FSYW6I4Q"},
+		EipIDs: []string{"eip-FSYW6I4Q"},
 	}
 	var response DissociateEipsResponse
 
@@ -366,7 +366,7 @@ func TestChangeEipsBandwidth(t *testing.T) {
 	}
 
 	request := ChangeEipsBandwidthRequest{
-		Eips:      []string{"eip-L6I69DSQ"},
+		EipIDs:    []string{"eip-L6I69DSQ"},
 		Bandwidth: 2,
 	}
 	var response ChangeEipsBandwidthResponse

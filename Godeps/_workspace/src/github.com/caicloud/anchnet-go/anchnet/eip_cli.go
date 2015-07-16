@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	anchnet "github.com/caicloud/anchnet-go"
-	"github.com/caicloud/anchnet-go/vendor/_nuts/github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
 
 func execDescribeEips(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -21,7 +21,7 @@ func execDescribeEips(cmd *cobra.Command, args []string, client *anchnet.Client,
 	}
 
 	request := anchnet.DescribeEipsRequest{
-		Eips: strings.Split(args[0], ","),
+		EipIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.DescribeEipsResponse
 
@@ -41,7 +41,7 @@ func execReleaseEips(cmd *cobra.Command, args []string, client *anchnet.Client, 
 	}
 
 	request := anchnet.ReleaseEipsRequest{
-		Eips: strings.Split(args[0], ","),
+		EipIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.ReleaseEipsResponse
 

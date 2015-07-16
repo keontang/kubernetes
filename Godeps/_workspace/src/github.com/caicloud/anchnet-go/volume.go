@@ -6,11 +6,14 @@ package anchnet
 
 // Implements all anchnet instance related APIs.
 
+//
+// DescribeVolumes retrieves information of a list of volumes.
+//
 type DescribeVolumesRequest struct {
 	RequestCommon `json:",inline"`
-	Volumes       []string       `json:"volumes,omitempty"`
-	Status        []VolumeStatus `json:"status,omitempty"`
+	VolumeIDs     []string       `json:"volumes,omitempty"`
 	SearchWord    string         `json:"search_word,omitempty"`
+	Status        []VolumeStatus `json:"status,omitempty"`
 	Offset        int            `json:"offset,omitempty"`
 	Limit         int            `json:"limit,omitempty"`
 }
@@ -56,39 +59,43 @@ const (
 	VolumeTypeCapacity    VolumeType = 1
 )
 
-// CreateVolumesRequest contains all information needed to create volumes.
+//
+// CreateVolumes creates given number of volumes.
+//
 type CreateVolumesRequest struct {
 	RequestCommon `json:",inline"`
-	VolumeName    string `json:"volume_name,omitempty"`
-	Count         int    `json:"count,omitempty"`
-	Size          int    `json:"size,omitempty"` // min 10GB, max 1000GB, unit:GB
-	// Do not omit empty due to type 0.
-	VolumeType VolumeType `json:"volume_type"`
+	VolumeName    string     `json:"volume_name,omitempty"`
+	VolumeType    VolumeType `json:"volume_type"`    // Do not omit empty due to type 0
+	Size          int        `json:"size,omitempty"` // min 10GB, max 1000GB, unit:GB
+	Count         int        `json:"count,omitempty"`
 }
 
-// CreateVolumesResponse contains all information returned from anchnet server.
 type CreateVolumesResponse struct {
 	ResponseCommon `json:",inline"`
-	Volumes        []string `json:"volumes,omitempty"` // IDs of created volumes
+	VolumeIDs      []string `json:"volumes,omitempty"` // IDs of created volumes
 	JobID          string   `json:"job_id,omitempty"`  // Job ID in anchnet
 }
 
-// DeleteVolumesRequest contains all information needed to delete volumes.
+//
+// DeleteVolumes deletes a list of volumes.
+//
 type DeleteVolumesRequest struct {
 	RequestCommon `json:",inline"`
-	Volumes       []string `json:"volumes,omitempty"`
+	VolumeIDs     []string `json:"volumes,omitempty"`
 }
 
-// DeleteVolumesResponse contains all information returned from anchnet server.
 type DeleteVolumesResponse struct {
 	ResponseCommon `json:",inline"`
 	JobID          string `json:"job_id,omitempty"` // Job ID in anchnet
 }
 
+//
+// AttachVolumes attaches a list of volumes to an instance.
+//
 type AttachVolumesRequest struct {
 	RequestCommon `json:",inline"`
-	Instance      string   `json:"instance,omitempty"` // ID of instance to attach volumes
-	Volumes       []string `json:"volumes,omitempty"`  // IDs of volumes
+	InstanceID    string   `json:"instance,omitempty"` // ID of instance to attach volumes
+	VolumeIDs     []string `json:"volumes,omitempty"`  // IDs of volumes
 }
 
 type AttachVolumesResponse struct {
@@ -96,9 +103,12 @@ type AttachVolumesResponse struct {
 	JobID          string `json:"job_id,omitempty"`
 }
 
+//
+// DetachVolumes detaches a list of volumes from their resources.
+//
 type DetachVolumesRequest struct {
 	RequestCommon `json:",inline"`
-	Volumes       []string `json:"volumes,omitempty"` // IDs of volumes to detach
+	VolumeIDs     []string `json:"volumes,omitempty"` // IDs of volumes to detach
 }
 
 type DetachVolumesResponse struct {
@@ -106,9 +116,12 @@ type DetachVolumesResponse struct {
 	JobID          string `json:"job_id,omitempty"`
 }
 
+//
+// ResizeVolumes resizes a list of volumes.
+//
 type ResizeVolumesRequest struct {
 	RequestCommon `json:",inline"`
-	Volumes       []string `json:"volumes,omitempty"` // IDs of volumes to resize
+	VolumeIDs     []string `json:"volumes,omitempty"` // IDs of volumes to resize
 	Size          int      `json:"size,omitempty"`    // Allow increase size only
 }
 
@@ -117,9 +130,12 @@ type ResizeVolumesResponse struct {
 	JobID          string `json:"job_id,omitempty"`
 }
 
+//
+// ModifyVolumeAttributes modifies attributes of a volume.
+//
 type ModifyVolumeAttributesRequest struct {
 	RequestCommon `json:",inline"`
-	Volume        string `json:"volume,omitempty"`
+	VolumeID      string `json:"volume,omitempty"`
 	VolumeName    string `json:"volume_name,omitempty"`
 	Description   string `json:"description,omitempty"`
 }

@@ -1,9 +1,0 @@
-[application]
-
-name = "anchnet-go"
-version = "0.1"
-authors = ["Deyuan Deng <deyuan.deng@gmail.com>"]
-
-
-[dependencies]
-"github.com/spf13/cobra" = ""

@@ -71,8 +71,8 @@ func TestSendRequest(t *testing.T) {
 
 	for _, test := range tests {
 		request := StopInstancesRequest{
-			Instances: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
-			Force:     ForceStop,
+			InstanceIDs: []string{"i-G74Q69NJ", "i-OAEZPC6C"},
+			Force:       ForceStop,
 		}
 		var response StopInstancesResponse
 		err := test.sendRequestFunc(request, &response)

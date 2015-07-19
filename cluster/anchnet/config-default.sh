@@ -37,7 +37,7 @@ NODE_INTERNAL_IP_RANGE=10.244.1.0/16
 MASTER_INSECURE_ADDRESS="127.0.0.1"
 MASTER_INSECURE_PORT=8080
 MASTER_SECURE_ADDRESS="0.0.0.0"
-MASTER_SECURE_PORT=6443
+MASTER_SECURE_PORT=443
 
 # Admission Controllers to invoke prior to persisting objects in cluster
 ADMISSION_CONTROL=NamespaceLifecycle,NamespaceAutoProvision,LimitRanger,ServiceAccount,ResourceQuota

@@ -33,10 +33,15 @@ DEV_MODE=${DEV_MODE:-false}
 INSTANCE_IMAGE="img-OBKRMWB4"
 INSTANCE_USER="ubuntu"
 
+# The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
+# 'eipg-00000000' is anchnet's own BGP.
+IP_GROUP="eipg-98dyd0aj"
+
 # Helper constants.
 ANCHNET_CMD="anchnet"
 DEFAULT_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
 SYSTEM_NAMESPACE=kube-system
+
 
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
 function verify-prereqs {
@@ -107,7 +112,6 @@ function kube-up {
     # two methods will create a set of vars to be used later:
     #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
     #   NODE_INSTANCE_IDS,   NODE_EIP_IDS,   NODE_EIPS
-    # TODO: Firewall setup, need a method create-firewall.
     create-master-instance
     create-node-instances
     # Create a private SDN; then add master, nodes to it. The IP address of the
@@ -115,7 +119,10 @@ function kube-up {
     # based on two variables: MASTER_INTERNAL_IP and NODE_INTERNAL_IPS. This method
     # will create one var:
     #   PRIVATE_SDN_INTERFACE - the interface created on each machine for the sdn network.
+    # TODO: Add retry logic to create sdn network and firewall.
     create-sdn-network
+    # Create firewall rules for all instances.
+    create-firewall
   fi
 
   # Create certificates and credentials to secure cluster communication.
@@ -135,10 +142,13 @@ function kube-up {
   provision-instances
 
   # common.sh defines create-kubeconfig, which is used to create client kubeconfig for
-  # kubectl. To properly create kubeconfig, make sure to supply it with assumed vars.
-  # TODO: Fix hardcoded CONTEXT
+  # kubectl. To properly create kubeconfig, make sure to we supply it with assumed vars.
   source "${KUBE_ROOT}/cluster/common.sh"
-  KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
+  # By default, kubeconfig uses https://${KUBE_MASTER_IP}. Since we use standard port 443,
+  # just assign MASTER_EIP to KUBE_MASTER_EIP. If non-standard port is used, then we need
+  # to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
+  KUBE_MASTER_IP="${MASTER_EIP}"
+  # TODO: Fix hardcoded CONTEXT
   CONTEXT="anchnet_kubernetes"
   create-kubeconfig
 }
@@ -297,7 +307,8 @@ function create-master-instance {
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
   local master_info=$(
     ${ANCHNET_CMD} runinstance "${MASTER_NAME}" -p="${KUBE_INSTANCE_PASSWORD}" \
-                   -i="${INSTANCE_IMAGE}" -m="${MASTER_MEM}" -c="${MASTER_CPU_CORES}")
+                   -i="${INSTANCE_IMAGE}" -m="${MASTER_MEM}" -c="${MASTER_CPU_CORES}" \
+                   -g="${IP_GROUP}")
   MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
   MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
 
@@ -334,7 +345,8 @@ function create-node-instances {
     # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
     local node_info=$(
       ${ANCHNET_CMD} runinstance "${NODE_NAME_PREFIX}-${i}" -p="${KUBE_INSTANCE_PASSWORD}" \
-                     -i="${INSTANCE_IMAGE}" -m="${NODE_MEM}" -c="${NODE_CPU_CORES}")
+                     -i="${INSTANCE_IMAGE}" -m="${NODE_MEM}" -c="${NODE_CPU_CORES}" \
+                     -g="${IP_GROUP}")
     local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
     local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
 
@@ -489,15 +501,18 @@ EOF
 # Vars set:
 #   PRIVATE_SDN_INTERFACE - The interface created by the SDN network
 function create-sdn-network {
+  echo "Creating private SDN network..."
+  sleep 3
   # Create a private SDN network.
   local vxnet_info=$(${ANCHNET_CMD} createvxnets ${VXNET_NAME})
   VXNET_ID=$(echo ${vxnet_info} | json_val '["vxnets"][0]')
+  sleep 3
   # There is no easy way to determine if vxnet is created or not. Fortunately, we can
   # send command to describe vxnets, when return, we should have vxnet created.
   ${ANCHNET_CMD} describevxnets ${VXNET_ID} > /dev/null
   sleep 5                       # Some grace period
 
-  # Add all instances (master and nodes) to the vxnet.
+  echo "Add all instances (both master and nodes) to the vxnet..."
   ALL_INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
   ${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${ALL_INSTANCE_IDS} > /dev/null
   # Wait for instances to be added successfully.
@@ -506,6 +521,43 @@ function create-sdn-network {
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
+}
+
+
+# Create firewall rules to allow certain traffics.
+#
+# Assumed vars:
+#   MASTER_SECURE_PORT
+#   MASTER_INSTANCE_ID
+#   NODE_INSTANCE_IDS
+function create-firewall {
+  echo "Creating master security group rules..."
+  sleep 3
+  local maser_sg_id=$(
+    ${ANCHNET_CMD} createsecuritygroup master-security-group master-https \
+                   --priority=5 --action=accept --protocol=tcp --direction=0 \
+                   --value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT} |
+      json_val '["security_group_id"]')
+  sleep 3
+  ${ANCHNET_CMD} addsecuritygrouprule master-ssh ${maser_sg_id} \
+                 --priority=3 --action=accept --protocol=tcp --direction=0 \
+                 --value1=22 --value2=22
+  sleep 3
+  ${ANCHNET_CMD} applysecuritygroup ${maser_sg_id} ${MASTER_INSTANCE_ID}
+
+  echo "Creating node security group rules..."
+  sleep 3
+  local node_sg_id=$(
+    ${ANCHNET_CMD} createsecuritygroup node-security-group node-ssh \
+                   --priority=5 --action=accept --protocol=tcp --direction=0 \
+                   --value1=22 --value2=22 |
+      json_val '["security_group_id"]')
+  sleep 3
+  ${ANCHNET_CMD} addsecuritygrouprule master-ssh ${node_sg_id} \
+                 --priority=3 --action=accept --protocol=tcp --direction=0 \
+                 --value1=22 --value2=22
+  sleep 3
+  ${ANCHNET_CMD} applysecuritygroup ${node_sg_id} ${NODE_INSTANCE_IDS}
 }
 
 

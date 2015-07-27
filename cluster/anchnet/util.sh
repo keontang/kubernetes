@@ -35,7 +35,7 @@ INSTANCE_USER="ubuntu"
 
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
 # 'eipg-00000000' is anchnet's own BGP.
-IP_GROUP="eipg-98dyd0aj"
+IP_GROUP="eipg-00000000"
 
 # Helper constants.
 ANCHNET_CMD="anchnet"
@@ -100,12 +100,12 @@ function kube-up {
 
   # For dev, set to existing machine.
   if [[ "${DEV_MODE}" = true ]]; then
-    MASTER_INSTANCE_ID="i-FF830WKU"
-    MASTER_EIP_ID="eip-1ITUTNX9"
-    MASTER_EIP="43.254.55.207"
-    NODE_INSTANCE_IDS="i-W7X4DRTB,i-EBW0J52Y"
-    NODE_EIP_IDS="eip-2EUFNTQM,eip-8KHBY6I7"
-    NODE_EIPS="43.254.55.206,43.254.55.202"
+    MASTER_INSTANCE_ID="i-JHB0WIOV"
+    MASTER_EIP_ID="eip-4L4V5BQU"
+    MASTER_EIP="221.228.88.99"
+    NODE_INSTANCE_IDS="i-C32WQF44"
+    NODE_EIP_IDS="eip-KW3EE0XI"
+    NODE_EIPS="221.228.88.105"
     PRIVATE_SDN_INTERFACE="eth1"
   else
     # Create master/node instances from anchnet without provision. The following
@@ -119,7 +119,6 @@ function kube-up {
     # based on two variables: MASTER_INTERNAL_IP and NODE_INTERNAL_IPS. This method
     # will create one var:
     #   PRIVATE_SDN_INTERFACE - the interface created on each machine for the sdn network.
-    # TODO: Add retry logic to create sdn network and firewall.
     create-sdn-network
     # Create firewall rules for all instances.
     create-firewall
@@ -499,25 +498,42 @@ EOF
 #   VXNET_NAME
 #
 # Vars set:
+#   VXNET_ID
+#
+# Vars set:
 #   PRIVATE_SDN_INTERFACE - The interface created by the SDN network
 function create-sdn-network {
   echo "Creating private SDN network..."
-  sleep 3
-  # Create a private SDN network.
-  local vxnet_info=$(${ANCHNET_CMD} createvxnets ${VXNET_NAME})
-  VXNET_ID=$(echo ${vxnet_info} | json_val '["vxnets"][0]')
-  sleep 3
-  # There is no easy way to determine if vxnet is created or not. Fortunately, we can
-  # send command to describe vxnets, when return, we should have vxnet created.
-  ${ANCHNET_CMD} describevxnets ${VXNET_ID} > /dev/null
-  sleep 5                       # Some grace period
 
-  echo "Add all instances (both master and nodes) to the vxnet..."
+  # Create a private SDN network.
+  local attempt=0
+  local pattern="vxnet-*"
+  while true; do
+    echo "Attempt $(($attempt+1)) to create sdn network"
+    VXNET_ID=$(${ANCHNET_CMD} createvxnets ${VXNET_NAME} | json_val '["vxnets"][0]')
+    if [[ ! $VXNET_ID =~ $pattern ]]; then
+      if (( attempt > 20 )); then
+        echo
+        echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
+        exit 1
+      fi
+    else
+      break
+    fi
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
+
+  # Make sure vxnet is created.
+  anchnet-exec-and-retry "${ANCHNET_CMD} describevxnets ${VXNET_ID}"
+
+  # Add all instances to the vxnet.
   ALL_INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
-  ${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${ALL_INSTANCE_IDS} > /dev/null
-  # Wait for instances to be added successfully.
-  ${ANCHNET_CMD} describevxnets ${VXNET_ID} > /dev/null
-  sleep 5                       # Some grace period
+  echo "Add all instances (both master and nodes) to the vxnet..."
+  anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${ALL_INSTANCE_IDS}"
+
+  # Make sure instances are joined.
+  anchnet-exec-and-retry "${ANCHNET_CMD} describevxnets ${VXNET_ID}"
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
@@ -531,33 +547,59 @@ function create-sdn-network {
 #   MASTER_INSTANCE_ID
 #   NODE_INSTANCE_IDS
 function create-firewall {
+  # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   echo "Creating master security group rules..."
-  sleep 3
-  local maser_sg_id=$(
-    ${ANCHNET_CMD} createsecuritygroup master-security-group master-https \
-                   --priority=5 --action=accept --protocol=tcp --direction=0 \
-                   --value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT} |
-      json_val '["security_group_id"]')
-  sleep 3
-  ${ANCHNET_CMD} addsecuritygrouprule master-ssh ${maser_sg_id} \
-                 --priority=3 --action=accept --protocol=tcp --direction=0 \
-                 --value1=22 --value2=22
-  sleep 3
-  ${ANCHNET_CMD} applysecuritygroup ${maser_sg_id} ${MASTER_INSTANCE_ID}
+  local attempt=0
+  local pattern="sg-*"
+  while true; do
+    echo "Attempt $(($attempt+1)) to create security group"
+    local master_sg_id=$(
+      ${ANCHNET_CMD} createsecuritygroup master-security-group master-ssh \
+                     --priority=1 --action=accept --protocol=tcp --direction=0 \
+                     --value1=22 --value2=22 |
+        json_val '["security_group_id"]')
+    if [[ ! $master_sg_id =~ $pattern ]]; then
+      if (( attempt > 20 )); then
+        echo
+        echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
+        exit 1
+      fi
+    else
+      echo "Created master security group with ID: ${master_sg_id}"
+      break
+    fi
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
 
+  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule master-https ${master_sg_id} --priority=3 --action=accept --protocol=tcp --direction=0 --value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${master_sg_id} ${MASTER_INSTANCE_ID}"
+
+  # Node security group contains firewall for ssh (tcp/22).
   echo "Creating node security group rules..."
-  sleep 3
-  local node_sg_id=$(
-    ${ANCHNET_CMD} createsecuritygroup node-security-group node-ssh \
-                   --priority=5 --action=accept --protocol=tcp --direction=0 \
-                   --value1=22 --value2=22 |
-      json_val '["security_group_id"]')
-  sleep 3
-  ${ANCHNET_CMD} addsecuritygrouprule master-ssh ${node_sg_id} \
-                 --priority=3 --action=accept --protocol=tcp --direction=0 \
-                 --value1=22 --value2=22
-  sleep 3
-  ${ANCHNET_CMD} applysecuritygroup ${node_sg_id} ${NODE_INSTANCE_IDS}
+  local attempt=0
+  while true; do
+    echo "Attempt $(($attempt+1)) to create security group"
+    local node_sg_id=$(
+      ${ANCHNET_CMD} createsecuritygroup node-security-group node-ssh \
+                     --priority=1 --action=accept --protocol=tcp --direction=0 \
+                     --value1=22 --value2=22 |
+        json_val '["security_group_id"]')
+    if [[ ! $node_sg_id =~ $pattern ]]; then
+      if (( attempt > 20 )); then
+        echo
+        echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
+        exit 1
+      fi
+    else
+      echo "Created node security group with ID: ${node_sg_id}"
+      break
+    fi
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
+
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${node_sg_id} ${NODE_INSTANCE_IDS}"
 }
 
 
@@ -1114,4 +1156,32 @@ metadata:
   name: token-${safe_username}
 type: Opaque
 EOF
+}
+
+
+# A helper function that executes a command (which interacts with anchnet), and retries on
+# failure. If the command can't succeed within given attempts, the script will exit.
+#
+# Input:
+#   $1 command string to execute
+function anchnet-exec-and-retry {
+  local attempt=0
+  # Before executing the command, we always sleep a few seconds to avoid anchnet rateACL.
+  sleep 3
+  while true; do
+    local ok=1
+    eval $1 || ok=0
+    if [[ "${ok}" == "0" ]]; then
+      if (( attempt > 20 )); then
+        echo
+        echo -e "${color_red}Unable to execute command [$1]${color_norm}" >&2
+        exit 1
+      fi
+    else
+      break
+    fi
+    echo -e "${color_yellow}Command [$1] not ok, will retry${color_norm}" >&2
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
 }

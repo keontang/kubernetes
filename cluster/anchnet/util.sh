@@ -17,9 +17,18 @@
 
 # TODO: Create a clean up script to stop all services, delete old configs, etc.
 
-# When running dev, no machine will be created. Developer is responsible to
-# specify the instance IDs, eip IDs, etc.
-DEV_MODE=${DEV_MODE:-false}
+# KUBE_UP_MODE defines how do we run kube-up, there are currently three modes:
+# - "development": when running in dev mode, no machine will be created. Developer
+#     is responsible to specify the instance IDs, eip IDs, etc.
+# - "image": when using existing-image, it is assumed that base image has been
+#     created in anchnet and has binaries pre-installed, see below.
+# - "full": when running in full mode, binaries will be copied to the instances.
+#     This can be slow depending on connections between local and remote host.
+#     In full mode, we build all binaries using docker; however, dockerfile
+#     "build/build-image/Dockerfile" tries to fetch GFW blocked package
+#     "golang.org/x/tools/cmd/cover". Therefore, we may need to comment the line
+#     if local host is running behind GFW.
+KUBE_UP_MODE="image"
 
 # The base image used to create master and node instance. This image is created
 # from scripts like 'image-from-devserver.sh', which install caicloud-k8s release
@@ -30,7 +39,11 @@ DEV_MODE=${DEV_MODE:-false}
 #   ~/kube/node - Directory containing all node binaries
 #   Installed docker
 #   Installed bridge-utils
+# Note when running in full mode, we still use this image to create instances,
+# but its binaries will be overriden.
 INSTANCE_IMAGE="img-OBKRMWB4"
+
+# User name used to ssh into the instances, e.g. root, ubuntu.
 INSTANCE_USER="ubuntu"
 
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
@@ -99,7 +112,7 @@ function kube-up {
   NODE_NAME_PREFIX="${CLUSTER_ID}-node"
 
   # For dev, set to existing machine.
-  if [[ "${DEV_MODE}" = true ]]; then
+  if [[ "${KUBE_UP_MODE}" = "development" ]]; then
     MASTER_INSTANCE_ID="i-JHB0WIOV"
     MASTER_EIP_ID="eip-4L4V5BQU"
     MASTER_EIP="221.228.88.99"
@@ -122,6 +135,10 @@ function kube-up {
     create-sdn-network
     # Create firewall rules for all instances.
     create-firewall
+  fi
+
+  if [[ "${KUBE_UP_MODE}" = "full" ]]; then
+    override-binaries
   fi
 
   # Create certificates and credentials to secure cluster communication.
@@ -707,6 +724,60 @@ function create-etcd-initial-cluster {
 }
 
 
+# Push new binaries to master and nodes.
+#
+# Assumed vars:
+#   KUBE_ROOT
+#   MASTER_IP
+#   NODE_IPS
+#   KUBE_INSTANCE_PASSWORD
+function override-binaries {
+  (
+    cd ${KUBE_ROOT}
+    build/run.sh hack/build-go.sh
+    IFS=',' read -ra instance_ip_arr <<< "${MASTER_EIP},${NODE_EIPS}"
+
+    for instance_ip in ${instance_ip_arr[*]}; do
+      local pids=""
+      expect <<EOF &
+set timeout -1
+spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
+  ubuntu@${instance_ip}:~/kube/master
+expect {
+  "*?assword:" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+      pids="$pids $!"
+      expect <<EOF &
+set timeout -1
+spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy \
+  ubuntu@${instance_ip}:~/kube/node
+expect {
+  "*?assword:" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+      pids="$pids $!"
+      wait $pids
+    done
+  )
+}
+
+
 # The method assumes instances are running. It does the following things:
 # 1. Copies master component configurations to working directory (~/kube).
 # 2. Create a master-start.sh file which applies the configs, setup network, and
@@ -1101,7 +1172,7 @@ EOF
   local -r service_accounts=("system:scheduler" "system:controller_manager")
   for account in "${service_accounts[@]}"; do
     token=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
-    create-kubeconfig-secret "${token}" "${account}" "https://${MASTER_EIP}:${MASTER_SECURE_PORT}" "${KUBE_TEMP}/${account}-secret"
+    create-kubeconfig-secret "${token}" "${account}" "https://${MASTER_EIP}:${MASTER_SECURE_PORT}" "${KUBE_TEMP}/${account}-secret.yaml"
     echo "${token},${account},${account}" >> "${KUBE_TEMP}/known-tokens.csv"
   done
 }

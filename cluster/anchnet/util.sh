@@ -65,7 +65,7 @@ function verify-prereqs {
   if [[ "$(which ${ANCHNET_CMD})" == "" ]]; then
     echo "Can't find anchnet cli binary in PATH, please fix and retry."
     echo "See https://github.com/caicloud/anchnet-go/tree/master/anchnet"
-    exit 1
+    exit 10
   fi
   if [[ "$(which expect)" == "" ]]; then
     echo "Can't find expect binary in PATH, please fix and retry."
@@ -225,14 +225,15 @@ EOF
 # Vars set:
 #   KUBE_INSTANCE_PASSWORD
 function prompt-instance-password {
-  read -s -p "Please enter password for new instances: " KUBE_INSTANCE_PASSWORD
-  echo
-  read -s -p "Password (again): " another
-  echo
-  if [[ "${KUBE_INSTANCE_PASSWORD}" != "${another}" ]]; then
-    echo "Passwords do not match"
-    exit 1
-  fi
+  KUBE_INSTANCE_PASSWORD=123abdABC
+#  read -s -p "Please enter password for new instances: " KUBE_INSTANCE_PASSWORD
+#  echo
+#  read -s -p "Password (again): " another
+#  echo
+#  if [[ "${KUBE_INSTANCE_PASSWORD}" != "${another}" ]]; then
+#    echo "Passwords do not match"
+#    exit 12
+#  fi
 }
 
 
@@ -480,7 +481,7 @@ function get-ip-address-from-eipid {
       if (( attempt > 20 )); then
         echo
         echo -e "${color_red}failed to get eip address (sorry!)${color_norm}" >&2
-        exit 1
+        exit  14
       fi
     else
       EIP_ADDRESS=${eip}

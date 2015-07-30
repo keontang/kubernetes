@@ -997,8 +997,8 @@ function create-certs-and-credentials {
 
   # Create cluster certificates.
   (
+    cp "${KUBE_ROOT}/cluster/anchnet/scripts/easy-rsa.tar.gz" "${KUBE_TEMP}"
     cd "${KUBE_TEMP}"
-    curl -L -O https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz > /dev/null 2>&1
     tar xzf easy-rsa.tar.gz > /dev/null 2>&1
     cd easy-rsa-master/easyrsa3
     ./easyrsa init-pki > /dev/null 2>&1

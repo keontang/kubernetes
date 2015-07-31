@@ -176,8 +176,7 @@ function deploy-addons {
   # Copy addon configurationss and startup script to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh \
-      ${KUBE_ROOT}/cluster/anchnet/addons/namespace.yaml \
-      ${KUBE_TEMP}/system:dns-secret \
+      ${KUBE_ROOT}/cluster/anchnet/namespace/namespace.yaml \
       ${KUBE_TEMP}/skydns-rc.yaml \
       ${KUBE_TEMP}/skydns-svc.yaml \
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
@@ -749,7 +748,7 @@ function install-instances {
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
     echo "create-etcd-opts kubernetes-master \"${MASTER_INTERNAL_IP}\" \"${ETCD_INITIAL_CLUSTER}\""
-    echo "create-kube-apiserver-opts \"${SERVICE_CLUSTER_IP_RANGE}\""
+    echo "create-kube-apiserver-opts \"${SERVICE_CLUSTER_IP_RANGE}\" \"${ADMISSION_CONTROL}\""
     echo "create-kube-controller-manager-opts"
     echo "create-kube-scheduler-opts"
     echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
@@ -1099,7 +1098,7 @@ EOF
   # and addons (Note scheduler and controller_manager are not actually used in
   # our setup, but we keep it here for tracking. The reason for having such secrets
   # for these service accounts is to run them as Pod, aka, self-hosting).
-  local -r service_accounts=("system:scheduler" "system:controller_manager" "system:dns")
+  local -r service_accounts=("system:scheduler" "system:controller_manager")
   for account in "${service_accounts[@]}"; do
     token=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
     create-kubeconfig-secret "${token}" "${account}" "https://${MASTER_EIP}:${MASTER_SECURE_PORT}" "${KUBE_TEMP}/${account}-secret"

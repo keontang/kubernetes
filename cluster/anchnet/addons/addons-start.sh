@@ -40,15 +40,11 @@ function create_resource_from_file() {
 
 # Currently we put secrets, addons and namespace in separate folders
 mkdir -p ~/kube/addons ~/kube/namespace ~/kube/secrets
-mv ~/kube/system:dns-secret ~/kube/secrets
 mv ~/kube/skydns-rc.yaml ~/kube/skydns-svc.yaml ~/kube/addons
 mv ~/kube/namespace.yaml ~/kube/namespace
 
 # Create the namespace that will be used to host the cluster-level add-ons.
 create_resource_from_file ~/kube/namespace/namespace.yaml 100 10 ""
-
-# Create secret before the addons which have dependencies on it.
-create_resource_from_file ~/kube/secrets/system:dns-secret 10 10 "${SYSTEM_NAMESPACE}"
 
 # Create addons from file
 for obj in $(find ~/kube/addons -type f -name \*.yaml -o -name \*.json); do

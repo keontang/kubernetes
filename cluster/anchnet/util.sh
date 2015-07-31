@@ -56,6 +56,7 @@ IP_GROUP="eipg-00000000"
 
 # Helper constants.
 ANCHNET_CMD="anchnet"
+CURL_CMD="curl"
 DEFAULT_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
 SYSTEM_NAMESPACE=kube-system
 
@@ -65,7 +66,12 @@ function verify-prereqs {
   if [[ "$(which ${ANCHNET_CMD})" == "" ]]; then
     echo "Can't find anchnet cli binary in PATH, please fix and retry."
     echo "See https://github.com/caicloud/anchnet-go/tree/master/anchnet"
-    exit 10
+    exit 1
+  fi
+  if [[ "$(which ${CURL_CMD})" == "" ]]; then
+    echo "Can't find curl in PATH, please fix and retry."
+    echo "For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
+    exit 1
   fi
   if [[ "$(which expect)" == "" ]]; then
     echo "Can't find expect binary in PATH, please fix and retry."
@@ -225,15 +231,14 @@ EOF
 # Vars set:
 #   KUBE_INSTANCE_PASSWORD
 function prompt-instance-password {
-  KUBE_INSTANCE_PASSWORD=123abdABC
-#  read -s -p "Please enter password for new instances: " KUBE_INSTANCE_PASSWORD
-#  echo
-#  read -s -p "Password (again): " another
-#  echo
-#  if [[ "${KUBE_INSTANCE_PASSWORD}" != "${another}" ]]; then
-#    echo "Passwords do not match"
-#    exit 12
-#  fi
+  read -s -p "Please enter password for new instances: " KUBE_INSTANCE_PASSWORD
+  echo
+  read -s -p "Password (again): " another
+  echo
+  if [[ "${KUBE_INSTANCE_PASSWORD}" != "${another}" ]]; then
+    echo "Passwords do not match"
+    exit 1
+  fi
 }
 
 
@@ -449,7 +454,11 @@ function check-instance-status {
     if [[ ${status} != "running" ]]; then
       if (( attempt > 20 )); then
         echo
+<<<<<<< HEAD
         echo -e "${color_red}instance $1 failed to start (sorry!)${color_norm}" >&2
+=======
+        echo -e "${color_red}Instance $1 failed to start (sorry!)${color_norm}" >&2
+>>>>>>> 11414ce... Create simple kube-down script
         exit 1
       fi
     else
@@ -481,7 +490,7 @@ function get-ip-address-from-eipid {
       if (( attempt > 20 )); then
         echo
         echo -e "${color_red}failed to get eip address (sorry!)${color_norm}" >&2
-        exit  14
+        exit 1
       fi
     else
       EIP_ADDRESS=${eip}
@@ -1353,6 +1362,32 @@ type: Opaque
 EOF
 }
 
+# Delete a kubernete cluster from anchnet
+#
+# Vars set:
+#   INSTANCE_IDS - comma separated string of instance IDs
+#   EIP_IDS - comma separated string of instance external IP IDs
+#   LB_ID - the id of load balancer
+#   LB_PUBLIC_IPS - comma separated string of public ips.
+#   SECURITY_GROUP_IDS - comma separated string of security group ids.
+function kube-down {
+  if [[ ! -z "${INSTANCE_IDS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${INSTANCE_IDS}"
+  fi
+
+  if [[ ! -z "${EIP_IDS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${EIP_IDS}"
+  fi
+
+  # TODO(jiang) test cleaning up LB_PUBLIC_IPS
+  if [[ ! -z "${LB_ID-}" && ! -z "${LB_PUBLIC_IPS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deleteloadbalancer ${LB_ID} ${LB_PUBLIC_IPS}"
+  fi
+
+  if [[ ! -z "${SECURITY_GROUP_IDS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS}"
+  fi
+}
 
 # A helper function that executes a command (which interacts with anchnet), and retries on
 # failure. If the command can't succeed within given attempts, the script will exit.

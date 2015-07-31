@@ -40,7 +40,7 @@ MASTER_SECURE_ADDRESS="0.0.0.0"
 MASTER_SECURE_PORT=443
 
 # Admission Controllers to invoke prior to persisting objects in cluster
-ADMISSION_CONTROL=NamespaceLifecycle,NamespaceAutoProvision,LimitRanger,ServiceAccount,ResourceQuota
+ADMISSION_CONTROL=NamespaceLifecycle,NamespaceExists,LimitRanger,ServiceAccount,ResourceQuota
 
 # The infra container used for every Pod.
 POD_INFRA_CONTAINER="ddysher/k8s-pause:0.8.0"

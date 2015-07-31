@@ -56,6 +56,7 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --client_ca_file=/etc/kubernetes/ca.crt \
 --tls_cert_file=/etc/kubernetes/master.crt \
 --tls_private_key_file=/etc/kubernetes/master.key \
+--admission_control=${2} \
 --cloud_config=/etc/kubernetes/anchnet-config \
 --cloud_provider=anchnet"
 EOF
@@ -67,7 +68,9 @@ function create-kube-controller-manager-opts {
 KUBE_CONTROLLER_MANAGER_OPTS="--logtostderr=true \
 --master=${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} \
 --cloud_config=/etc/kubernetes/anchnet-config \
---cloud_provider=anchnet"
+--cloud_provider=anchnet \
+--service-account-private-key-file=/etc/kubernetes/master.key \
+--root-ca-file=/etc/kubernetes/ca.crt"
 EOF
 }
 

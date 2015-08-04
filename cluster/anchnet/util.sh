@@ -14,12 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# In kube-up.sh, bash is set to exit on error. However, it's very common for
+# anchnet cli to return error, and for robustness, we need to retry on error.
+# Therefore, we disable errexit here.
+set +o errexit
 
 # TODO: Create a clean up script to stop all services, delete old configs, etc.
 
 # KUBE_UP_MODE defines how do we run kube-up, there are currently three modes:
-# - "development": when running in dev mode, no machine will be created. Developer
-#     is responsible to specify the instance IDs, eip IDs, etc.
+# - "dev": when running in dev mode, no machine will be created. Developer is
+#     responsible to specify the instance IDs, eip IDs, etc.
 # - "image": when using existing-image, it is assumed that base image has been
 #     created in anchnet and has binaries pre-installed, see below.
 # - "full": when running in full mode, binaries will be copied to the instances.
@@ -41,7 +45,7 @@ KUBE_UP_MODE="image"
 #   Installed bridge-utils
 # Note when running in full mode, we still use this image to create instances,
 # but its binaries will be overriden.
-INSTANCE_IMAGE="img-OBKRMWB4"
+INSTANCE_IMAGE="img-51ZRZKL7"
 
 # User name used to ssh into the instances, e.g. root, ubuntu.
 INSTANCE_USER="ubuntu"
@@ -112,13 +116,13 @@ function kube-up {
   NODE_NAME_PREFIX="${CLUSTER_ID}-node"
 
   # For dev, set to existing machine.
-  if [[ "${KUBE_UP_MODE}" = "development" ]]; then
-    MASTER_INSTANCE_ID="i-JHB0WIOV"
-    MASTER_EIP_ID="eip-4L4V5BQU"
-    MASTER_EIP="221.228.88.99"
-    NODE_INSTANCE_IDS="i-C32WQF44"
-    NODE_EIP_IDS="eip-KW3EE0XI"
-    NODE_EIPS="221.228.88.105"
+  if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
+    MASTER_INSTANCE_ID="i-697SFZUJ"
+    MASTER_EIP_ID="eip-NXJ9E8CF"
+    MASTER_EIP="43.254.55.208"
+    NODE_INSTANCE_IDS="i-MN0UAIZO"
+    NODE_EIP_IDS="eip-89NTY9F2"
+    NODE_EIPS="43.254.55.168"
     PRIVATE_SDN_INTERFACE="eth1"
   else
     # Create master/node instances from anchnet without provision. The following
@@ -135,6 +139,8 @@ function kube-up {
     create-sdn-network
     # Create firewall rules for all instances.
     create-firewall
+    # Make sure firewall is properly setup.
+    ensure-firewall
   fi
 
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
@@ -233,7 +239,7 @@ function prompt-instance-password {
 # Create ~/.ssh/id_rsa.pub if it doesn't exist.
 function ensure-pub-key {
   if [[ ! -f ~/.ssh/id_rsa.pub ]]; then
-    echo "+++++ Creating public key..."
+    echo "+++++++++ Creating public key ..."
     expect <<EOF
 spawn ssh-keygen -t rsa -b 4096
 expect "*rsa key*"
@@ -317,15 +323,34 @@ except:
 #   MASTER_EIP_ID
 #   MASTER_EIP
 function create-master-instance {
-  echo "+++++ Creating kubernetes master from anchnet, master name: ${MASTER_NAME}"
+  echo "++++++++++ Creating kubernetes master from anchnet, master name: ${MASTER_NAME} ..."
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
-  local master_info=$(
-    ${ANCHNET_CMD} runinstance "${MASTER_NAME}" -p="${KUBE_INSTANCE_PASSWORD}" \
+  local attempt=0
+  local instance_pattern="i-*"
+  local eip_pattern="eip-*"
+  while true; do
+    echo "Attempt $(($attempt+1)) to create master instance"
+    local master_info=$(
+      ${ANCHNET_CMD} runinstance "${MASTER_NAME}" -p="${KUBE_INSTANCE_PASSWORD}" \
                    -i="${INSTANCE_IMAGE}" -m="${MASTER_MEM}" -c="${MASTER_CPU_CORES}" \
                    -g="${IP_GROUP}")
-  MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
-  MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
+    local exit_code="$?"
+    MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
+    MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
+    if [[ "${exit_code}" != "0" || ! $MASTER_INSTANCE_ID =~ $instance_pattern || ! $MASTER_EIP_ID =~ $eip_pattern ]]; then
+      if (( attempt > 20 )); then
+        echo
+        echo -e "${color_red}failed to create master instance (sorry!)${color_norm}" >&2
+        exit 1
+      fi
+    else
+      echo -e " ${color_yellow}[master created in anchnet, verifying]${color_norm}"
+      break
+    fi
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
 
   # Check instance status and its external IP address.
   check-instance-status "${MASTER_INSTANCE_ID}"
@@ -335,7 +360,7 @@ function create-master-instance {
   # Enable ssh without password.
   setup-instance-ssh "${MASTER_EIP}"
 
-  echo "Created master with instance ID ${MASTER_INSTANCE_ID}, eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}"
+  echo -e " ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 }
 
 
@@ -355,15 +380,34 @@ function create-master-instance {
 #   NODE_EIPS - comma separated string of instance external IPs
 function create-node-instances {
   for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    echo "+++++ Creating kubernetes ${i}th node from anchnet, node name: ${NODE_NAME_PREFIX}-${i}"
+    echo "++++++++++ Creating kubernetes ${i}th node from anchnet, node name: ${NODE_NAME_PREFIX}-${i} ..."
 
     # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
-    local node_info=$(
-      ${ANCHNET_CMD} runinstance "${NODE_NAME_PREFIX}-${i}" -p="${KUBE_INSTANCE_PASSWORD}" \
-                     -i="${INSTANCE_IMAGE}" -m="${NODE_MEM}" -c="${NODE_CPU_CORES}" \
-                     -g="${IP_GROUP}")
-    local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
-    local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
+    local attempt=0
+    local instance_pattern="i-*"
+    local eip_pattern="eip-*"
+    while true; do
+      echo "Attempt $(($attempt+1)) to create ${i}th node instance"
+      local node_info=$(
+        ${ANCHNET_CMD} runinstance "${NODE_NAME_PREFIX}-${i}" -p="${KUBE_INSTANCE_PASSWORD}" \
+                       -i="${INSTANCE_IMAGE}" -m="${NODE_MEM}" -c="${NODE_CPU_CORES}" \
+                       -g="${IP_GROUP}")
+      local exit_code="$?"
+      local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
+      local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
+      if [[ "${exit_code}" != "0" || ! $node_instance_id =~ $instance_pattern || ! $node_eip_id =~ $eip_pattern ]]; then
+        if (( attempt > 20 )); then
+          echo
+          echo -e "${color_red}failed to create ${i}th node instance (sorry!)${color_norm}" >&2
+          exit 1
+        fi
+      else
+        echo -e " ${color_yellow}[${i}th node created in anchnet, verifying]${color_norm}"
+        break
+      fi
+      attempt=$(($attempt+1))
+      sleep $(($attempt*2))
+    done
 
     # Check instance status and its external IP address.
     check-instance-status "${node_instance_id}"
@@ -373,7 +417,7 @@ function create-node-instances {
     # Enable ssh without password.
     setup-instance-ssh "${node_eip}"
 
-    echo "Created node-${i} with instance ID ${node_instance_id}, eip ID ${node_eip_id}. Node EIP: ${node_eip}"
+    echo -e " ${color_green}[created node-${i} with instance ID ${node_instance_id}, eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
 
     # Set output vars. Note we use ${NODE_EIPS-} to check if NODE_EIPS is unset,
     # as toplevel script set -o nounset
@@ -388,7 +432,7 @@ function create-node-instances {
     fi
   done
 
-  echo "Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}"
+  echo -e " ${color_green}[Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}]${color_norm}"
 }
 
 
@@ -404,11 +448,11 @@ function check-instance-status {
     if [[ ${status} != "running" ]]; then
       if (( attempt > 20 )); then
         echo
-        echo -e "${color_red}Instance $1 failed to start (sorry!)${color_norm}" >&2
+        echo -e "${color_red}instance $1 failed to start (sorry!)${color_norm}" >&2
         exit 1
       fi
     else
-      echo "Instance $1 becomes running status"
+      echo -e " ${color_green}[instance $1 becomes running status]${color_norm}"
       break
     fi
     attempt=$(($attempt+1))
@@ -440,7 +484,7 @@ function get-ip-address-from-eipid {
       fi
     else
       EIP_ADDRESS=${eip}
-      echo "Get Eip address ${EIP_ADDRESS}"
+      echo -e " ${color_green}[get eip address ${EIP_ADDRESS} for $1]${color_norm}"
       break
     fi
     attempt=$(($attempt+1))
@@ -463,8 +507,7 @@ function setup-instance-ssh {
   attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to setup instance ssh for $1"
-    local ok=1
-    expect <<EOF || ok=0
+    expect <<EOF
 set timeout $((($attempt+1)*3))
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   $HOME/.ssh/id_rsa.pub ${INSTANCE_USER}@$1:~/host_rsa.pub
@@ -489,7 +532,7 @@ expect {
   eof {}
 }
 EOF
-    if [[ "${ok}" == "0" ]]; then
+    if [[ "$?" != "0" ]]; then
       # We give more attempts for setting up ssh to allow slow startup.
       if (( attempt > 40 )); then
         echo
@@ -519,7 +562,7 @@ EOF
 # Vars set:
 #   PRIVATE_SDN_INTERFACE - The interface created by the SDN network
 function create-sdn-network {
-  echo "Creating private SDN network..."
+  echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
   local attempt=0
@@ -556,66 +599,147 @@ function create-sdn-network {
 }
 
 
-# Create firewall rules to allow certain traffics.
+# Create firewall rules to allow certain traffic.
 #
 # Assumed vars:
 #   MASTER_SECURE_PORT
 #   MASTER_INSTANCE_ID
 #   NODE_INSTANCE_IDS
+#
+# Vars set:
+#   MASTER_SG_ID
+#   NODE_SG_ID
 function create-firewall {
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
-  echo "Creating master security group rules..."
+  echo "++++++++++ Creating master security group rules ..."
   local attempt=0
   local pattern="sg-*"
   while true; do
-    echo "Attempt $(($attempt+1)) to create security group"
-    local master_sg_id=$(
-      ${ANCHNET_CMD} createsecuritygroup master-security-group master-ssh \
-                     --priority=1 --action=accept --protocol=tcp --direction=0 \
-                     --value1=22 --value2=22 |
-        json_val '["security_group_id"]')
-    if [[ ! $master_sg_id =~ $pattern ]]; then
+    echo "Attempt $(($attempt+1)) to create security group for master"
+    MASTER_SG_ID=$(${ANCHNET_CMD} createsecuritygroup master-security-group master-ssh \
+                                  --priority=1 --action=accept --protocol=tcp --direction=0 \
+                                  --value1=22 --value2=22 |
+                      json_val '["security_group_id"]')
+    if [[ ! $MASTER_SG_ID =~ $pattern ]]; then
       if (( attempt > 20 )); then
         echo
         echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
         exit 1
       fi
     else
-      echo "Created master security group with ID: ${master_sg_id}"
+      echo -e " ${color_green}[created master security group with ID: ${MASTER_SG_ID}]${color_norm}"
       break
     fi
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
 
-  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule master-https ${master_sg_id} --priority=3 --action=accept --protocol=tcp --direction=0 --value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT}"
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${master_sg_id} ${MASTER_INSTANCE_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule master-https ${MASTER_SG_ID} --priority=3 --action=accept --protocol=tcp --direction=0 --value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
 
   # Node security group contains firewall for ssh (tcp/22).
   echo "Creating node security group rules..."
   local attempt=0
   while true; do
-    echo "Attempt $(($attempt+1)) to create security group"
-    local node_sg_id=$(
-      ${ANCHNET_CMD} createsecuritygroup node-security-group node-ssh \
-                     --priority=1 --action=accept --protocol=tcp --direction=0 \
-                     --value1=22 --value2=22 |
-        json_val '["security_group_id"]')
-    if [[ ! $node_sg_id =~ $pattern ]]; then
+    echo "Attempt $(($attempt+1)) to create security group for node"
+    NODE_SG_ID=$(${ANCHNET_CMD} createsecuritygroup node-security-group node-ssh \
+                                --priority=1 --action=accept --protocol=tcp --direction=0 \
+                                --value1=22 --value2=22 |
+                    json_val '["security_group_id"]')
+    if [[ ! $NODE_SG_ID =~ $pattern ]]; then
       if (( attempt > 20 )); then
         echo
         echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
         exit 1
       fi
     else
-      echo "Created node security group with ID: ${node_sg_id}"
+      echo -e " ${color_green}[created node security group with ID: ${NODE_SG_ID}]${color_norm}"
       break
     fi
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
 
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${node_sg_id} ${NODE_INSTANCE_IDS}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
+}
+
+
+# Make sure firewall is properly set via checking ssh.
+#
+# Assumed vars:
+#   KUBE_INSTANCE_PASSWORD
+#   MASTER_SG_ID
+#   MASTER_INSTANCE_ID
+#   MASTER_EIP
+#   NODE_SG_ID
+#   NODE_INSTANCE_IDS
+#   NODE_EIPS
+function ensure-firewall {
+  local attempt=0
+  while true; do
+    echo "Attempt $(($attempt+1)) to check master firewall"
+    expect <<EOF
+set timeout $((($attempt+1)*3))
+spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} echo Hello
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  "lost connection" { exit 1 }
+  timeout { exit 1 }
+  eof {}
+}
+EOF
+    if [[ "$?" != "0" ]]; then
+      if (( attempt > 10 )); then
+        echo
+        echo -e "${color_red}Unable to setup firewall for master (sorry!)${color_norm}" >&2
+        exit 1
+      else
+        ${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}
+      fi
+    else
+      break
+    fi
+    echo -e " ${color_yellow}[reapplying security group to master]${color_norm}"
+    attempt=$(($attempt+1))
+  done
+
+  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
+  first_node_ip="${node_eip_arr[0]}"
+  attempt=0
+  while true; do
+    echo "Attempt $(($attempt+1)) to check node firewall"
+    expect <<EOF
+set timeout $((($attempt+1)*3))
+spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${first_node_ip} echo Hello
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  "lost connection" { exit 1 }
+  timeout { exit 1 }
+  eof {}
+}
+EOF
+    if [[ "$?" != "0" ]]; then
+      if (( attempt > 10 )); then
+        echo
+        echo -e "${color_red}Unable to setup firewall for nodes (sorry!)${color_norm}" >&2
+        exit 1
+      else
+        ${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}
+      fi
+    else
+      break
+    fi
+    echo -e " ${color_yellow}[reapplying security group to node]${color_norm}"
+    attempt=$(($attempt+1))
+  done
 }
 
 
@@ -1248,6 +1372,7 @@ function anchnet-exec-and-retry {
         exit 1
       fi
     else
+      echo # Add a blank line (anchnet cli output doesn't have new line)
       break
     fi
     echo -e "${color_yellow}Command [$1] not ok, will retry${color_norm}" >&2

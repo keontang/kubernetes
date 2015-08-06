@@ -47,7 +47,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 	if len(lb_response.ItemSet[0].Eips) == 0 {
 		return nil, false, fmt.Errorf("External loadbalancer has no public IP")
 	}
-	err = an.waitForLoadBalancerReady(lb_response.ItemSet[0].LoadbalancerID)
+	err = an.waitForLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, anchnet_client.LoadBalancerStatusActive)
 	if err != nil {
 		return nil, false, err
 	}
@@ -70,7 +70,9 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 // 1. create external ip;
 // 2. create a loadbalancer with that ip;
 // 3. add listeners for the loadbalancer, number of listeners = number of service ports;
-// 4. add backends for each listener.
+// 4. add backends for each listener;
+// 5. create a security group for loadbalancer, number of rules = number of service ports;
+// 6. modify node security group rules to open node port of the service, number of added rules = number of service ports.
 func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP, ports []*api.ServicePort, hosts []string, affinityType api.ServiceAffinity) (*api.LoadBalancerStatus, error) {
 	glog.Infof("Anchnet: received create loadbalancer request with name %v\n", name)
 
@@ -105,7 +107,7 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 
 	// Adding listeners and backends do not need loadbalancer to be ready, but updating
 	// loadbalancer to apply the changes do require.
-	err = an.waitForLoadBalancerReady(lb_response.LoadbalancerID)
+	err = an.waitForLoadBalancer(lb_response.LoadbalancerID, anchnet_client.LoadBalancerStatusActive)
 	if err != nil {
 		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 		return nil, err
@@ -139,18 +141,33 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 		}
 	}
 
+	// Create a security group and apply it to loadbalancer.
+	_, err = an.createLBSecurityGroup(name, ports, lb_response.LoadbalancerID)
+	if err != nil {
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		return nil, err
+	}
+
+	// Update node security group rules to open node port.
+	err = an.updateNodeSecurityGroup(NodeSecurityGroupName, ports)
+	if err != nil {
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		return nil, err
+	}
+
+	// Calling update loadbalancer will apply the above changes.
 	_, err = an.updateLoadBalancer(lb_response.LoadbalancerID)
 	if err != nil {
 		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 		return nil, err
 	}
 
+	// Get loadbalancer ip address and return it to k8s.
 	response, err := an.describeEip(ip_response.EipIDs[0])
 	if err != nil {
 		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
 		return nil, err
 	}
-
 	status := &api.LoadBalancerStatus{}
 	status.Ingress = []api.LoadBalancerIngress{{IP: response.ItemSet[0].EipAddr}}
 	glog.Infof("Anchnet: created loadbalancer %v, ingress ip %v\n", name, response.ItemSet[0].EipAddr)
@@ -168,7 +185,13 @@ func (an *Anchnet) UpdateTCPLoadBalancer(name, region string, hosts []string) er
 // This construction is useful because many cloud providers' load balancers
 // have multiple underlying components, meaning a Get could say that the LB
 // doesn't exist even if some part of it is still laying around.
+// In anchnet, we need to delete:
+// 1. external ip allocated to loadbalancer;
+// 2. loadbalancer itself (including listeners);
+// 3. security group for loadbalancer;
+// 4. TODO: node security group rules for node port.
 func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
+	// Delete external ip and load balancer.
 	lb_response, exists, err := an.searchLoadBalancer(name)
 	if err != nil {
 		return err
@@ -182,6 +205,38 @@ func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
 		eip_ids = append(eip_ids, eip.EipID)
 	}
 	_, err = an.deleteLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, eip_ids)
+
+	// Wait for load balancer to be deleted.
+	err = an.waitForLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, anchnet_client.LoadBalancerStatusDeleted)
+	if err != nil {
+		return err
+	}
+
+	// Now delete security group.
+	sg_response, exists, err := an.searchSecurityGroup(name)
+	if err != nil {
+		return err
+	}
+	if exists == false {
+		glog.Info("Security group %v already deleted", name)
+		return nil
+	}
+
+	var delete_response anchnet_client.DeleteSecurityGroupsResponse
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.DeleteSecurityGroupsRequest{
+			SecurityGroupIDs: []string{sg_response.ItemSet[0].SecurityGroupID},
+		}
+		err := an.client.SendRequest(request, &delete_response)
+		if err == nil {
+			glog.Infof("Deleted security group %v with ID %v", name, sg_response.ItemSet[0].SecurityGroupID)
+			break
+		} else {
+			glog.Infof("Attempt %d: failed to delete security group: %v\n", i, err)
+		}
+		time.Sleep(RetryIntervalOnError)
+	}
+
 	return err
 }
 
@@ -201,13 +256,13 @@ func (an *Anchnet) allocateEIP() (*anchnet_client.AllocateEipsResponse, error) {
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
 			if len(response.EipIDs) == 0 {
-				glog.Errorf("Attemp %d: received nil error but empty response while allocating eip\n", i)
+				glog.Infof("Attempt %d: received nil error but empty response while allocating eip\n", i)
 			} else {
 				glog.Infof("Allocated EIP with ID: %v", response.EipIDs[0])
 				return &response, nil
 			}
 		} else {
-			glog.Errorf("Attemp %d: failed to allocate eip: %v\n", i, err)
+			glog.Infof("Attempt %d: failed to allocate eip: %v\n", i, err)
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
@@ -225,7 +280,7 @@ func (an *Anchnet) releaseEIP(eip string) (*anchnet_client.ReleaseEipsResponse, 
 		if err == nil {
 			return &response, nil
 		} else {
-			glog.Errorf("Attemp %d: failed to release eip: %v\n", i, err)
+			glog.Infof("Attempt %d: failed to release eip: %v\n", i, err)
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
@@ -247,7 +302,7 @@ func (an *Anchnet) describeEip(eip string) (*anchnet_client.DescribeEipsResponse
 				return &response, nil
 			}
 		}
-		glog.Errorf("Attemp %d: failed to describe eip %v: %v\n", i, eip, err)
+		glog.Infof("Attempt %d: failed to describe eip %v: %v\n", i, eip, err)
 		time.Sleep(RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to find EIP %v\n", eip)
@@ -268,7 +323,7 @@ func (an *Anchnet) createLoadBalancer(name string, eip string) (*anchnet_client.
 			glog.Infof("Created loadbalancer with ID: %v", response.LoadbalancerID)
 			return &response, nil
 		} else {
-			glog.Errorf("Attemp %d: failed to create loadbalancer: %v\n", i, err)
+			glog.Infof("Attempt %d: failed to create loadbalancer: %v\n", i, err)
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
@@ -288,14 +343,14 @@ func (an *Anchnet) deleteLoadBalancer(lbID string, eips []string) (*anchnet_clie
 			glog.Infof("Deleted loadbalancer with ID: %v", lbID)
 			return &response, nil
 		} else {
-			glog.Errorf("Attemp %d: failed to delete loadbalancer: %v\n", i, err)
+			glog.Infof("Attempt %d: failed to delete loadbalancer: %v\n", i, err)
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to delete loadbalancer %v with eips %v\n", lbID, eips)
 }
 
-// describeLoadBalancer gets a loadbalancer and its eip, with retry.
+// searchLoadBalancer tries to find loadbalancer by name.
 func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.DescribeLoadBalancersResponse, bool, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.DescribeLoadBalancersRequest{
@@ -307,13 +362,13 @@ func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.Descr
 			if len(response.ItemSet) == 0 {
 				return nil, false, nil
 			} else {
-				glog.Infof("Get loadbalancer with name: %v", search_word)
+				glog.Infof("Got loadbalancer with name: %v", search_word)
 				return &response, true, nil
 			}
 		} else {
-			glog.Errorf("Attemp %d: failed to get loadbalancer %v: %v\n", i, search_word, err)
+			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, search_word, err)
 		}
-		time.Sleep(RetryIntervalOnWaitReady)
+		time.Sleep(RetryIntervalOnWait)
 	}
 	return nil, false, fmt.Errorf("Unable to get loadbalancer %v", search_word)
 }
@@ -338,13 +393,13 @@ func (an *Anchnet) addLoadBalancerListeners(lbID string, port int) (*anchnet_cli
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
 			if len(response.ListenerIDs) == 0 {
-				glog.Errorf("Attemp %d: received nil error but empty response while adding listeners\n", i)
+				glog.Infof("Attempt %d: received nil error but empty response while adding listeners\n", i)
 			} else {
 				glog.Infof("Created listener with ID: %v", response.ListenerIDs[0])
 				return &response, nil
 			}
 		} else {
-			glog.Errorf("Attemp %d: failed to add listener: %v\n", i, err)
+			glog.Infof("Attempt %d: failed to add listener: %v\n", i, err)
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
@@ -362,13 +417,13 @@ func (an *Anchnet) addLoadBalancerBackends(listenerID string, backends []anchnet
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
 			if len(response.BackendIDs) == 0 {
-				glog.Errorf("Attemp %d: received nil error but empty response while adding backends\n", i)
+				glog.Infof("Attempt %d: received nil error but empty response while adding backends\n", i)
 			} else {
 				glog.Infof("Added backends with IDs: %+v", response.BackendIDs)
 				return &response, nil
 			}
 		} else {
-			glog.Errorf("Attemp %d: failed to add backend: %v\n", i, err)
+			glog.Infof("Attempt %d: failed to add backend: %v\n", i, err)
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
@@ -387,16 +442,16 @@ func (an *Anchnet) updateLoadBalancer(lbID string) (*anchnet_client.UpdateLoadBa
 			glog.Infof("Updated loadbalancer %v", lbID)
 			return &response, nil
 		} else {
-			glog.Errorf("Attemp %d: failed to update loadbalancer %v: %v\n", i, lbID, err)
+			glog.Infof("Attempt %d: failed to update loadbalancer %v: %v\n", i, lbID, err)
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to update loadbalancer %v\n", lbID)
 }
 
-// waitForLoadBalancerReady waits loadbalancer to be ready.
-func (an *Anchnet) waitForLoadBalancerReady(lbID string) error {
-	for i := 0; i < RetryCountOnWaitReady; i++ {
+// waitForLoadBalancer waits for loadbalancer to desired status.
+func (an *Anchnet) waitForLoadBalancer(lbID string, status anchnet_client.LoadBalancerStatus) error {
+	for i := 0; i < RetryCountOnWait; i++ {
 		request := anchnet_client.DescribeLoadBalancersRequest{
 			LoadbalancerIDs: []string{lbID},
 		}
@@ -404,19 +459,157 @@ func (an *Anchnet) waitForLoadBalancerReady(lbID string) error {
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
 			if len(response.ItemSet) == 0 {
-				glog.Errorf("Attemp %d: received nil error but empty response while getting loadbalancer %v\n", i, lbID)
+				glog.Infof("Attempt %d: received nil error but empty response while getting loadbalancer %v\n", i, lbID)
 			} else {
-				if response.ItemSet[0].Status == "active" {
-					glog.Infof("Loadbalancer %v is ready (active status)\n", lbID)
+				if response.ItemSet[0].Status == status {
+					glog.Infof("Loadbalancer %v is in desired %v status\n", lbID, status)
 					return nil
 				} else {
-					glog.Errorf("Attemp %d: loadbalancer %v not ready yet, current status: %v\n", i, lbID, response.ItemSet[0].Status)
+					glog.Infof("Attempt %d: loadbalancer %v not in desired %v status yet, current status: %v\n", i, lbID, status, response.ItemSet[0].Status)
 				}
 			}
 		} else {
-			glog.Errorf("Attemp %d: failed to get loadbalancer %v: %v\n", i, lbID, err)
+			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, lbID, err)
 		}
-		time.Sleep(RetryIntervalOnWaitReady)
+		time.Sleep(RetryIntervalOnWait)
 	}
-	return fmt.Errorf("Loadbalancer %v is not ready after timeout", lbID)
+	return fmt.Errorf("Loadbalancer %v is not in desired %v status after timeout", lbID, status)
+}
+
+// searchSecurityGroup tries to find security group by name.
+func (an *Anchnet) searchSecurityGroup(search_word string) (*anchnet_client.DescribeSecurityGroupsResponse, bool, error) {
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.DescribeSecurityGroupsRequest{
+			SearchWord: search_word,
+		}
+		var response anchnet_client.DescribeSecurityGroupsResponse
+		err := an.client.SendRequest(request, &response)
+		if err == nil {
+			if len(response.ItemSet) == 0 {
+				return nil, false, nil
+			} else {
+				glog.Infof("Got security group with name: %v", search_word)
+				return &response, true, nil
+			}
+		} else {
+			glog.Infof("Attempt %d: failed to get security group %v: %v\n", i, search_word, err)
+		}
+		time.Sleep(RetryIntervalOnWait)
+	}
+	return nil, false, fmt.Errorf("Unable to get security group %v", search_word)
+}
+
+// createLBSecurityGroup creates a security group, and then apply the rules to loadbalancer.
+func (an *Anchnet) createLBSecurityGroup(name string, ports []*api.ServicePort, lbID string) (*anchnet_client.CreateSecurityGroupResponse, error) {
+	// For every service port, we create a security group rule to allow lb traffic.
+	var rules []anchnet_client.CreateSecurityGroupRule
+	for _, port := range ports {
+		rule := anchnet_client.CreateSecurityGroupRule{
+			SecurityGroupRuleName: fmt.Sprintf("%s-%d", name, port.Port),
+			Action:                anchnet_client.SecurityGroupRuleActionAccept,
+			Direction:             anchnet_client.SecurityGroupRuleDirectionDown,
+			Protocol:              anchnet_client.SecurityGroupRuleProtocolTCP,
+			Priority:              5, // TODO: Is it ok to use fixed priority?
+			Value1:                fmt.Sprintf("%d", port.Port),
+			Value2:                fmt.Sprintf("%d", port.Port),
+		}
+		rules = append(rules, rule)
+	}
+
+	var sg_response anchnet_client.CreateSecurityGroupResponse
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.CreateSecurityGroupRequest{
+			SecurityGroupName:  name,
+			SecurityGroupRules: rules,
+		}
+		err := an.client.SendRequest(request, &sg_response)
+		if err == nil {
+			glog.Infof("Created security group with ID: %v", sg_response.SecurityGroupID)
+			break
+		} else {
+			glog.Infof("Attempt %d: failed to create security group: %v\n", i, err)
+		}
+		time.Sleep(RetryIntervalOnError)
+	}
+
+	var lb_response anchnet_client.ModifyLoadBalancerAttributesResponse
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.ModifyLoadBalancerAttributesRequest{
+			LoadbalancerID:  lbID,
+			SecurityGroupID: sg_response.SecurityGroupID,
+		}
+		err := an.client.SendRequest(request, &lb_response)
+		if err == nil {
+			glog.Infof("Applied security group %v to loadbalancer %v", sg_response.SecurityGroupID, lbID)
+			return &sg_response, nil
+		} else {
+			glog.Infof("Attempt %d: failed to apply security group: %v\n", i, err)
+		}
+		time.Sleep(RetryIntervalOnError)
+	}
+
+	return nil, fmt.Errorf("Unable to create security group %v for loadbalancer %v\n", name, lbID)
+}
+
+// updateNodeSecurityGroup adds node security group rule to open service
+// node port connection.
+func (an *Anchnet) updateNodeSecurityGroup(name string, ports []*api.ServicePort) error {
+	// Find node security group ID.
+	sg_response, exists, err := an.searchSecurityGroup(name)
+	if err != nil {
+		return err
+	}
+	if exists == false {
+		return fmt.Errorf("Security group %v doesn't exist", name)
+	}
+
+	// For every node port, we create a security group rule to allow traffic.
+	var rules []anchnet_client.AddSecurityGroupRule
+	for _, port := range ports {
+		rule := anchnet_client.AddSecurityGroupRule{
+			SecurityGroupRuleName: fmt.Sprintf("%s-%d", name, port.NodePort),
+			Action:                anchnet_client.SecurityGroupRuleActionAccept,
+			Direction:             anchnet_client.SecurityGroupRuleDirectionDown,
+			Protocol:              anchnet_client.SecurityGroupRuleProtocolTCP,
+			Priority:              5, // TODO: Is it ok to use fixed priority?
+			Value1:                fmt.Sprintf("%d", port.NodePort),
+			Value2:                fmt.Sprintf("%d", port.NodePort),
+		}
+		rules = append(rules, rule)
+	}
+
+	// Now add the rules to security group.
+	var rules_response anchnet_client.AddSecurityGroupRulesResponse
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.AddSecurityGroupRulesRequest{
+			SecurityGroupID:    sg_response.ItemSet[0].SecurityGroupID,
+			SecurityGroupRules: rules,
+		}
+		err := an.client.SendRequest(request, &rules_response)
+		if err == nil {
+			glog.Infof("Added rules to node security group")
+			break
+		} else {
+			glog.Infof("Attempt %d: failed to add security group rules: %v\n", i, err)
+		}
+		time.Sleep(RetryIntervalOnError)
+	}
+
+	// Apply the above changes.
+	var apply_response anchnet_client.ApplySecurityGroupResponse
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.ApplySecurityGroupRequest{
+			SecurityGroupID: sg_response.ItemSet[0].SecurityGroupID,
+		}
+		err := an.client.SendRequest(request, &apply_response)
+		if err == nil {
+			glog.Infof("Applied changes to node security group")
+			break
+		} else {
+			glog.Infof("Attempt %d: failed to apply security group rules: %v\n", i, err)
+		}
+		time.Sleep(RetryIntervalOnError)
+	}
+
+	return nil
 }

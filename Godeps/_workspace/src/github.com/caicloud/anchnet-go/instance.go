@@ -215,8 +215,8 @@ type RunInstancesNet1 struct {
 // RunInstancesIP sets parameters for public IP (EIP).
 type RunInstancesIP struct {
 	// Following fields are used when creating eip along with new instance.
-	Bandwidth int    `json:"bw,omitempty"`       // In MB/s
-	IPGroup   string `json:"ip_group,omitempty"` // Only "eipg-00000000" is BGP for now
+	Bandwidth int         `json:"bw,omitempty"` // In MB/s
+	IPGroup   IPGroupType `json:"ip_group,omitempty"`
 
 	// Following fields are used when using existing eip.
 	EipID string `json:"ip,omitempty"` // ID of existing EIP; the ip will be assigned to the new machine

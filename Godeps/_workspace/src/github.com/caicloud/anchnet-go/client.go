@@ -88,6 +88,16 @@ func init() {
 	actions["DeleteLoadBalancerBackends"] = true
 	actions["DescribeLoadBalancerBackends"] = true
 	actions["ModifyLoadBalancerBackendAttributes"] = true
+
+	actions["DescribeSecurityGroups"] = true
+	actions["CreateSecurityGroup"] = true
+	actions["DeleteSecurityGroups"] = true
+	actions["ApplySecurityGroup"] = true
+	actions["ModifySecurityGroupAttributes"] = true
+	actions["DescribeSecurityGroupRules"] = true
+	actions["AddSecurityGroupRules"] = true
+	actions["DeleteSecurityGroupRules"] = true
+	actions["ModifySecurityGroupRuleAttributes"] = true
 }
 
 // Client represents an anchnet client.

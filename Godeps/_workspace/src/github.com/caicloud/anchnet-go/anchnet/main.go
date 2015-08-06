@@ -23,6 +23,7 @@ func main() {
 	addEipsCLI(cmds, os.Stdout)
 	addVxnetsCLI(cmds, os.Stdout)
 	addLoadBalancerCLI(cmds, os.Stdout)
+	addSecurityGroupCLI(cmds, os.Stdout)
 
 	cmds.Execute()
 }
@@ -38,12 +39,13 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 		},
 	}
 	var cpu, memory, bandwidth int
-	var passwd, image_id string
+	var passwd, image_id, ip_group string
 	cmdRunInstance.Flags().IntVarP(&cpu, "cpu", "c", 1, "Number of cpu cores")
 	cmdRunInstance.Flags().IntVarP(&memory, "memory", "m", 1024, "Number of memory in MB")
 	cmdRunInstance.Flags().IntVarP(&bandwidth, "bandwidth", "b", 1, "Public network bandwidth, in MB/s")
 	cmdRunInstance.Flags().StringVarP(&passwd, "passwd", "p", "caicloud2015ABC", "Login password for new instance")
 	cmdRunInstance.Flags().StringVarP(&image_id, "image-id", "i", "trustysrvx64c", "Image ID used to create new instance")
+	cmdRunInstance.Flags().StringVarP(&ip_group, "ip-group", "g", "eipg-00000000", "IP group of the newly created eip")
 
 	cmdDescribeInstance := &cobra.Command{
 		Use:   "describeinstance id",
@@ -155,4 +157,76 @@ func addLoadBalancerCLI(cmds *cobra.Command, out io.Writer) {
 	// Add all sub-commands
 	cmds.AddCommand(cmdCreateLoadBalancer)
 	cmds.AddCommand(cmdDeleteLoadBalancer)
+}
+
+// addSecurityGroupCLI adds SecurityGroup commands.
+func addSecurityGroupCLI(cmds *cobra.Command, out io.Writer) {
+	var protocol, action, value1, value2, value3 string
+	var direction, priority int
+
+	cmdCreateSecurityGroup := &cobra.Command{
+		Use:   "createsecuritygroup name",
+		Short: "Create a new empty security group",
+		Run: func(cmd *cobra.Command, args []string) {
+			execCreateSecurityGroup(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+	cmdCreateSecurityGroup.Flags().IntVarP(&direction, "direction", "d", 0,
+		"Direction of the rule. 0 is down, 1 is up.")
+	cmdCreateSecurityGroup.Flags().StringVarP(&action, "action", "a", "",
+		"Action of the rule, one of accept and drop.")
+	cmdCreateSecurityGroup.Flags().StringVarP(&protocol, "protocol", "c", "",
+		"Protocol of the rule, can be tcp, udp or ssh, http, etc.")
+	cmdCreateSecurityGroup.Flags().IntVarP(&priority, "priority", "p", 0,
+		"Priority of the rule, an integer.")
+	cmdCreateSecurityGroup.Flags().StringVarP(&value1, "value1", "", "0",
+		"Value1 of the rule, whose meanning differs based on protocol.")
+	cmdCreateSecurityGroup.Flags().StringVarP(&value2, "value2", "", "0",
+		"Value2 of the rule, whose meanning differs based on protocol.")
+	cmdCreateSecurityGroup.Flags().StringVarP(&value3, "value3", "", "0",
+		"Value3 of the rule, whose meanning differs based on protocol.")
+
+	cmdAddSecurityGroupRule := &cobra.Command{
+		Use:   "addsecuritygrouprule name securitygroup_id",
+		Short: "Add a new rule to a given security group",
+		Run: func(cmd *cobra.Command, args []string) {
+			execAddSecurityGroupRule(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+	cmdAddSecurityGroupRule.Flags().IntVarP(&direction, "direction", "d", 0,
+		"Direction of the rule. 0 is down, 1 is up.")
+	cmdAddSecurityGroupRule.Flags().StringVarP(&action, "action", "a", "",
+		"Action of the rule, one of accept and drop.")
+	cmdAddSecurityGroupRule.Flags().StringVarP(&protocol, "protocol", "c", "",
+		"Protocol of the rule, can be tcp, udp or ssh, http, etc.")
+	cmdAddSecurityGroupRule.Flags().IntVarP(&priority, "priority", "p", 0,
+		"Priority of the rule, an integer.")
+	cmdAddSecurityGroupRule.Flags().StringVarP(&value1, "value1", "", "",
+		"Value1 of the rule, whose meanning differs based on protocol.")
+	cmdAddSecurityGroupRule.Flags().StringVarP(&value2, "value2", "", "",
+		"Value2 of the rule, whose meanning differs based on protocol.")
+	cmdAddSecurityGroupRule.Flags().StringVarP(&value3, "value3", "", "",
+		"Value3 of the rule, whose meanning differs based on protocol.")
+
+	cmdApplySecurityGroup := &cobra.Command{
+		Use:   "applysecuritygroup securitygroup_id instance_ids",
+		Short: "Apply a security group id to a comma separated list of instance ids",
+		Run: func(cmd *cobra.Command, args []string) {
+			execApplySecurityGroup(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	cmdDeleteSecurityGroups := &cobra.Command{
+		Use:   "deletesecuritygroups securitygroup_ids",
+		Short: "Delete of a list of security groups by ids.",
+		Run: func(cmd *cobra.Command, args []string) {
+			execDeleteSecurityGroups(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	// Add all sub-commands.
+	cmds.AddCommand(cmdCreateSecurityGroup)
+	cmds.AddCommand(cmdAddSecurityGroupRule)
+	cmds.AddCommand(cmdApplySecurityGroup)
+	cmds.AddCommand(cmdDeleteSecurityGroups)
 }

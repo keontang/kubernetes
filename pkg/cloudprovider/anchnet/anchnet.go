@@ -34,10 +34,14 @@ const (
 	// Interval between two retries for the above situation.
 	RetryIntervalOnError = 4 * time.Second
 
-	// Number of retries when waitting on resources to become ready.
-	RetryCountOnWaitReady = 30
+	// Number of retries when waitting on resources to become desired status.
+	RetryCountOnWait = 30
 	// Interval between two retries for the above situation.
-	RetryIntervalOnWaitReady = 8 * time.Second
+	RetryIntervalOnWait = 8 * time.Second
+
+	// TODO: This is used to find node security group id, and to update node security group for
+	// node port. Find a better way to access the information.
+	NodeSecurityGroupName = "node-security-group"
 )
 
 // TODO: Create cache layer to reduce calls to anchnet.

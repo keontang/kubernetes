@@ -29,7 +29,7 @@ func execCreateVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, 
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command CreateVxnet: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -49,7 +49,7 @@ func execDescribeVxnets(cmd *cobra.Command, args []string, client *anchnet.Clien
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command DescribeVxnet: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -70,7 +70,7 @@ func execJoinVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, ou
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command JoinVxnet: %v\n", err)
 		os.Exit(1)
 	}
 

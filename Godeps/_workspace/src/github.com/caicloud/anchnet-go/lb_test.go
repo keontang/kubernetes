@@ -116,7 +116,7 @@ func TestDescribeLoadBalancer(t *testing.T) {
 		TotalCount: 2,
 		ItemSet: []DescribeLoadBalancersItem{
 			{
-				IsApplied:        LoadBalancerApplied,
+				IsApplied:        1,
 				LoadbalancerID:   "lb-0GFUQW2O",
 				LoadbalancerName: "wang_loanbar",
 				Description:      "51idc",
@@ -135,7 +135,7 @@ func TestDescribeLoadBalancer(t *testing.T) {
 				},
 			},
 			{
-				IsApplied:        LoadBalancerApplied,
+				IsApplied:        1,
 				LoadbalancerID:   "lb-FPB98Z0Z",
 				LoadbalancerName: "yy",
 				Description:      "51idc",

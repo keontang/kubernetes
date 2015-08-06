@@ -27,7 +27,7 @@ func execDescribeEips(cmd *cobra.Command, args []string, client *anchnet.Client,
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command DescribeEips: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -47,7 +47,7 @@ func execReleaseEips(cmd *cobra.Command, args []string, client *anchnet.Client, 
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command ReleaseEips: %v\n", err)
 		os.Exit(1)
 	}
 

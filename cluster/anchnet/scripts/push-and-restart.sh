@@ -22,8 +22,8 @@ set -o pipefail
 # and restarts kubernetes.
 
 # Set master and node internal IPs.
-MASTER_IP="10.57.45.108"
-NODE_IPS="10.57.45.97"
+MASTER_IP="10.57.42.91"
+NODE_IPS="10.57.42.68"
 KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
 CLEAN_ETCD=false
 

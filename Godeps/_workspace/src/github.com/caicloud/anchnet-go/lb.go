@@ -32,7 +32,7 @@ type DescribeLoadBalancersItem struct {
 	Description      string                             `json:"description,omitempty"`
 	CreateTime       string                             `json:"create_time,omitempty"`
 	StatusTime       string                             `json:"status_time,omitempty"`
-	IsApplied        LoadBalancerApply                  `json:"is_applied,omitempty"`
+	IsApplied        int                                `json:"is_applied,omitempty"`
 	Status           LoadBalancerStatus                 `json:"status,omitempty"`
 	Eips             []DescribeLoadBalancersEIP         `json:"eips,omitempty"`
 	Listeners        []DescribeLoadBalancersListener    `json:"listeners,omitempty"`
@@ -86,14 +86,6 @@ const (
 	LoadBalancerType100K LoadBalancerType = 3
 )
 
-// LoadBalancerApply defines whether changes have been applied to loadbalancer.
-type LoadBalancerApply int
-
-const (
-	LoadBalancerNotApplied LoadBalancerApply = 0
-	LoadBalancerApplied    LoadBalancerApply = 1
-)
-
 // ListenerProtocolType defines protocols to listen, only support http and tcp.
 type ListenerProtocolType string
 
@@ -119,6 +111,7 @@ const (
 	LoadBalancerStatusActive    LoadBalancerStatus = "active"
 	LoadBalancerStatusStopped   LoadBalancerStatus = "stopped"
 	LoadBalancerStatusSuspended LoadBalancerStatus = "suspended"
+	LoadBalancerStatusDeleted   LoadBalancerStatus = "deleted"
 )
 
 // BalanceMode defines how to do load balance.
@@ -164,7 +157,7 @@ type CreateLoadBalancerIP struct {
 }
 
 //
-// DeleteLoadBalancer deletes a list of loadbalancer, with optional eip information.
+// DeleteLoadBalancers deletes a list of loadbalancer, with optional eip information.
 //
 type DeleteLoadBalancersRequest struct {
 	RequestCommon   `json:",inline"`
@@ -207,10 +200,15 @@ type StopLoadBalancersResponse struct {
 // ModifyLoadBalancerAttributes modifies attributes of a loadbalancer.
 //
 type ModifyLoadBalancerAttributesRequest struct {
-	RequestCommon    `json:",inline"`
-	LoadbalancerID   string `json:"loadbalancer,omitempty"`
+	RequestCommon  `json:",inline"`
+	LoadbalancerID string `json:"loadbalancer,omitempty"`
+
+	// Following fields is used to chnage baisc loadbalancer attributes.
 	LoadbalancerName string `json:"loadbalancer_name,omitempty"`
 	Description      string `json:"description,omitempty"`
+
+	// Following field is used to apply a security group to the loadbalancer.
+	SecurityGroupID string `json:"security_group_id,omitempty"`
 }
 
 type ModifyLoadBalancerAttributesResponse struct {

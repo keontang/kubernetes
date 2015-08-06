@@ -41,7 +41,7 @@ func execCreateLoadBalancer(cmd *cobra.Command, args []string, client *anchnet.C
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command CreateLoadBalancer: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -65,7 +65,7 @@ func execDeleteLoadBalancer(cmd *cobra.Command, args []string, client *anchnet.C
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command DeleteLoadBalancer: %v\n", err)
 		os.Exit(1)
 	}
 

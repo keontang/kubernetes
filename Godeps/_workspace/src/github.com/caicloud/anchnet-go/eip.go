@@ -84,10 +84,17 @@ type AllocateEipsProduct struct {
 }
 
 type AllocateEipsIP struct {
-	IPGroup   string `json:"ip_group,omitempty"` // Only "eipg-00000000" is BGP for now
-	Bandwidth int    `json:"bw,omitempty"`       // In MB/s
-	Amount    int    `json:"amount,omitempty"`   // Default 1
+	IPGroup   IPGroupType `json:"ip_group,omitempty"`
+	Bandwidth int         `json:"bw,omitempty"`     // In MB/s
+	Amount    int         `json:"amount,omitempty"` // Default 1
 }
+
+type IPGroupType string
+
+const (
+	IPGroupChinaTelecom IPGroupType = "eipg-98dyd0aj"
+	IPGroupBGP          IPGroupType = "eipg-00000000"
+)
 
 //
 // ReleaseEips deletes (release) a list of external IPs.

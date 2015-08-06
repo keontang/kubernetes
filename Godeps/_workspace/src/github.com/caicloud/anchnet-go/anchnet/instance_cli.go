@@ -25,6 +25,7 @@ func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, 
 	passwd := getFlagString(cmd, "passwd")
 	bandwidth := getFlagInt(cmd, "bandwidth")
 	image_id := getFlagString(cmd, "image-id")
+	ip_group := getFlagString(cmd, "ip-group")
 
 	request := anchnet.RunInstancesRequest{
 		Product: anchnet.RunInstancesProduct{
@@ -39,7 +40,7 @@ func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, 
 				},
 				Net0: true, // Create public network
 				IP: anchnet.RunInstancesIP{
-					IPGroup:   "eipg-00000000",
+					IPGroup:   anchnet.IPGroupType(ip_group),
 					Bandwidth: bandwidth,
 				},
 			},
@@ -49,7 +50,7 @@ func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, 
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command RunInstance: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -70,7 +71,7 @@ func execDescribeInstance(cmd *cobra.Command, args []string, client *anchnet.Cli
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command DescribeInstance: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -90,7 +91,7 @@ func execTerminateInstances(cmd *cobra.Command, args []string, client *anchnet.C
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command TerminateInstances: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -110,7 +111,7 @@ func execStopInstances(cmd *cobra.Command, args []string, client *anchnet.Client
 
 	err := client.SendRequest(request, &response)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command: %v", err)
+		fmt.Fprintf(os.Stderr, "Error running command StopInstances: %v\n", err)
 		os.Exit(1)
 	}
 

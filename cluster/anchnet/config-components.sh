@@ -151,6 +151,10 @@ EOF
 }
 
 # Configure docker network settings to use flannel overlay network.
+#
+# Input:
+#   $1 Flannel overlay network CIDR
+#   $2 Registry mirror address
 function config-docker-net {
   # Set flannel configuration to etcd.
   attempt=0
@@ -166,7 +170,7 @@ function config-docker-net {
         echo "timeout waiting for network config"
         exit 2
       fi
-      /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"${FLANNEL_NET}\"}"
+      /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"$1\"}"
       attempt=$((attempt+1))
       sleep 3
     fi
@@ -201,7 +205,7 @@ function config-docker-net {
 
   source /run/flannel/subnet.env
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
-       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU}\" > /etc/default/docker
+       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$2\" > /etc/default/docker
   sudo service docker start
 }
 

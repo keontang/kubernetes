@@ -19,8 +19,6 @@
 # Therefore, we disable errexit here.
 set +o errexit
 
-# TODO: Create a clean up script to stop all services, delete old configs, etc.
-
 # KUBE_UP_MODE defines how do we run kube-up, there are currently three modes:
 # - "dev": when running in dev mode, no machine will be created. Developer is
 #     responsible to specify the instance IDs, eip IDs, etc.
@@ -45,20 +43,34 @@ KUBE_UP_MODE="image"
 #   Installed bridge-utils
 # Note when running in full mode, we still use this image to create instances,
 # but its binaries will be overriden.
-INSTANCE_IMAGE="img-51ZRZKL7"
-
-# User name used to ssh into the instances, e.g. root, ubuntu.
+INSTANCE_IMAGE="img-C0SA7DD5"
 INSTANCE_USER="ubuntu"
 
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
 # 'eipg-00000000' is anchnet's own BGP.
 IP_GROUP="eipg-00000000"
 
-# Helper constants.
+# Default config files for kube cluster. This config file contains various user
+# defined parameters, like number of nodes, cores, etc.
+DEFAULT_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
+
+# Name space used to create cluster wide services.
+SYSTEM_NAMESPACE=kube-system
+
+# Daocloud registry accelerator. Before implementing our own registry (or registry
+# mirror), use this accelerator to make pulling image faster. The variable is a
+# comma separated list of mirror address, we randomly choose one of them.
+#   http://47178212.m.daocloud.io -> deyuan.deng@gmail.com
+#   http://dd69bd44.m.daocloud.io -> 729581241@qq.com
+#   http://9482cd22.m.daocloud.io -> dalvikbogus@gmail.com
+#   http://4a682d3b.m.daocloud.io -> 492886102@qq.com
+DAOCLOUD_ACCELERATOR="http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
+  http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
+
+# Helper constants for various commands.
 ANCHNET_CMD="anchnet"
 CURL_CMD="curl"
-DEFAULT_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
-SYSTEM_NAMESPACE=kube-system
+EXPECT_CMD="expect"
 
 
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
@@ -73,7 +85,7 @@ function verify-prereqs {
     echo "For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
     exit 1
   fi
-  if [[ "$(which expect)" == "" ]]; then
+  if [[ "$(which ${EXPECT_CMD})" == "" ]]; then
     echo "Can't find expect binary in PATH, please fix and retry."
     echo "For ubuntu/debian, if you have root access, run: sudo apt-get install expect."
     exit 1
@@ -211,7 +223,7 @@ function deploy-addons {
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
 
   # Calling 'addons-start.sh' to start addons.
-  expect <<EOF
+  ${EXPECT_CMD} <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "sudo ./kube/addons-start.sh"
@@ -246,7 +258,7 @@ function prompt-instance-password {
 function ensure-pub-key {
   if [[ ! -f ~/.ssh/id_rsa.pub ]]; then
     echo "+++++++++ Creating public key ..."
-    expect <<EOF
+    ${EXPECT_CMD} <<EOF
 spawn ssh-keygen -t rsa -b 4096
 expect "*rsa key*"
 expect "*file in which to save the key*"
@@ -517,7 +529,7 @@ function setup-instance-ssh {
   attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to setup instance ssh for $1"
-    expect <<EOF
+    ${EXPECT_CMD} <<EOF
 set timeout $((($attempt+1)*3))
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   $HOME/.ssh/id_rsa.pub ${INSTANCE_USER}@$1:~/host_rsa.pub
@@ -688,7 +700,7 @@ function ensure-firewall {
   local attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to check master firewall"
-    expect <<EOF
+    ${EXPECT_CMD} <<EOF
 set timeout $((($attempt+1)*3))
 spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} echo Hello
@@ -722,7 +734,7 @@ EOF
   attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to check node firewall"
-    expect <<EOF
+    ${EXPECT_CMD} <<EOF
 set timeout $((($attempt+1)*3))
 spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${first_node_ip} echo Hello
@@ -873,7 +885,7 @@ function override-binaries {
 
     for instance_ip in ${instance_ip_arr[*]}; do
       local pids=""
-      expect <<EOF &
+      ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
@@ -890,7 +902,7 @@ expect {
 }
 EOF
       pids="$pids $!"
-      expect <<EOF &
+      ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
@@ -1009,6 +1021,11 @@ function install-instances {
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
   IFS=',' read -ra node_instance_arr <<< "${NODE_INSTANCE_IDS}"
 
+  # Randomly choose one daocloud accelerator.
+  IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATOR}"
+  reg_mirror=${reg_mirror_arr[$(( ${RANDOM} % 4 ))]}
+  echo "Use daocloud registry mirror ${reg_mirror}"
+
   for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
     echo "+++++ Start installing node-${i}"
     local node_internal_ip=${node_iip_arr[${i}]}
@@ -1056,7 +1073,7 @@ function install-instances {
       # Finally, start kubernetes cluster.
       echo "sudo service etcd start"
       # Configure docker network to use flannel overlay.
-      echo "config-docker-net"
+      echo "config-docker-net ${FLANNEL_NET} ${reg_mirror}"
     ) > "${KUBE_TEMP}/node${i}-start.sh"
     chmod a+x ${KUBE_TEMP}/node${i}-start.sh
 
@@ -1089,7 +1106,7 @@ function provision-instances {
 
   echo "+++++ Start provisioning master"
   # Call master-start.sh to start master.
-  expect <<EOF &
+  ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh"
@@ -1112,7 +1129,7 @@ EOF
     # connection (for docker-flannel configuration) because other nodes aren't
     # ready. If we run expect in foreground, we can't start other nodes; thus node0
     # will wait until timeout.
-    expect <<EOF &
+    ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${node_eip} "sudo ./kube/node${i}-start.sh"

@@ -53,6 +53,10 @@ IP_GROUP=${IP_GROUP:-"eipg-00000000"}
 # Namespace used to create cluster wide services.
 SYSTEM_NAMESPACE=kube-system
 
+# To indicate if the execution status needs to be reported back to Caicloud
+# executor via curl. Set it to be Y if reporting is needed.
+REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"} 
+
 # Daocloud registry accelerator. Before implementing our own registry (or registry
 # mirror), use this accelerator to make pulling image faster. The variable is a
 # comma separated list of mirror address, we randomly choose one of them.
@@ -67,6 +71,8 @@ http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
 ANCHNET_CMD="anchnet"
 CURL_CMD="curl"
 EXPECT_CMD="expect"
+
+source "${KUBE_ROOT}/cluster/anchnet/executor_service.sh"
 
 # Get all cluster configuration parameters from config-default and user-config.
 # config-default is mostly static information configured by caicloud admin, like
@@ -577,6 +583,9 @@ function create-master-instance {
 
   echo -e " ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, \
 eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
+  report-instance-ids ${MASTER_INSTANCE_ID} M
+  report-eip-ids ${MASTER_EIP_ID}
+  report-ips ${MASTER_EIP} M
 }
 
 
@@ -637,6 +646,9 @@ eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
 
   echo -e " ${color_green}[Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, \
 eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}]${color_norm}"
+  report-instance-ids ${NODE_INSTANCE_IDS} N
+  report-eip-ids ${NODE_EIP_IDS}
+  report-ips ${NODE_EIPS} N
 }
 
 
@@ -819,6 +831,7 @@ function create-firewall {
   MASTER_SG_ID=$(echo ${master_sg_info} | json_val '["security_group_id"]')
 
   # Now, apply all above changes.
+  report-security-group-ids ${MASTER_SG_ID} M
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 
@@ -838,6 +851,7 @@ function create-firewall {
   NODE_SG_ID=$(echo ${node_sg_info} | json_val '["security_group_id"]')
 
   # Now, apply all above changes.
+  report-security-group-ids ${NODE_SG_ID} N
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 }

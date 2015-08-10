@@ -47,9 +47,13 @@ function send-request-with-retry {
 # $2 M or N. M indicates the ips reported belong to the master,
 #    and N indicates ips are for regular nodes.
 #
-function report_ips {
-  if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-    send-request-with-retry "$EXECUTOR_HOST_NAME/report_ips?id=${EXECUTION_ID}&ips=$1&type=$2"
+function report-ips {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_ips?id=${EXECUTION_ID}&ips=$1&type=$2"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-ips failed."
+    fi
   fi
 }
 
@@ -57,10 +61,16 @@ function report_ips {
 #
 # Input:
 # $1 The list of comma deliminated instance ids.
+# $2 M or N. M indicates the ips reported belong to the master,
+#    and N indicates ips are for regular nodes.
 #
-function report_instance_ids {
-  if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-    send-request-with-retry "$EXECUTOR_HOST_NAME/report_instance_ids?id=${EXECUTION_ID}&instances=$1"
+function report-instance-ids {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_instance_ids?id=${EXECUTION_ID}&instances=$1&type=$2"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-instance-ids failed."
+    fi
   fi
 }
 
@@ -68,10 +78,16 @@ function report_instance_ids {
 #
 # Input:
 # $1 The list of comma deliminated security group ids.
+# $2 M or N. M indicates the ips reported belong to the master,
+#    and N indicates ips are for regular nodes.
 #
-function report_security_group_ids {
-  if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-    send-request-with-retry "$EXECUTOR_HOST_NAME/report_security_group_ids?id=${EXECUTION_ID}&security_groups=$1"
+function report-security-group-ids {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_security_group_ids?id=${EXECUTION_ID}&security_groups=$1&type=$2"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-security-group-ids failed."
+    fi
   fi
 }
 
@@ -80,9 +96,13 @@ function report_security_group_ids {
 # Input:
 # $1 The list of comma deliminated eip ids.
 #
-function report_eip_ids {
-  if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-    send-request-with-retry "$EXECUTOR_HOST_NAME/report_eip_ids?id=${EXECUTION_ID}&eips=$1"
+function report-eip-ids {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_eip_ids?id=${EXECUTION_ID}&eips=$1"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-eip-ids failed."
+    fi
   fi
 }
 
@@ -91,9 +111,13 @@ function report_eip_ids {
 # Input:
 # $1 "Y|N" indicating if the result of kube-up.
 #
-function complete {
-  if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-    send-request-with-retry "$EXECUTOR_HOST_NAME/complete?id=${EXECUTION_ID}&succ=$1"
+function kube-up-complete {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/complete?id=${EXECUTION_ID}&succ=$1"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. kube-up-compete failed."
+    fi
   fi
 }
 
@@ -102,9 +126,13 @@ function complete {
 # Input:
 # $1 a code of InfoLogType in execution_report_collection.go
 #
-function log_info {
-  if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-    send-request-with-retry "$EXECUTOR_HOST_NAME/info?id=${EXECUTION_ID}&info_code=$1"
+function log-info {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/info?id=${EXECUTION_ID}&info_code=$1"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. log-info failed."
+    fi
   fi
 }
 
@@ -113,22 +141,27 @@ function log_info {
 # Input:
 # $1 a code of ErrorLogType in execution_report_collection.go
 #
-function log_error {
-  if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-    send-request-with-retry "$EXECUTOR_HOST_NAME/error?id=${EXECUTION_ID}&error_code=$1"
+function log-error {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/error?id=${EXECUTION_ID}&error_code=$1"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. log-error failed."
+    fi
   fi
 }
 
 # Commands for testing only
-#CURL_CMD=curl
-#EXECUTOR_HOST_NAME=localhost:8765
-#EXECUTION_ID=55b599d0e4c2036358000003
-#report_ips ip1,ip2 M
-#report_ips ip1,ip2 N
-#report_instance_ids master-instance,node-instance1,node-instance2
-#report_security_group_ids sg1,sg2
-#report_eip_ids eip1,eip2
-#complete Y
-#complete N
-#log_info 1
-#log_error 1
+# CURL_CMD=curl
+# REPORT_KUBE_STATUS="Y"
+# EXECUTOR_HOST_NAME=localhost:8765
+# EXECUTION_ID=55b599d0e4c2036358000003
+# report-ips ip1,ip2 M
+# report-ips ip1,ip2 N
+# report-instance-ids master-instance,node-instance1,node-instance2 N
+# report-security-group-ids sg1,sg2
+# report-eip-ids eip1,eip2
+# kube-up-complete Y
+# kube-up-complete N
+# log-info 1
+# log-error 1

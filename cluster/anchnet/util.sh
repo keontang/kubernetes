@@ -19,6 +19,9 @@
 # Therefore, we disable errexit here.
 set +o errexit
 
+# Path of kubernetes root directory.
+KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
+
 # KUBE_UP_MODE defines how do we run kube-up, there are currently three modes:
 # - "dev": when running in dev mode, no machine will be created. Developer is
 #     responsible to specify the instance IDs, eip IDs, etc.
@@ -26,35 +29,28 @@ set +o errexit
 #     created in anchnet and has binaries pre-installed, see below.
 # - "full": when running in full mode, binaries will be copied to the instances.
 #     This can be slow depending on connections between local and remote host.
-#     In full mode, we build all binaries using docker; however, dockerfile
-#     "build/build-image/Dockerfile" tries to fetch GFW blocked package
-#     "golang.org/x/tools/cmd/cover". Therefore, we may need to comment the line
-#     if local host is running behind GFW.
-KUBE_UP_MODE="image"
+KUBE_UP_MODE=${KUBE_UP_MODE:-"image"}
 
 # The base image used to create master and node instance. This image is created
 # from scripts like 'image-from-devserver.sh', which install caicloud-k8s release
 # binaries, docker, etc.
 # This approach avoids downloading/installing when bootstrapping a cluster, which
-# saves a lot of time. The image must be created from ubuntu, and has:
+# saves a lot of time. For now, the image must be created from ubuntu, and has:
 #   ~/kube/master - Directory containing all master binaries
 #   ~/kube/node - Directory containing all node binaries
 #   Installed docker
 #   Installed bridge-utils
 # Note when running in full mode, we still use this image to create instances,
 # but its binaries will be overriden.
-INSTANCE_IMAGE="img-C0SA7DD5"
-INSTANCE_USER="ubuntu"
+INSTANCE_IMAGE=${INSTANCE_IMAGE:-"img-C0SA7DD5"}
+INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
+KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
 # 'eipg-00000000' is anchnet's own BGP.
-IP_GROUP="eipg-00000000"
+IP_GROUP=${IP_GROUP:-"eipg-00000000"}
 
-# Default config files for kube cluster. This config file contains various user
-# defined parameters, like number of nodes, cores, etc.
-DEFAULT_USER_CONFIG_FILE="${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"
-
-# Name space used to create cluster wide services.
+# Namespace used to create cluster wide services.
 SYSTEM_NAMESPACE=kube-system
 
 # Daocloud registry accelerator. Before implementing our own registry (or registry
@@ -65,13 +61,36 @@ SYSTEM_NAMESPACE=kube-system
 #   http://9482cd22.m.daocloud.io -> dalvikbogus@gmail.com
 #   http://4a682d3b.m.daocloud.io -> 492886102@qq.com
 DAOCLOUD_ACCELERATOR="http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
-  http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
+http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
 
 # Helper constants for various commands.
 ANCHNET_CMD="anchnet"
 CURL_CMD="curl"
 EXPECT_CMD="expect"
 
+# Get all cluster configuration parameters from config-default and user-config.
+# config-default is mostly static information configured by caicloud admin, like
+# node ip range; while user-config is configured by user, like number of nodes.
+# We also create useful vars based on config information:
+#   MASTER_NAME, NODE_NAME_PREFIX
+# Note that master_name and node_name are name of the instances in anchnet, which
+# is helpful to group instances; however, anchnet API works well with instance id,
+# so we provide instance id to kubernetes as nodename and hostname, which makes it
+# easy to query anchnet in kubernetes.
+function setup-anchnet-env {
+  USER_CONFIG_FILE=${USER_CONFIG_FILE:-"${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"}
+  source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+  source "${USER_CONFIG_FILE}"
+  MASTER_NAME="${CLUSTER_ID}-master"
+  NODE_NAME_PREFIX="${CLUSTER_ID}-node"
+}
+
+# Before running any function, we setup all anchnet env variables.
+setup-anchnet-env
+
+
+# -----------------------------------------------------------------------------
+# Cluster specific library utility functions.
 
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
 function verify-prereqs {
@@ -104,43 +123,26 @@ function verify-prereqs {
 
 # Step2 of cluster bootstrapping: create all machines and provision them.
 function kube-up {
-  KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
-
   # Create KUBE_INSTANCE_PASSWORD, which will be used to login into anchnet instances.
   if false; then
     # Disable to save some typing.
     prompt-instance-password
   fi
-  KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
 
   # Make sure we have a staging area.
   ensure-temp-dir
 
-  # Make sure we have a public/private key pair used to provision the machine.
+  # Make sure we have a public/private key pair used to provision instances.
   ensure-pub-key
 
-  # Get all cluster configuration parameters from config-default and user-config;
-  # also create useful vars based on the information:
-  #   MASTER_NAME, NODE_NAME_PREFIX
-  # Note that master_name and node_name are name of the instances in anchnet, which
-  # is helpful to group instances; however, anchnet API works well with instance id,
-  # so we provide instance id to kubernetes as nodename and hostname, which makes it
-  # easy to query anchnet in kubernetes.
-  USER_CONFIG_FILE=${USER_CONFIG_FILE:-${DEFAULT_USER_CONFIG_FILE}}
-  echo "++++++++++ Reading user configuration from: ${USER_CONFIG_FILE}"
-  source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-  source "${USER_CONFIG_FILE}"
-  MASTER_NAME="${CLUSTER_ID}-master"
-  NODE_NAME_PREFIX="${CLUSTER_ID}-node"
-
-  # For dev, set to existing machine.
+  # For dev, set to existing instances.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
-    MASTER_INSTANCE_ID="i-697SFZUJ"
-    MASTER_EIP_ID="eip-NXJ9E8CF"
-    MASTER_EIP="43.254.55.208"
-    NODE_INSTANCE_IDS="i-MN0UAIZO"
-    NODE_EIP_IDS="eip-89NTY9F2"
-    NODE_EIPS="43.254.55.168"
+    MASTER_INSTANCE_ID="i-8DRF060F"
+    MASTER_EIP_ID="eip-1BG18SPI"
+    MASTER_EIP="43.254.54.196"
+    NODE_INSTANCE_IDS="i-LKC0Y64C,i-S8Q6V8YG"
+    NODE_EIP_IDS="eip-WO4BB47Y,eip-91WBNBM1"
+    NODE_EIPS="43.254.55.53,43.254.55.92"
     PRIVATE_SDN_INTERFACE="eth1"
   else
     # Create master/node instances from anchnet without provision. The following
@@ -189,6 +191,75 @@ function kube-up {
   # TODO: Fix hardcoded CONTEXT
   CONTEXT="anchnet_kubernetes"
   create-kubeconfig
+}
+
+
+# Update a kubernetes cluster with latest source.
+function kube-push {
+  echo "not implemented"
+}
+
+
+# Delete a kubernete cluster from anchnet.
+#
+# Assumed vars:
+#   INSTANCE_IDS - comma separated string of instance IDs
+#   EIP_IDS - comma separated string of instance external IP IDs
+#   LB_ID - the id of load balancer
+#   LB_PUBLIC_IPS - comma separated string of public ips.
+#   SECURITY_GROUP_IDS - comma separated string of security group ids.
+function kube-down {
+  if [[ ! -z "${INSTANCE_IDS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${INSTANCE_IDS}"
+  fi
+
+  if [[ ! -z "${EIP_IDS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${EIP_IDS}"
+  fi
+
+  # TODO(jiang) test cleaning up LB_PUBLIC_IPS
+  if [[ ! -z "${LB_ID-}" && ! -z "${LB_PUBLIC_IPS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deleteloadbalancer ${LB_ID} ${LB_PUBLIC_IPS}"
+  fi
+
+  if [[ ! -z "${SECURITY_GROUP_IDS-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS}"
+  fi
+}
+
+
+# Detect name and IP for kube master.
+#
+# Assumed vars:
+#   MASTER_NAME
+#
+# Vars set:
+#   KUBE_MASTER
+#   KUBE_MASTER_IP
+function detect-master {
+  local attempt=0
+  while true; do
+    echo "Attempt $(($attempt+1)) to detect kube master"
+    echo "$MASTER_NAME"
+    local eip=$(${ANCHNET_CMD} searchinstance $MASTER_NAME | json_val '["item_set"][0]["eip"]["eip_addr"]')
+    local exit_code="$?"
+    echo ${eip}
+    if [[ "${exit_code}" != "0" || ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+      if (( attempt > 20 )); then
+        echo
+        echo -e "${color_red}failed to detect kube master (sorry!)${color_norm}" >&2
+        exit 1
+      fi
+    else
+      KUBE_MASTER_IP=${eip}
+      break
+    fi
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
+
+  KUBE_MASTER=${MASTER_NAME}
+  echo "Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)"
 }
 
 
@@ -367,7 +438,9 @@ eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 
 # Create node instances from anchnet.
 #
-# TODO: Create nodes at once (In anchnet API, it's possible to create N instances at once).
+# TODO: Create nodes at once (In anchnet API, it's possible to create N
+#   instances at once). However, all instances will have the same name,
+#   is it acceptable?
 #
 # Assumed vars:
 #   NUM_MINIONS
@@ -406,7 +479,7 @@ function create-node-instances {
 eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
 
     # Set output vars. Note we use ${NODE_EIPS-} to check if NODE_EIPS is unset,
-    # as toplevel script set -o nounset
+    # as top-level script has 'set -o nounset'.
     if [[ -z "${NODE_EIPS-}" ]]; then
       NODE_INSTANCE_IDS="${node_instance_id}"
       NODE_EIP_IDS="${node_eip_id}"
@@ -484,15 +557,16 @@ function get-ip-address-from-eipid {
 }
 
 
-# SSH to the machine and put the host's pub key to master's authorized_key,
+# SSH to the machine and put the host's pub key to instance's authorized_key,
 # so future ssh commands do not require password to login. Note however,
-# if ubuntu is used, then we still need to use 'expect' to enter password
-# because root login is disabled by default in ubuntu.
+# if ubuntu is used, we still need to use 'expect' to enter password, because
+# root login is disabled by default in ubuntu.
 #
 # Input:
 #   $1 Instance external IP address
 #
 # Assumed vars:
+#   INSTANCE_USER
 #   KUBE_INSTANCE_PASSWORD
 function setup-instance-ssh {
   attempt=0
@@ -575,6 +649,8 @@ function create-sdn-network {
 
 
 # Create firewall rules to allow certain traffic.
+#
+# TODO: This is slow, can we improve?
 #
 # Assumed vars:
 #   MASTER_SECURE_PORT
@@ -734,11 +810,12 @@ function create-etcd-initial-cluster {
 #   KUBE_ROOT
 #   MASTER_IP
 #   NODE_IPS
+#   INSTANCE_USER
 #   KUBE_INSTANCE_PASSWORD
 function override-binaries {
   (
     cd ${KUBE_ROOT}
-    build/run.sh hack/build-go.sh
+    anchnet-build-release
     IFS=',' read -ra instance_ip_arr <<< "${MASTER_EIP},${NODE_EIPS}"
 
     for instance_ip in ${instance_ip_arr[*]}; do
@@ -750,7 +827,7 @@ spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLeve
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
-  ubuntu@${instance_ip}:~/kube/master
+  ${INSTANCE_USER}@${instance_ip}:~/kube/master
 expect {
   "*?assword:" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -766,7 +843,7 @@ spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLeve
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy \
-  ubuntu@${instance_ip}:~/kube/node
+  ${INSTANCE_USER}@${instance_ip}:~/kube/node
 expect {
   "*?assword:" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -779,6 +856,19 @@ EOF
       wait $pids
     done
   )
+}
+
+
+# Build all binaries using docker. Note there are some restrictions we need
+# to fix if the provision host is running in mainland China; it is fixed in
+# k8s_replace.sh.
+function anchnet-build-release {
+  if [[ `uname` == "Darwin" ]]; then
+    boot2docker start
+  fi
+  ${KUBE_ROOT}/hack/caicloud-tools/k8s_replace.sh
+  trap '${KUBE_ROOT}/hack/caicloud-tools/k8s_restore.sh' EXIT
+  ${KUBE_ROOT}/build/release.sh
 }
 
 
@@ -810,7 +900,7 @@ EOF
 function install-instances {
   local pids=""
 
-  echo "+++++ Start installing master"
+  echo "++++++++++ Start installing master"
   # Create master startup script.
   (
     echo "#!/bin/bash"
@@ -885,7 +975,7 @@ function install-instances {
   echo "Use daocloud registry mirror ${reg_mirror}"
 
   for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    echo "+++++ Start installing node-${i}"
+    echo "+++++++++ Start installing node-${i}"
     local node_internal_ip=${node_iip_arr[${i}]}
     local node_eip=${node_eip_arr[${i}]}
     local node_instance_id=${node_instance_arr[${i}]}
@@ -1238,34 +1328,6 @@ EOF
 }
 
 
-# Delete a kubernete cluster from anchnet
-#
-# Vars set:
-#   INSTANCE_IDS - comma separated string of instance IDs
-#   EIP_IDS - comma separated string of instance external IP IDs
-#   LB_ID - the id of load balancer
-#   LB_PUBLIC_IPS - comma separated string of public ips.
-#   SECURITY_GROUP_IDS - comma separated string of security group ids.
-function kube-down {
-  if [[ ! -z "${INSTANCE_IDS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${INSTANCE_IDS}"
-  fi
-
-  if [[ ! -z "${EIP_IDS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${EIP_IDS}"
-  fi
-
-  # TODO(jiang) test cleaning up LB_PUBLIC_IPS
-  if [[ ! -z "${LB_ID-}" && ! -z "${LB_PUBLIC_IPS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} deleteloadbalancer ${LB_ID} ${LB_PUBLIC_IPS}"
-  fi
-
-  if [[ ! -z "${SECURITY_GROUP_IDS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS}"
-  fi
-}
-
-
 # A helper function that executes a command (which interacts with anchnet), and retries
 # on failure. If the command can't succeed within given attempts, the script will exit
 # directly.
@@ -1297,7 +1359,7 @@ function anchnet-exec-and-retry {
 }
 
 
-# Wait until job finishes. If job doesn't finish within timeout, return error
+# Wait until job finishes. If job doesn't finish within timeout, return error.
 #
 # Input:
 #   $1 anchnet response, typically ANCHNET_RESPONSE.
@@ -1317,4 +1379,67 @@ function anchnet-wait-job {
   fi
 
   return $exit_code
+}
+
+
+# -----------------------------------------------------------------------------
+# Cluster specific test helpers used from hack/e2e-test.sh
+
+
+# Perform preparations required to run e2e tests.
+function prepare-e2e() {
+  ensure-temp-dir
+
+  cat > ${KUBE_TEMP}/e2e-config.sh <<EOF
+export CLUSTER_ID="e2e-test"
+export NUM_MINIONS=2
+export MASTER_MEM=2048
+export MASTER_CPU_CORES=2
+export NODE_MEM=2048
+export NODE_CPU_CORES=2
+EOF
+  export USER_CONFIG_FILE=${KUBE_TEMP}/e2e-config.sh
+  export KUBE_UP_MODE="full"
+  # Since we changed our config above, we reset anchnet env.
+  setup-anchnet-env
+  # As part of e2e preparation, we fix image path.
+  ${KUBE_ROOT}/hack/caicloud-tools/k8s_replace.sh
+  trap '${KUBE_ROOT}/hack/caicloud-tools/k8s_restore.sh' EXIT
+}
+
+
+# Execute prior to running tests to build a release if required for env.
+#
+# Assumed Vars:
+#   KUBE_ROOT
+function test-build-release {
+  # In e2e test, we will run in full mode, i.e. build release and copy binaries,
+  # so we do not build release here.
+  echo "Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
+  # e2e test will test client & server version match. Server binary uses dockerized
+  # build; however, developer may use local kubectl (_output/local/bin/kubectl), so
+  # we do a local build here.
+  (
+    cd ${KUBE_ROOT}
+    make clean
+    cd -
+  )
+  ${KUBE_ROOT}/hack/build-go.sh
+}
+
+
+# Execute prior to running tests to initialize required structure. This is
+# called from hack/e2e.go only when running -up (it is ran after kube-up).
+#
+# Assumed vars:
+#   Variables from config.sh
+function test-setup {
+  echo "Anchnet e2e doesn't need special test for setup (after kube-up)"
+}
+
+
+# Execute after running tests to perform any required clean-up. This is called
+# from hack/e2e.go
+function test-teardown {
+  echo "No special handling for test-teardown"
 }

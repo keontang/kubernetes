@@ -32,5 +32,13 @@ sed -i "" "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover g
 
 
 # Restore 'github.com' files.
-sed -i "" "s|http://deyuan.me:9999/etcd-v2.0.0-linux-amd64.tar.gz|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
+sed -i "" "s|http://43.254.52.18:9999/etcd/etcd-v2.0.0-linux-amd64.tar.gz|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
+
+
+# Restore supported e2e tests.
+sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|g" \
+    ${KUBE_ROOT}/test/e2e/kubectl.go
+sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|g" \
+    ${KUBE_ROOT}/test/e2e/service.go
+sed -i "" "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go

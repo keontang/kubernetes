@@ -32,5 +32,13 @@ sed -i "" "s|go get golang.org/x/tools/cmd/cover github.com/tools/godep|go get g
 
 
 # Accessing 'github.com' is slow, replace it with our own file server
-sed -i "" "s|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|http://deyuan.me:9999/etcd-v2.0.0-linux-amd64.tar.gz|g" \
+sed -i "" "s|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|http://43.254.52.18:9999/etcd/etcd-v2.0.0-linux-amd64.tar.gz|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
+
+
+# Our cloudprovider supports following e2e tests.
+sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|g" \
+    ${KUBE_ROOT}/test/e2e/kubectl.go
+sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|g" \
+    ${KUBE_ROOT}/test/e2e/service.go
+sed -i "" "s|google.com|baidu.com|g" ${KUBE_ROOT}/test/e2e/networking.go

@@ -29,19 +29,19 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #     created in anchnet and has binaries pre-installed, see below.
 # - "full": when running in full mode, binaries will be copied to the instances.
 #     This can be slow depending on connections between local and remote host.
-KUBE_UP_MODE=${KUBE_UP_MODE:-"image"}
+KUBE_UP_MODE=${KUBE_UP_MODE:-"full"}
 
-# The base image used to create master and node instance. This image is created
-# from scripts like 'image-from-devserver.sh', which install caicloud-k8s release
-# binaries, docker, etc.
-# This approach avoids downloading/installing when bootstrapping a cluster, which
-# saves a lot of time. For now, the image must be created from ubuntu, and has:
+# The base image used to create master and node instance in image mode. This image
+# is created from scripts like 'image-from-devserver.sh', which install caicloud-k8s
+# release binaries, docker, etc. This approach avoids downloading/installing when
+# bootstrapping a cluster, which saves a lot of time. For now, the image must be
+# created from ubuntu, and has:
 #   ~/kube/master - Directory containing all master binaries
 #   ~/kube/node - Directory containing all node binaries
+# Preferrably, it also has following packages installed:
 #   Installed docker
 #   Installed bridge-utils
-# Note when running in full mode, we still use this image to create instances,
-# but its binaries will be overriden.
+# Note when running in full mode, we use base image from anchnet.
 INSTANCE_IMAGE=${INSTANCE_IMAGE:-"img-C0SA7DD5"}
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
@@ -55,7 +55,12 @@ SYSTEM_NAMESPACE=kube-system
 
 # To indicate if the execution status needs to be reported back to Caicloud
 # executor via curl. Set it to be Y if reporting is needed.
-REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"} 
+REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"}
+
+# Package versions
+DOCKER_VERSION=1.7.1
+FLANNEL_VERSION=0.4.0
+ETCD_VERSION=v2.0.12
 
 # Daocloud registry accelerator. Before implementing our own registry (or registry
 # mirror), use this accelerator to make pulling image faster. The variable is a
@@ -67,10 +72,14 @@ REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"}
 DAOCLOUD_ACCELERATOR="http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
 http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
 
-# Helper constants for various commands.
+# Helper constants.
 ANCHNET_CMD="anchnet"
 CURL_CMD="curl"
 EXPECT_CMD="expect"
+BASE_IMAGE="trustysrvx64c"
+if [[ "${KUBE_UP_MODE}" == "full" ]]; then
+  INSTANCE_IMAGE=${BASE_IMAGE}  # Use bare base image from anchnet in full mode.
+fi
 
 source "${KUBE_ROOT}/cluster/anchnet/executor_service.sh"
 
@@ -116,8 +125,15 @@ function verify-prereqs {
     exit 1
   fi
   if [[ "$(which kubectl)" == "" ]]; then
-    echo "Can't find kubectl binary in PATH, please fix and retry."
-    exit 1
+    (
+      cd ${KUBE_ROOT}
+      build/run.sh hack/build-go.sh
+      if [[ "$?" != "0" ]]; then
+        echo "Can't find kubectl binary in PATH, please fix and retry."
+        exit 1
+      fi
+      cd -
+    )
   fi
   if [[ ! -f ~/.anchnet/config  ]]; then
     echo "Can't find anchnet config file in ~/.anchnet, please fix and retry."
@@ -168,7 +184,7 @@ function kube-up {
   fi
 
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
-    override-binaries
+    install-kube-binaries
   fi
 
   # Create certificates and credentials to secure cluster communication.
@@ -977,22 +993,47 @@ function create-etcd-initial-cluster {
 #   NODE_IPS
 #   INSTANCE_USER
 #   KUBE_INSTANCE_PASSWORD
-function override-binaries {
+function install-kube-binaries {
   (
     cd ${KUBE_ROOT}
     anchnet-build-server
     IFS=',' read -ra instance_ip_arr <<< "${MASTER_EIP},${NODE_EIPS}"
 
-    for instance_ip in ${instance_ip_arr[*]}; do
-      local pids=""
-      ${EXPECT_CMD} <<EOF &
+    # Fetch etcd and flanneld.
+    (
+      cd ${KUBE_TEMP}
+      curl -L -O http://get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz
+      tar xzf etcd-$ETCD_VERSION-linux-amd64.tar.gz
+      mv etcd-$ETCD_VERSION-linux-amd64/etcd .
+      mv etcd-$ETCD_VERSION-linux-amd64/etcdctl .
+      curl -L -O http://get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz
+      tar xzf flannel-$FLANNEL_VERSION-linux-amd64.tar.gz
+      mv flannel-$FLANNEL_VERSION/flanneld .
+      cd -
+    )
+
+    # Copy master binaries.
+    ${EXPECT_CMD} <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} "mkdir -p ~/kube/master ~/kube/node"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+    ${EXPECT_CMD} <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
-  ${INSTANCE_USER}@${instance_ip}:~/kube/master
+  ${KUBE_TEMP}/etcd ${KUBE_TEMP}/etcdctl ${KUBE_TEMP}/flanneld \
+  ${INSTANCE_USER}@${MASTER_EIP}:~/kube/master
 expect {
   "*?assword:" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1001,14 +1042,31 @@ expect {
   eof {}
 }
 EOF
-      pids="$pids $!"
-      ${EXPECT_CMD} <<EOF &
+
+    # Copy node binaries.
+    IFS=',' read -ra node_ip_arr <<< "${NODE_EIPS}"
+
+    for node_ip in ${node_ip_arr[*]}; do
+      ${EXPECT_CMD} <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${node_ip} "mkdir -p ~/kube/master ~/kube/node"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+      ${EXPECT_CMD} <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy \
-  ${INSTANCE_USER}@${instance_ip}:~/kube/node
+  ${KUBE_TEMP}/etcd ${KUBE_TEMP}/etcdctl ${KUBE_TEMP}/flanneld \
+  ${INSTANCE_USER}@${node_ip}:~/kube/node
 expect {
   "*?assword:" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1017,9 +1075,9 @@ expect {
   eof {}
 }
 EOF
-      pids="$pids $!"
-      wait $pids
     done
+
+    cd -
   )
 }
 
@@ -1061,6 +1119,7 @@ function install-instances {
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${USER_CONFIG_FILE}"
     echo ""
+    echo "install-packages ${DOCKER_VERSION}"
     echo "config-hostname ${MASTER_INSTANCE_ID}"
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
@@ -1140,6 +1199,7 @@ function install-instances {
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
       echo ""
+      echo "install-packages ${DOCKER_VERSION}"
       echo "config-hostname ${node_instance_id}"
       # Create component options. Note in 'create-kubelet-opts', we use
       # ${node_instance_id} as hostname override for each node - see
@@ -1189,9 +1249,9 @@ function install-instances {
     pids="$pids $!"
   done
 
-  echo "+++++ Wait for all instances to be installed..."
+  echo -n "++++++++++ Waiting for all instances to be installed ... "
   wait $pids
-  echo "+++++ All instances have been installed...."
+  echo "Done"
 }
 
 

@@ -1045,7 +1045,7 @@ function install-instances {
       # ${node_instance_id} as hostname override for each node - see
       # 'pkg/cloudprovider/anchnet/anchnet_instances.go' for how this works.
       echo "create-etcd-opts kubernetes-node${i} ${node_internal_ip} \"${ETCD_INITIAL_CLUSTER}\""
-      echo "create-kubelet-opts ${node_instance_id} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
+      echo "create-kubelet-opts ${node_instance_id} ${node_internal_ip} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
       echo "create-kube-proxy-opts \"${MASTER_INTERNAL_IP}\""
       echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
       # Create network options.

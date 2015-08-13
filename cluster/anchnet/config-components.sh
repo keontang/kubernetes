@@ -240,3 +240,20 @@ function config-hostname {
 
   echo "Hostname settings have been changed to ${new_hostname}."
 }
+
+# Install packages used on each host.
+# $1 docker version
+function install-packages {
+  if [[ "$(which docker)" == "" ]]; then
+    # Adding key to ubuntu.com is not stable (due to China network), so we just
+    # trust our own source.
+    # $ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
+    sudo sh -c "echo deb [arch=amd64] http://get.caicloud.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
+    sudo apt-get update
+    sudo apt-get install --allow-unauthenticated -y lxc-docker-$1
+    sudo usermod -a -G docker $USER
+  fi
+  if [[ "$(which brctl)" == "" ]]; then
+    sudo apt-get install bridge-utils
+  fi
+}

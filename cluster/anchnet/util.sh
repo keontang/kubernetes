@@ -657,7 +657,6 @@ function create-firewall {
   done
 
   anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule master-https ${MASTER_SG_ID} --priority=3 --action=accept --protocol=tcp --direction=0 --value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT}"
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
 
   # Node security group contains firewall for ssh (tcp/22).
   echo "Creating node security group rules..."
@@ -682,6 +681,12 @@ function create-firewall {
     sleep $(($attempt*2))
   done
 
+  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule nodeport-range-tcp ${NODE_SG_ID} --priority=3 --action=accept --protocol=tcp --direction=0 --value1=30000 --value2=32767"
+  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule nodeport-range-udp ${NODE_SG_ID} --priority=3 --action=accept --protocol=udp --direction=0 --value1=30000 --value2=32767"
+
+  # Sleep a while and apply the above changes.
+  sleep 10
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
 }
 
@@ -1413,8 +1418,6 @@ function kube-down {
 #   $1 command string to execute
 function anchnet-exec-and-retry {
   local attempt=0
-  # Before executing the command, we always sleep a few seconds to avoid anchnet rateACL.
-  sleep 3
   while true; do
     local ok=1
     eval $1 || ok=0
@@ -1432,4 +1435,8 @@ function anchnet-exec-and-retry {
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
+  # Anchnet API is not stable. Even we've guarded all command with retry, we'll
+  # ocassionally encounter errors. Here, we sleep a while to allow processing.
+  # We are working with anchnet to fix the API issue.
+  sleep 3
 }

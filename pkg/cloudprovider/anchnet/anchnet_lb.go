@@ -148,13 +148,6 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 		return nil, err
 	}
 
-	// Update node security group rules to open node port.
-	err = an.updateNodeSecurityGroup(NodeSecurityGroupName, ports)
-	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
-		return nil, err
-	}
-
 	// Calling update loadbalancer will apply the above changes.
 	_, err = an.updateLoadBalancer(lb_response.LoadbalancerID)
 	if err != nil {
@@ -549,67 +542,4 @@ func (an *Anchnet) createLBSecurityGroup(name string, ports []*api.ServicePort, 
 	}
 
 	return nil, fmt.Errorf("Unable to create security group %v for loadbalancer %v\n", name, lbID)
-}
-
-// updateNodeSecurityGroup adds node security group rule to open service
-// node port connection.
-func (an *Anchnet) updateNodeSecurityGroup(name string, ports []*api.ServicePort) error {
-	// Find node security group ID.
-	sg_response, exists, err := an.searchSecurityGroup(name)
-	if err != nil {
-		return err
-	}
-	if exists == false {
-		return fmt.Errorf("Security group %v doesn't exist", name)
-	}
-
-	// For every node port, we create a security group rule to allow traffic.
-	var rules []anchnet_client.AddSecurityGroupRule
-	for _, port := range ports {
-		rule := anchnet_client.AddSecurityGroupRule{
-			SecurityGroupRuleName: fmt.Sprintf("%s-%d", name, port.NodePort),
-			Action:                anchnet_client.SecurityGroupRuleActionAccept,
-			Direction:             anchnet_client.SecurityGroupRuleDirectionDown,
-			Protocol:              anchnet_client.SecurityGroupRuleProtocolTCP,
-			Priority:              5, // TODO: Is it ok to use fixed priority?
-			Value1:                fmt.Sprintf("%d", port.NodePort),
-			Value2:                fmt.Sprintf("%d", port.NodePort),
-		}
-		rules = append(rules, rule)
-	}
-
-	// Now add the rules to security group.
-	var rules_response anchnet_client.AddSecurityGroupRulesResponse
-	for i := 0; i < RetryCountOnError; i++ {
-		request := anchnet_client.AddSecurityGroupRulesRequest{
-			SecurityGroupID:    sg_response.ItemSet[0].SecurityGroupID,
-			SecurityGroupRules: rules,
-		}
-		err := an.client.SendRequest(request, &rules_response)
-		if err == nil {
-			glog.Infof("Added rules to node security group")
-			break
-		} else {
-			glog.Infof("Attempt %d: failed to add security group rules: %v\n", i, err)
-		}
-		time.Sleep(RetryIntervalOnError)
-	}
-
-	// Apply the above changes.
-	var apply_response anchnet_client.ApplySecurityGroupResponse
-	for i := 0; i < RetryCountOnError; i++ {
-		request := anchnet_client.ApplySecurityGroupRequest{
-			SecurityGroupID: sg_response.ItemSet[0].SecurityGroupID,
-		}
-		err := an.client.SendRequest(request, &apply_response)
-		if err == nil {
-			glog.Infof("Applied changes to node security group")
-			break
-		} else {
-			glog.Infof("Attempt %d: failed to apply security group rules: %v\n", i, err)
-		}
-		time.Sleep(RetryIntervalOnError)
-	}
-
-	return nil
 }

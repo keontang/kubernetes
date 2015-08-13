@@ -86,6 +86,7 @@ EOF
 #
 # Input:
 #   $1 Hostname override - override hostname used in kubelet.
+#   $2 Address to bind
 #   $2 API server address, typically master internal IP address.
 #   $3 Cluster DNS IP address, should fall into service ip range.
 #   $4 Cluster search domain, e.g. cluster.local
@@ -96,13 +97,13 @@ function create-kubelet-opts {
   local hostname=$(echo $1 | tr '[:upper:]' '[:lower:]')
   cat <<EOF > ~/kube/default/kubelet
 KUBELET_OPTS="--logtostderr=true \
---address=0.0.0.0 \
+--address=${2} \
 --port=10250 \
 --hostname_override=${hostname} \
---api_servers=https://${2}:${MASTER_SECURE_PORT} \
---cluster_dns=${3} \
---cluster_domain=${4} \
---pod-infra-container-image=${5} \
+--api_servers=https://${3}:${MASTER_SECURE_PORT} \
+--cluster_dns=${4} \
+--cluster_domain=${5} \
+--pod-infra-container-image=${6} \
 --kubeconfig=/etc/kubernetes/kubelet-kubeconfig \
 --cloud_config=/etc/kubernetes/anchnet-config \
 --cloud_provider=anchnet"

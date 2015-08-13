@@ -19,6 +19,7 @@ package anchnet_cloud
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 	"unicode"
@@ -56,10 +57,35 @@ func (an *Anchnet) NodeAddresses(name string) ([]api.NodeAddress, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Get internal IP address as well (private SDN).
+
+	// Here we have some assumptions:
+	// 1. Private SDN is on eth1, and can alwasys be found.
+	// 2. The host calling NodeAddresses matches 'name', i.e. the function is
+	//  called from kubelet, not other controllers. This is true for now, but
+	//  we may need to fix it later, we can use:
+	//  ssh ubuntu@external_ip ifconfig | grep -A 1 'eth1' | tail -1 | cut -d ':' -f 2 | cut -d ' ' -f 1
+	var ip net.IP
+	ifaces, _ := net.Interfaces()
+	for _, iface := range ifaces {
+		if iface.Name == "eth1" {
+			addrs, _ := iface.Addrs()
+			for _, addr := range addrs {
+				switch v := addr.(type) {
+				case *net.IPNet:
+					if v.IP.To4() != nil {
+						ip = v.IP
+						break
+					}
+				}
+			}
+		}
+	}
+
 	addresses := []api.NodeAddress{
+		{Type: api.NodeInternalIP, Address: ip.String()},
 		{Type: api.NodeExternalIP, Address: response.ItemSet[0].EIP.EipAddr},
 	}
+
 	return addresses, nil
 }
 

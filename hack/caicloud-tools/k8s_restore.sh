@@ -20,10 +20,10 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 # don't want to change upstream code.
 
 # Restore 'gcr.io' images.
-grep -rl "caicloud/[^\", ]*" \
+grep -rl "caicloudgcr/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib |
-  xargs sed -i "" 's|caicloud/|gcr.io/google_containers/|g'
+  xargs sed -i "" 's|caicloudgcr/|gcr.io/google_containers/|g'
 
 
 # Restore 'golang.org' packages.

@@ -16,9 +16,9 @@
 
 # Kubernetes team hosts a lot of images on gcr.io, which is blocked by GFW.
 # The script pulls such images from gcr.io, and push to docker hub under
-# our offical account (caicloud). Prerequisites for running the script:
+# our dedicated account (caicloudgcr). Prerequisites for running the script:
 # 1. The script must be ran on host outside of GFW, of course;
-# 2. The host has logged into docker hub using caicloud account.
+# 2. The host has logged into docker hub using caicloudgcr account.
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 
@@ -27,9 +27,9 @@ grep -IhEro "gcr.io/google_containers/[^\", ]*" \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib | sort -u |
   while read -r gcr_image ; do
     image=${gcr_image#"gcr.io/google_containers/"}
-    caicloud_image="caicloud/$image"
+    caicloudgcr_image="caicloudgcr/$image"
     echo "Processing $gcr_image, image: $image"
     docker pull "$gcr_image"
-    docker tag -f "$gcr_image" "$caicloud_image"
-    docker push "$caicloud_image"
+    docker tag -f "$gcr_image" "$caicloudgcr_image"
+    docker push "$caicloudgcr_image"
   done

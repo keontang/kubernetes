@@ -37,7 +37,7 @@ const (
 	// Number of retries when waitting on resources to become desired status.
 	RetryCountOnWait = 30
 	// Interval between two retries for the above situation.
-	RetryIntervalOnWait = 8 * time.Second
+	RetryIntervalOnWait = 4 * time.Second
 
 	// TODO: This is used to find node security group id, and to update node security group for
 	// node port. Find a better way to access the information.

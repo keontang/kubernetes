@@ -98,6 +98,8 @@ func init() {
 	actions["AddSecurityGroupRules"] = true
 	actions["DeleteSecurityGroupRules"] = true
 	actions["ModifySecurityGroupRuleAttributes"] = true
+
+	actions["DescribeJobs"] = true
 }
 
 // Client represents an anchnet client.

@@ -24,6 +24,7 @@ func main() {
 	addVxnetsCLI(cmds, os.Stdout)
 	addLoadBalancerCLI(cmds, os.Stdout)
 	addSecurityGroupCLI(cmds, os.Stdout)
+	addJobCLI(cmds, os.Stdout)
 
 	cmds.Execute()
 }
@@ -49,9 +50,17 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 
 	cmdDescribeInstance := &cobra.Command{
 		Use:   "describeinstance id",
-		Short: "Get information of an instance",
+		Short: "Get information of an instance by id",
 		Run: func(cmd *cobra.Command, args []string) {
 			execDescribeInstance(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	cmdSearchInstance := &cobra.Command{
+		Use:   "searchinstance name",
+		Short: "Get information of an instance by name",
+		Run: func(cmd *cobra.Command, args []string) {
+			execSearchInstance(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -74,6 +83,7 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 	// Add all sub-commands.
 	cmds.AddCommand(cmdRunInstance)
 	cmds.AddCommand(cmdDescribeInstance)
+	cmds.AddCommand(cmdSearchInstance)
 	cmds.AddCommand(cmdTerminateInstances)
 	cmds.AddCommand(cmdStopInstances)
 }
@@ -229,4 +239,18 @@ func addSecurityGroupCLI(cmds *cobra.Command, out io.Writer) {
 	cmds.AddCommand(cmdAddSecurityGroupRule)
 	cmds.AddCommand(cmdApplySecurityGroup)
 	cmds.AddCommand(cmdDeleteSecurityGroups)
+}
+
+// addJobCLI adds job commands.
+func addJobCLI(cmds *cobra.Command, out io.Writer) {
+	cmdDescribeJob := &cobra.Command{
+		Use:   "describejob id",
+		Short: "Get information of a job by id",
+		Run: func(cmd *cobra.Command, args []string) {
+			execDescribeJob(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	// Add all sub-commands.
+	cmds.AddCommand(cmdDescribeJob)
 }

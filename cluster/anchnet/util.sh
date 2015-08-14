@@ -127,7 +127,7 @@ function kube-up {
   # so we provide instance id to kubernetes as nodename and hostname, which makes it
   # easy to query anchnet in kubernetes.
   USER_CONFIG_FILE=${USER_CONFIG_FILE:-${DEFAULT_USER_CONFIG_FILE}}
-  echo "Reading user configuration from ${USER_CONFIG_FILE}"
+  echo "++++++++++ Reading user configuration from: ${USER_CONFIG_FILE}"
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
   source "${USER_CONFIG_FILE}"
   MASTER_NAME="${CLUSTER_ID}-master"
@@ -157,8 +157,6 @@ function kube-up {
     create-sdn-network
     # Create firewall rules for all instances.
     create-firewall
-    # Make sure firewall is properly setup.
-    ensure-firewall
   fi
 
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
@@ -344,31 +342,15 @@ function create-master-instance {
   echo "++++++++++ Creating kubernetes master from anchnet, master name: ${MASTER_NAME} ..."
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
-  local attempt=0
-  local instance_pattern="i-*"
-  local eip_pattern="eip-*"
-  while true; do
-    echo "Attempt $(($attempt+1)) to create master instance"
-    local master_info=$(
-      ${ANCHNET_CMD} runinstance "${MASTER_NAME}" -p="${KUBE_INSTANCE_PASSWORD}" \
-                   -i="${INSTANCE_IMAGE}" -m="${MASTER_MEM}" -c="${MASTER_CPU_CORES}" \
-                   -g="${IP_GROUP}")
-    local exit_code="$?"
-    MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
-    MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
-    if [[ "${exit_code}" != "0" || ! $MASTER_INSTANCE_ID =~ $instance_pattern || ! $MASTER_EIP_ID =~ $eip_pattern ]]; then
-      if (( attempt > 20 )); then
-        echo
-        echo -e "${color_red}failed to create master instance (sorry!)${color_norm}" >&2
-        exit 1
-      fi
-    else
-      echo -e " ${color_yellow}[master created in anchnet, verifying]${color_norm}"
-      break
-    fi
-    attempt=$(($attempt+1))
-    sleep $(($attempt*2))
-  done
+  anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
+-p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${MASTER_MEM} \
+-c=${MASTER_CPU_CORES} -g=${IP_GROUP}"
+  anchnet-wait-job ${ANCHNET_RESPONSE} 60 3
+
+  # Get master information.
+  local master_info=${ANCHNET_RESPONSE}
+  MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
+  MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
 
   # Check instance status and its external IP address.
   check-instance-status "${MASTER_INSTANCE_ID}"
@@ -378,7 +360,8 @@ function create-master-instance {
   # Enable ssh without password.
   setup-instance-ssh "${MASTER_EIP}"
 
-  echo -e " ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
+  echo -e " ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, \
+eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 }
 
 
@@ -401,31 +384,15 @@ function create-node-instances {
     echo "++++++++++ Creating kubernetes ${i}th node from anchnet, node name: ${NODE_NAME_PREFIX}-${i} ..."
 
     # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
-    local attempt=0
-    local instance_pattern="i-*"
-    local eip_pattern="eip-*"
-    while true; do
-      echo "Attempt $(($attempt+1)) to create ${i}th node instance"
-      local node_info=$(
-        ${ANCHNET_CMD} runinstance "${NODE_NAME_PREFIX}-${i}" -p="${KUBE_INSTANCE_PASSWORD}" \
-                       -i="${INSTANCE_IMAGE}" -m="${NODE_MEM}" -c="${NODE_CPU_CORES}" \
-                       -g="${IP_GROUP}")
-      local exit_code="$?"
-      local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
-      local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
-      if [[ "${exit_code}" != "0" || ! $node_instance_id =~ $instance_pattern || ! $node_eip_id =~ $eip_pattern ]]; then
-        if (( attempt > 20 )); then
-          echo
-          echo -e "${color_red}failed to create ${i}th node instance (sorry!)${color_norm}" >&2
-          exit 1
-        fi
-      else
-        echo -e " ${color_yellow}[${i}th node created in anchnet, verifying]${color_norm}"
-        break
-      fi
-      attempt=$(($attempt+1))
-      sleep $(($attempt*2))
-    done
+    anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX}-${i} \
+-p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
+-c=${NODE_CPU_CORES} -g=${IP_GROUP}"
+    anchnet-wait-job ${ANCHNET_RESPONSE} 60 3
+
+    # Get node information.
+    local node_info=${ANCHNET_RESPONSE}
+    local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
+    local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
 
     # Check instance status and its external IP address.
     check-instance-status "${node_instance_id}"
@@ -435,7 +402,8 @@ function create-node-instances {
     # Enable ssh without password.
     setup-instance-ssh "${node_eip}"
 
-    echo -e " ${color_green}[created node-${i} with instance ID ${node_instance_id}, eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
+    echo -e " ${color_green}[created node-${i} with instance ID ${node_instance_id}, \
+eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
 
     # Set output vars. Note we use ${NODE_EIPS-} to check if NODE_EIPS is unset,
     # as toplevel script set -o nounset
@@ -450,7 +418,8 @@ function create-node-instances {
     fi
   done
 
-  echo -e " ${color_green}[Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}]${color_norm}"
+  echo -e " ${color_green}[Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, \
+eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}]${color_norm}"
 }
 
 
@@ -587,34 +556,18 @@ function create-sdn-network {
   echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
-  local attempt=0
-  local pattern="vxnet-*"
-  while true; do
-    echo "Attempt $(($attempt+1)) to create sdn network"
-    VXNET_ID=$(${ANCHNET_CMD} createvxnets ${VXNET_NAME} | json_val '["vxnets"][0]')
-    if [[ ! $VXNET_ID =~ $pattern ]]; then
-      if (( attempt > 20 )); then
-        echo
-        echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
-        exit 1
-      fi
-    else
-      break
-    fi
-    attempt=$(($attempt+1))
-    sleep $(($attempt*2))
-  done
+  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${VXNET_NAME}"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
 
-  # Make sure vxnet is created.
-  anchnet-exec-and-retry "${ANCHNET_CMD} describevxnets ${VXNET_ID}"
+  # Get vxnet information.
+  local vxnet_info=${ANCHNET_RESPONSE}
+  VXNET_ID=$(echo ${vxnet_info} | json_val '["vxnets"][0]')
 
   # Add all instances to the vxnet.
-  ALL_INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
-  echo "Add all instances (both master and nodes) to the vxnet..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${ALL_INSTANCE_IDS}"
-
-  # Make sure instances are joined.
-  anchnet-exec-and-retry "${ANCHNET_CMD} describevxnets ${VXNET_ID}"
+  local all_instance_ids="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
+  echo "Add all instances (both master and nodes) to vxnet ${VXNET_ID} ..."
+  anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids}"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
@@ -632,141 +585,54 @@ function create-sdn-network {
 #   MASTER_SG_ID
 #   NODE_SG_ID
 function create-firewall {
+  #
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
+  #
   echo "++++++++++ Creating master security group rules ..."
-  local attempt=0
-  local pattern="sg-*"
-  while true; do
-    echo "Attempt $(($attempt+1)) to create security group for master"
-    MASTER_SG_ID=$(${ANCHNET_CMD} createsecuritygroup master-security-group master-ssh \
-                                  --priority=1 --action=accept --protocol=tcp --direction=0 \
-                                  --value1=22 --value2=22 |
-                      json_val '["security_group_id"]')
-    if [[ ! $MASTER_SG_ID =~ $pattern ]]; then
-      if (( attempt > 20 )); then
-        echo
-        echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
-        exit 1
-      fi
-    else
-      echo -e " ${color_green}[created master security group with ID: ${MASTER_SG_ID}]${color_norm}"
-      break
-    fi
-    attempt=$(($attempt+1))
-    sleep $(($attempt*2))
-  done
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup master-security-group \
+master-ssh --priority=1 --action=accept --protocol=tcp --direction=0 --value1=22 --value2=22"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
 
-  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule master-https ${MASTER_SG_ID} --priority=3 --action=accept --protocol=tcp --direction=0 --value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT}"
+  # Get security group information.
+  local master_sg_info=${ANCHNET_RESPONSE}
+  MASTER_SG_ID=$(echo ${master_sg_info} | json_val '["security_group_id"]')
 
-  # Node security group contains firewall for ssh (tcp/22).
-  echo "Creating node security group rules..."
-  local attempt=0
-  while true; do
-    echo "Attempt $(($attempt+1)) to create security group for node"
-    NODE_SG_ID=$(${ANCHNET_CMD} createsecuritygroup node-security-group node-ssh \
-                                --priority=1 --action=accept --protocol=tcp --direction=0 \
-                                --value1=22 --value2=22 |
-                    json_val '["security_group_id"]')
-    if [[ ! $NODE_SG_ID =~ $pattern ]]; then
-      if (( attempt > 20 )); then
-        echo
-        echo -e "${color_red}failed to create sdn network (sorry!)${color_norm}" >&2
-        exit 1
-      fi
-    else
-      echo -e " ${color_green}[created node security group with ID: ${NODE_SG_ID}]${color_norm}"
-      break
-    fi
-    attempt=$(($attempt+1))
-    sleep $(($attempt*2))
-  done
+  # Add more rules to master security group.
+  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule \
+master-https ${MASTER_SG_ID} --priority=3 --action=accept --protocol=tcp --direction=0 \
+--value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT}"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
 
-  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule nodeport-range-tcp ${NODE_SG_ID} --priority=3 --action=accept --protocol=tcp --direction=0 --value1=30000 --value2=32767"
-  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule nodeport-range-udp ${NODE_SG_ID} --priority=3 --action=accept --protocol=udp --direction=0 --value1=30000 --value2=32767"
-
-  # Sleep a while and apply the above changes.
-  sleep 10
+  # Now, apply all above changes.
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
+
+  #
+  # Node security group contains firewall for ssh (tcp/22) and nodeport range
+  # (tcp/30000-32767, udp/30000-32767).
+  #
+  echo "++++++++++ Creating node security group rules ..."
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup node-security-group \
+node-ssh --priority=1 --action=accept --protocol=tcp --direction=0 --value1=22 --value2=22"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
+
+  # Get security group information.
+  local node_sg_info=${ANCHNET_RESPONSE}
+  NODE_SG_ID=$(echo ${node_sg_info} | json_val '["security_group_id"]')
+
+  # Add more rules to node security group.
+  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule \
+nodeport-range-tcp ${NODE_SG_ID} --priority=3 --action=accept --protocol=tcp \
+--direction=0 --value1=30000 --value2=32767"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
+  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule \
+nodeport-range-udp ${NODE_SG_ID} --priority=3 --action=accept --protocol=udp \
+--direction=0 --value1=30000 --value2=32767"
+  anchnet-wait-job ${ANCHNET_RESPONSE}
+
+  # Now, apply all above changes.
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
-}
-
-
-# Make sure firewall is properly set via checking ssh.
-#
-# Assumed vars:
-#   KUBE_INSTANCE_PASSWORD
-#   MASTER_SG_ID
-#   MASTER_INSTANCE_ID
-#   MASTER_EIP
-#   NODE_SG_ID
-#   NODE_INSTANCE_IDS
-#   NODE_EIPS
-function ensure-firewall {
-  local attempt=0
-  while true; do
-    echo "Attempt $(($attempt+1)) to check master firewall"
-    ${EXPECT_CMD} <<EOF
-set timeout $((($attempt+1)*3))
-spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} echo Hello
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  "lost connection" { exit 1 }
-  timeout { exit 1 }
-  eof {}
-}
-EOF
-    if [[ "$?" != "0" ]]; then
-      if (( attempt > 10 )); then
-        echo
-        echo -e "${color_red}Unable to setup firewall for master (sorry!)${color_norm}" >&2
-        exit 1
-      else
-        ${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}
-      fi
-    else
-      break
-    fi
-    echo -e " ${color_yellow}[reapplying security group to master]${color_norm}"
-    attempt=$(($attempt+1))
-  done
-
-  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
-  first_node_ip="${node_eip_arr[0]}"
-  attempt=0
-  while true; do
-    echo "Attempt $(($attempt+1)) to check node firewall"
-    ${EXPECT_CMD} <<EOF
-set timeout $((($attempt+1)*3))
-spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${first_node_ip} echo Hello
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  "lost connection" { exit 1 }
-  timeout { exit 1 }
-  eof {}
-}
-EOF
-    if [[ "$?" != "0" ]]; then
-      if (( attempt > 10 )); then
-        echo
-        echo -e "${color_red}Unable to setup firewall for nodes (sorry!)${color_norm}" >&2
-        exit 1
-      else
-        ${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}
-      fi
-    else
-      break
-    fi
-    echo -e " ${color_yellow}[reapplying security group to node]${color_norm}"
-    attempt=$(($attempt+1))
-  done
+  anchnet-wait-job ${ANCHNET_RESPONSE}
 }
 
 
@@ -1411,32 +1277,54 @@ function kube-down {
   fi
 }
 
-# A helper function that executes a command (which interacts with anchnet), and retries on
-# failure. If the command can't succeed within given attempts, the script will exit.
+# A helper function that executes a command (which interacts with anchnet), and retries
+# on failure. If the command can't succeed within given attempts, the script will exit
+# directly.
 #
 # Input:
 #   $1 command string to execute
+#
+# Output:
+#   ANCHNET_RESPONSE response from anchnet. It is a global variable, so we can't use
+#     then function concurrently.
 function anchnet-exec-and-retry {
   local attempt=0
   while true; do
-    local ok=1
-    eval $1 || ok=0
-    if [[ "${ok}" == "0" ]]; then
+    ANCHNET_RESPONSE=$(eval $1)
+    if [[ "$?" != "0" ]]; then
       if (( attempt > 20 )); then
         echo
         echo -e "${color_red}Unable to execute command [$1]${color_norm}" >&2
         exit 1
       fi
     else
-      echo # Add a blank line (anchnet cli output doesn't have new line)
+      echo -e " ${color_green}Command [$1] ok${color_norm}" >&2
       break
     fi
-    echo -e "${color_yellow}Command [$1] not ok, will retry${color_norm}" >&2
+    echo -e " ${color_yellow}Command [$1] not ok, will retry${color_norm}" >&2
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
-  # Anchnet API is not stable. Even we've guarded all command with retry, we'll
-  # ocassionally encounter errors. Here, we sleep a while to allow processing.
-  # We are working with anchnet to fix the API issue.
-  sleep 3
+}
+
+# Wait until job finishes. If job doesn't finish within timeout, return error
+#
+# Input:
+#   $1 anchnet response, typically ANCHNET_RESPONSE.
+#   $2 number of retry, default to 30
+#   $3 retry interval, in second, default to 3
+function anchnet-wait-job {
+  echo -n "Wait until job finishes: ${1} ... "
+
+  local job_id=$(echo ${1} | json_val '["job_id"]')
+  ${ANCHNET_CMD} waitjob ${job_id} -c=${2-10} -i=${3-3}
+
+  local exit_code=$?
+  if [[ "$?" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
+  else
+    echo -e "${color_red}Failed${color_norm}"
+  fi
+
+  return $?
 }

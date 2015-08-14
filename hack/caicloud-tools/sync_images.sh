@@ -23,7 +23,7 @@
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 
 grep -IhEro "gcr.io/google_containers/[^\", ]*" \
-     --include \*.go --include \*.json --include \*.yaml --include \*.yml --include Dockerfile --include \*.manifest \
+     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib | sort -u |
   while read -r gcr_image ; do
     image=${gcr_image#"gcr.io/google_containers/"}

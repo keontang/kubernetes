@@ -21,7 +21,7 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 # 'gcr.io' is blocked - replace all gcr.io images to ones we uploaded to docker
 # hub caicloudgcr account.
 grep -rl "gcr.io/google_containers/[^\", ]*" \
-     --include \*.go --include \*.json --include \*.yaml --include \*.yml --include Dockerfile --include \*.manifest \
+     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib |
   xargs sed -i "" 's|gcr.io/google_containers/|caicloudgcr/|g'
 

@@ -59,7 +59,7 @@ func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, 
 
 func execDescribeInstance(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "Instance name required")
+		fmt.Fprintln(os.Stderr, "Instance id required")
 		os.Exit(1)
 	}
 
@@ -72,6 +72,28 @@ func execDescribeInstance(cmd *cobra.Command, args []string, client *anchnet.Cli
 	err := client.SendRequest(request, &response)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error running command DescribeInstance: %v\n", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}
+
+func execSearchInstance(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Instance name required")
+		os.Exit(1)
+	}
+
+	request := anchnet.DescribeInstancesRequest{
+		SearchWord: args[0],
+		Status:     []anchnet.InstanceStatus{anchnet.InstanceStatusRunning},
+		Verbose:    1,
+	}
+	var response anchnet.DescribeInstancesResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command DescribeInstance (for searching instance): %v\n", err)
 		os.Exit(1)
 	}
 

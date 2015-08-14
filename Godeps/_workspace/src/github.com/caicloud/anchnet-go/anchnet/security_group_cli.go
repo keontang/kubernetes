@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	anchnet "github.com/caicloud/anchnet-go"
@@ -15,33 +16,39 @@ import (
 )
 
 func execCreateSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
-	if len(args) != 2 {
-		fmt.Fprintln(os.Stderr, "Security group name and rule name required")
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "Security group name required")
 		os.Exit(1)
 	}
 
-	priority := getFlagInt(cmd, "priority")
-	direction := getFlagInt(cmd, "direction")
-	action := getFlagString(cmd, "action")
-	protocol := getFlagString(cmd, "protocol")
-	value1 := getFlagString(cmd, "value1")
-	value2 := getFlagString(cmd, "value2")
-	value3 := getFlagString(cmd, "value3")
+	// Assume number matches.
+	rulename := strings.Split(getFlagString(cmd, "rulename"), ",")
+	priority := strings.Split(getFlagString(cmd, "priority"), ",")
+	direction := strings.Split(getFlagString(cmd, "direction"), ",")
+	action := strings.Split(getFlagString(cmd, "action"), ",")
+	protocol := strings.Split(getFlagString(cmd, "protocol"), ",")
+	value1 := strings.Split(getFlagString(cmd, "value1"), ",")
+	value2 := strings.Split(getFlagString(cmd, "value2"), ",")
+
+	var rules []anchnet.CreateSecurityGroupRule
+	for i := range rulename {
+		d, _ := strconv.Atoi(direction[i])
+		p, _ := strconv.Atoi(priority[i])
+		rule := anchnet.CreateSecurityGroupRule{
+			SecurityGroupRuleName: rulename[i],
+			Action:                anchnet.SecurityGroupRuleAction(action[i]),
+			Direction:             anchnet.SecurityGroupRuleDirection(d),
+			Protocol:              anchnet.SecurityGroupRuleProtocol(protocol[i]),
+			Priority:              p,
+			Value1:                value1[i],
+			Value2:                value2[i],
+		}
+		rules = append(rules, rule)
+	}
 
 	request := anchnet.CreateSecurityGroupRequest{
-		SecurityGroupName: args[0],
-		SecurityGroupRules: []anchnet.CreateSecurityGroupRule{
-			{
-				SecurityGroupRuleName: args[1],
-				Action:                anchnet.SecurityGroupRuleAction(action),
-				Direction:             anchnet.SecurityGroupRuleDirection(direction),
-				Protocol:              anchnet.SecurityGroupRuleProtocol(protocol),
-				Priority:              priority,
-				Value1:                value1,
-				Value2:                value2,
-				Value3:                value3,
-			},
-		},
+		SecurityGroupName:  args[0],
+		SecurityGroupRules: rules,
 	}
 	var response anchnet.CreateSecurityGroupResponse
 

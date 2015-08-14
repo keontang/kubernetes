@@ -345,7 +345,7 @@ function create-master-instance {
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${MASTER_MEM} \
 -c=${MASTER_CPU_CORES} -g=${IP_GROUP}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} 60 3
+  anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
 
   # Get master information.
   local master_info=${ANCHNET_RESPONSE}
@@ -387,7 +387,7 @@ function create-node-instances {
     anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX}-${i} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
 -c=${NODE_CPU_CORES} -g=${IP_GROUP}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} 60 3
+    anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
 
     # Get node information.
     local node_info=${ANCHNET_RESPONSE}
@@ -590,18 +590,13 @@ function create-firewall {
   #
   echo "++++++++++ Creating master security group rules ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup master-security-group \
-master-ssh --priority=1 --action=accept --protocol=tcp --direction=0 --value1=22 --value2=22"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
+--rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
+--direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT}"
+  anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
 
   # Get security group information.
   local master_sg_info=${ANCHNET_RESPONSE}
   MASTER_SG_ID=$(echo ${master_sg_info} | json_val '["security_group_id"]')
-
-  # Add more rules to master security group.
-  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule \
-master-https ${MASTER_SG_ID} --priority=3 --action=accept --protocol=tcp --direction=0 \
---value1=${MASTER_SECURE_PORT} --value2=${MASTER_SECURE_PORT}"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
 
   # Now, apply all above changes.
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
@@ -613,22 +608,14 @@ master-https ${MASTER_SG_ID} --priority=3 --action=accept --protocol=tcp --direc
   #
   echo "++++++++++ Creating node security group rules ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup node-security-group \
-node-ssh --priority=1 --action=accept --protocol=tcp --direction=0 --value1=22 --value2=22"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
+--rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
+--action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
+--value1=22,30000,30000 --value2=22,32767,32767"
+  anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
 
   # Get security group information.
   local node_sg_info=${ANCHNET_RESPONSE}
   NODE_SG_ID=$(echo ${node_sg_info} | json_val '["security_group_id"]')
-
-  # Add more rules to node security group.
-  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule \
-nodeport-range-tcp ${NODE_SG_ID} --priority=3 --action=accept --protocol=tcp \
---direction=0 --value1=30000 --value2=32767"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
-  anchnet-exec-and-retry "${ANCHNET_CMD} addsecuritygrouprule \
-nodeport-range-udp ${NODE_SG_ID} --priority=3 --action=accept --protocol=udp \
---direction=0 --value1=30000 --value2=32767"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
 
   # Now, apply all above changes.
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
@@ -1250,6 +1237,7 @@ type: Opaque
 EOF
 }
 
+
 # Delete a kubernete cluster from anchnet
 #
 # Vars set:
@@ -1276,6 +1264,7 @@ function kube-down {
     anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS}"
   fi
 }
+
 
 # A helper function that executes a command (which interacts with anchnet), and retries
 # on failure. If the command can't succeed within given attempts, the script will exit
@@ -1307,24 +1296,25 @@ function anchnet-exec-and-retry {
   done
 }
 
+
 # Wait until job finishes. If job doesn't finish within timeout, return error
 #
 # Input:
 #   $1 anchnet response, typically ANCHNET_RESPONSE.
-#   $2 number of retry, default to 30
+#   $2 number of retry, default to 60
 #   $3 retry interval, in second, default to 3
 function anchnet-wait-job {
   echo -n "Wait until job finishes: ${1} ... "
 
   local job_id=$(echo ${1} | json_val '["job_id"]')
-  ${ANCHNET_CMD} waitjob ${job_id} -c=${2-10} -i=${3-3}
+  ${ANCHNET_CMD} waitjob ${job_id} -c=${2-60} -i=${3-3}
 
   local exit_code=$?
-  if [[ "$?" == "0" ]]; then
+  if [[ "$exit_code" == "0" ]]; then
     echo -e "${color_green}Done${color_norm}"
   else
     echo -e "${color_red}Failed${color_norm}"
   fi
 
-  return $?
+  return $exit_code
 }

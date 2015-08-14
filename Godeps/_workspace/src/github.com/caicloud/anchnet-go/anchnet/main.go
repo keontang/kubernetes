@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	anchnet "github.com/caicloud/anchnet-go"
 	"github.com/spf13/cobra"
 )
 
@@ -171,31 +172,33 @@ func addLoadBalancerCLI(cmds *cobra.Command, out io.Writer) {
 
 // addSecurityGroupCLI adds SecurityGroup commands.
 func addSecurityGroupCLI(cmds *cobra.Command, out io.Writer) {
-	var protocol, action, value1, value2, value3 string
-	var direction, priority int
-
+	var rulename, direction, priority, protocol, action, value1, value2, value3 string
 	cmdCreateSecurityGroup := &cobra.Command{
-		Use:   "createsecuritygroup name",
-		Short: "Create a new empty security group",
+		Use: "createsecuritygroup name",
+		Short: "Create a new security group with rules, e.g. anchnet createsecuritygroup sg_group" +
+			"--rulename=ssh,http --priority=1,2 --action=accept,accept --protocol=tcp,tcp",
 		Run: func(cmd *cobra.Command, args []string) {
 			execCreateSecurityGroup(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
-	cmdCreateSecurityGroup.Flags().IntVarP(&direction, "direction", "d", 0,
+	cmdCreateSecurityGroup.Flags().StringVarP(&rulename, "rulename", "r", "",
+		"Rule names, comma separated list.")
+	cmdCreateSecurityGroup.Flags().StringVarP(&direction, "direction", "d", "",
 		"Direction of the rule. 0 is down, 1 is up.")
 	cmdCreateSecurityGroup.Flags().StringVarP(&action, "action", "a", "",
 		"Action of the rule, one of accept and drop.")
 	cmdCreateSecurityGroup.Flags().StringVarP(&protocol, "protocol", "c", "",
 		"Protocol of the rule, can be tcp, udp or ssh, http, etc.")
-	cmdCreateSecurityGroup.Flags().IntVarP(&priority, "priority", "p", 0,
+	cmdCreateSecurityGroup.Flags().StringVarP(&priority, "priority", "p", "",
 		"Priority of the rule, an integer.")
-	cmdCreateSecurityGroup.Flags().StringVarP(&value1, "value1", "", "0",
+	cmdCreateSecurityGroup.Flags().StringVarP(&value1, "value1", "", "",
 		"Value1 of the rule, whose meanning differs based on protocol.")
-	cmdCreateSecurityGroup.Flags().StringVarP(&value2, "value2", "", "0",
+	cmdCreateSecurityGroup.Flags().StringVarP(&value2, "value2", "", "",
 		"Value2 of the rule, whose meanning differs based on protocol.")
-	cmdCreateSecurityGroup.Flags().StringVarP(&value3, "value3", "", "0",
+	cmdCreateSecurityGroup.Flags().StringVarP(&value3, "value3", "", "",
 		"Value3 of the rule, whose meanning differs based on protocol.")
 
+	var add_direction, add_priority int
 	cmdAddSecurityGroupRule := &cobra.Command{
 		Use:   "addsecuritygrouprule name securitygroup_id",
 		Short: "Add a new rule to a given security group",
@@ -203,13 +206,13 @@ func addSecurityGroupCLI(cmds *cobra.Command, out io.Writer) {
 			execAddSecurityGroupRule(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
-	cmdAddSecurityGroupRule.Flags().IntVarP(&direction, "direction", "d", 0,
+	cmdAddSecurityGroupRule.Flags().IntVarP(&add_direction, "direction", "d", 0,
 		"Direction of the rule. 0 is down, 1 is up.")
 	cmdAddSecurityGroupRule.Flags().StringVarP(&action, "action", "a", "",
 		"Action of the rule, one of accept and drop.")
 	cmdAddSecurityGroupRule.Flags().StringVarP(&protocol, "protocol", "c", "",
 		"Protocol of the rule, can be tcp, udp or ssh, http, etc.")
-	cmdAddSecurityGroupRule.Flags().IntVarP(&priority, "priority", "p", 0,
+	cmdAddSecurityGroupRule.Flags().IntVarP(&add_priority, "priority", "p", 0,
 		"Priority of the rule, an integer.")
 	cmdAddSecurityGroupRule.Flags().StringVarP(&value1, "value1", "", "",
 		"Value1 of the rule, whose meanning differs based on protocol.")
@@ -251,6 +254,20 @@ func addJobCLI(cmds *cobra.Command, out io.Writer) {
 		},
 	}
 
+	cmdWaitJob := &cobra.Command{
+		Use:   "waitjob id",
+		Short: "Wait until job becomes desired status, default 'successful'",
+		Run: func(cmd *cobra.Command, args []string) {
+			execWaitJob(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+	var count, interval int
+	var status string
+	cmdWaitJob.Flags().IntVarP(&count, "count", "c", 20, "Number of retries")
+	cmdWaitJob.Flags().IntVarP(&interval, "interval", "i", 3, "Retry interval, in second")
+	cmdWaitJob.Flags().StringVarP(&status, "status", "s", string(anchnet.JobStatusSuccessful), "Retry interval, in second")
+
 	// Add all sub-commands.
 	cmds.AddCommand(cmdDescribeJob)
+	cmds.AddCommand(cmdWaitJob)
 }

@@ -35,7 +35,7 @@ const (
 	RetryIntervalOnError = 4 * time.Second
 
 	// Number of retries when waitting on resources to become desired status.
-	RetryCountOnWait = 30
+	RetryCountOnWait = 60
 	// Interval between two retries for the above situation.
 	RetryIntervalOnWait = 4 * time.Second
 

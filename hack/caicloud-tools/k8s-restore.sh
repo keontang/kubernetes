@@ -16,7 +16,7 @@
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 
-# The script restores changes from k8s_replace.sh. This is necessary since we
+# The script restores changes from k8s-replace.sh. This is necessary since we
 # don't want to change upstream code.
 
 # Restore 'gcr.io' images.

@@ -181,6 +181,9 @@ function kube-up {
   # Start master/nodes all together.
   provision-instances
 
+  # After everything's done, we re-apply firewall to make sure it works.
+  ensure-firewall
+
   # common.sh defines create-kubeconfig, which is used to create client kubeconfig for
   # kubectl. To properly create kubeconfig, make sure to we supply it with assumed vars.
   source "${KUBE_ROOT}/cluster/common.sh"
@@ -196,7 +199,125 @@ function kube-up {
 
 # Update a kubernetes cluster with latest source.
 function kube-push {
-  echo "not implemented"
+  # Find all instances prefixed with CLUSTER_ID (caicloud convention - every instance
+  # is prefixed with a unique CLUSTER_ID).
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID}"
+  local number=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+
+  # Print instance information
+  echo -n "Found instances: "
+  for i in `seq 0 $(($number-1))`; do
+    name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+    id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
+    echo -n "${name},${id}; "
+  done
+  echo
+
+  # Build server binaries.
+  anchnet-build-server
+
+  # Push new binaries to master and nodes.
+  echo "++++++++++ Pushing binaries to master and nodes ..."
+  for i in `seq 0 $(($number-1))`; do
+    name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+    eip=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
+    if [[ $name == *"master"* ]]; then
+      ${EXPECT_CMD} <<EOF
+set timeout -1
+spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
+  ${INSTANCE_USER}@${eip}:~/kube/master
+expect {
+  "*?assword:" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+    else
+      ${EXPECT_CMD} <<EOF
+set timeout -1
+spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy \
+  ${INSTANCE_USER}@${eip}:~/kube/node
+expect {
+  "*?assword:" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+    fi
+    if [[ -z "${KUBE_PUSH_ALL_EIPS-}" ]]; then
+      KUBE_PUSH_ALL_EIPS="${eip}"
+    else
+      KUBE_PUSH_ALL_EIPS="${KUBE_PUSH_ALL_EIPS},${eip}"
+    fi
+  done
+
+  # Stop running cluster.
+  IFS=',' read -ra instance_ip_arr <<< "${KUBE_PUSH_ALL_EIPS}"
+  echo "++++++++++ Stop services ..."
+  for instance_ip in ${instance_ip_arr[*]}; do
+    expect <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${instance_ip} "sudo service etcd stop"
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+  done
+
+  # Restart cluster.
+  pids=""
+  for i in `seq 0 $(($number-1))`; do
+    name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+    eip=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
+    if [[ $name == *"master"* ]]; then
+      expect <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${eip} "sudo ~/kube/master-start.sh"
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+      pids="$pids $!"
+    else
+      index=${name#"${CLUSTER_ID}-node-"}
+      expect <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${eip} "sudo ./kube/node${index}-start.sh"
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+      pids="$pids $!"
+    fi
+  done
+
+  echo "Wait for all instances to be provisioned..."
+  wait $pids
+  echo "All instances have been provisioned..."
 }
 
 
@@ -376,7 +497,7 @@ function ensure-temp-dir {
 #
 # Input:
 #   $1 A valid string for indexing json string.
-#   stdin: A json string
+#   $stdin A json string
 #
 # Output:
 #   stdout: value at given index (empty if error occurs).
@@ -387,6 +508,29 @@ import json,sys
 try:
   obj=json.load(sys.stdin)
   print obj'$1'
+except:
+  sys.stderr.write("Unable to parse json string, please retry\n")
+'
+}
+
+
+# Evaluate a json string and return length of required fields. Example:
+# $ echo '{"price": [{"item1":12}, {"item2":21}]}' | json_len '["price"]'
+# $ 2
+#
+# Input:
+#   $1 A valid string for indexing json string.
+#   $stdin A json string
+#
+# Output:
+#   stdout: length at given index (empty if error occurs).
+#   stderr: any parsing error
+function json_len {
+  python -c '
+import json,sys
+try:
+  obj=json.load(sys.stdin)
+  print len(obj'$1')
 except:
   sys.stderr.write("Unable to parse json string, please retry\n")
 '
@@ -699,6 +843,13 @@ function create-firewall {
 }
 
 
+# Re-apply firewall to make sure firewall is properly set up.
+function ensure-firewall {
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
+}
+
+
 # Create a comma separated string of node internal ips based on the cluster
 # config NODE_INTERNAL_IP_RANGE and NUM_MINIONS. E.g. if NODE_INTERNAL_IP_RANGE
 # is 10.244.1.0/16 and NUM_MINIONS is 2, then output: "10.244.1.0,10.244.1.1".
@@ -815,7 +966,7 @@ function create-etcd-initial-cluster {
 function override-binaries {
   (
     cd ${KUBE_ROOT}
-    anchnet-build-release
+    anchnet-build-server
     IFS=',' read -ra instance_ip_arr <<< "${MASTER_EIP},${NODE_EIPS}"
 
     for instance_ip in ${instance_ip_arr[*]}; do
@@ -856,19 +1007,6 @@ EOF
       wait $pids
     done
   )
-}
-
-
-# Build all binaries using docker. Note there are some restrictions we need
-# to fix if the provision host is running in mainland China; it is fixed in
-# k8s_replace.sh.
-function anchnet-build-release {
-  if [[ `uname` == "Darwin" ]]; then
-    boot2docker start
-  fi
-  ${KUBE_ROOT}/hack/caicloud-tools/k8s_replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud-tools/k8s_restore.sh' EXIT
-  ${KUBE_ROOT}/build/release.sh
 }
 
 
@@ -1382,6 +1520,38 @@ function anchnet-wait-job {
 }
 
 
+# Build all binaries using docker. Note there are some restrictions we need
+# to fix if the provision host is running in mainland China; it is fixed in
+# k8s-replace.sh.
+function anchnet-build-release {
+  if [[ `uname` == "Darwin" ]]; then
+    boot2docker start
+  fi
+  (
+    cd ${KUBE_ROOT}
+    hack/caicloud-tools/k8s-replace.sh
+    trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
+    build/release.sh
+    cd -
+  )
+}
+
+
+# Like build release, but only build server binary (linux amd64).
+function anchnet-build-server {
+  if [[ `uname` == "Darwin" ]]; then
+    boot2docker start
+  fi
+  (
+    cd ${KUBE_ROOT}
+    hack/caicloud-tools/k8s-replace.sh
+    trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
+    build/run.sh hack/build-go.sh
+    cd -
+  )
+}
+
+
 # -----------------------------------------------------------------------------
 # Cluster specific test helpers used from hack/e2e-test.sh
 
@@ -1403,8 +1573,8 @@ EOF
   # Since we changed our config above, we reset anchnet env.
   setup-anchnet-env
   # As part of e2e preparation, we fix image path.
-  ${KUBE_ROOT}/hack/caicloud-tools/k8s_replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud-tools/k8s_restore.sh' EXIT
+  ${KUBE_ROOT}/hack/caicloud-tools/k8s-replace.sh
+  trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
 }
 
 

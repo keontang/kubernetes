@@ -202,11 +202,11 @@ function kube-push {
   # Find all instances prefixed with CLUSTER_ID (caicloud convention - every instance
   # is prefixed with a unique CLUSTER_ID).
   anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID}"
-  local number=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  local count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
 
   # Print instance information
   echo -n "Found instances: "
-  for i in `seq 0 $(($number-1))`; do
+  for i in `seq 0 $(($count-1))`; do
     name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
     echo -n "${name},${id}; "
@@ -218,7 +218,7 @@ function kube-push {
 
   # Push new binaries to master and nodes.
   echo "++++++++++ Pushing binaries to master and nodes ..."
-  for i in `seq 0 $(($number-1))`; do
+  for i in `seq 0 $(($count-1))`; do
     name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     eip=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
     if [[ $name == *"master"* ]]; then
@@ -280,7 +280,7 @@ EOF
 
   # Restart cluster.
   pids=""
-  for i in `seq 0 $(($number-1))`; do
+  for i in `seq 0 $(($count-1))`; do
     name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     eip=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
     if [[ $name == *"master"* ]]; then

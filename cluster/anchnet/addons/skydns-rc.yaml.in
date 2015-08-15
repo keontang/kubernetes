@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: etcd
-        image: ddysher/etcd:2.0.9
+        image: caicloudgcr/etcd:2.0.9
         resources:
           limits:
             cpu: 100m
@@ -40,7 +40,7 @@ spec:
         - name: etcd-storage
           mountPath: /var/etcd/data
       - name: kube2sky
-        image: tupachydralisk/kube2sky:1.11
+        image: caicloudgcr/kube2sky:1.11
         resources:
           limits:
             cpu: 100m
@@ -49,7 +49,7 @@ spec:
         # command = "/kube2sky"
         - -domain={{ pillar['dns_domain'] }}
       - name: skydns
-        image: ddysher/skydns:2015-03-11-001
+        image: caicloudgcr/skydns:2015-03-11-001
         resources:
           limits:
             cpu: 100m
@@ -74,7 +74,7 @@ spec:
           initialDelaySeconds: 30
           timeoutSeconds: 5
       - name: healthz
-        image: tupachydralisk/exechealthz:1.0
+        image: caicloudgcr/exechealthz:1.0
         resources:
           limits:
             cpu: 10m

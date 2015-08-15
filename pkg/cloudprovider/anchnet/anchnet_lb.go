@@ -63,7 +63,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 }
 
 // CreateTCPLoadBalancer creates a new tcp load balancer. Returns the status of the balancer.
-// 'region' is returned from Zone interface and it's not used here, since anchnet only supports
+// 'region' is returned from Zone interface and is not used here, since anchnet only supports
 // one zone. If it starts supporting multiple zones, we just need to update the request.
 // 'externalIP' is not used, we use external IP given by anchnent.
 // To create a TCP LoadBalancer for kubernetes, we do the following:
@@ -72,7 +72,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 // 3. add listeners for the loadbalancer, number of listeners = number of service ports;
 // 4. add backends for each listener;
 // 5. create a security group for loadbalancer, number of rules = number of service ports;
-// 6. modify node security group rules to open node port of the service, number of added rules = number of service ports.
+// 6. apply above changes.
 func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP, ports []*api.ServicePort, hosts []string, affinityType api.ServiceAffinity) (*api.LoadBalancerStatus, error) {
 	glog.Infof("Anchnet: received create loadbalancer request with name %v\n", name)
 
@@ -212,7 +212,6 @@ func (an *Anchnet) UpdateTCPLoadBalancer(name, region string, hosts []string) er
 // 1. external ip allocated to loadbalancer;
 // 2. loadbalancer itself (including listeners);
 // 3. security group for loadbalancer;
-// 4. TODO: node security group rules for node port.
 func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
 	// Delete external ip and load balancer.
 	lb_response, exists, err := an.searchLoadBalancer(name)
@@ -220,16 +219,23 @@ func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
 		return err
 	}
 	if exists == false {
-		glog.Info("Load balancer %v already deleted", name)
+		glog.Infof("Load balancer %v already deleted", name)
 		return nil
 	}
 	var eip_ids []string
 	for _, eip := range lb_response.ItemSet[0].Eips {
 		eip_ids = append(eip_ids, eip.EipID)
 	}
-	_, err = an.deleteLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, eip_ids)
+	lb_delete_response, err := an.deleteLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, eip_ids)
+	if err != nil {
+		return err
+	}
+	err = an.waitJobStatus(lb_delete_response.JobID, anchnet_client.JobStatusSuccessful)
+	if err != nil {
+		return err
+	}
 
-	// Wait for load balancer to be deleted.
+	// Wait for load balancer to become 'deleted' status.
 	err = an.waitForLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, anchnet_client.LoadBalancerStatusDeleted)
 	if err != nil {
 		return err
@@ -241,30 +247,22 @@ func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
 		return err
 	}
 	if exists == false {
-		glog.Info("Security group %v already deleted", name)
+		glog.Infof("Security group %v already deleted", name)
 		return nil
 	}
 
-	var delete_response anchnet_client.DeleteSecurityGroupsResponse
-	for i := 0; i < RetryCountOnError; i++ {
-		request := anchnet_client.DeleteSecurityGroupsRequest{
-			SecurityGroupIDs: []string{sg_response.ItemSet[0].SecurityGroupID},
-		}
-		err := an.client.SendRequest(request, &delete_response)
-		if err == nil {
-			glog.Infof("Deleted security group %v with ID %v", name, sg_response.ItemSet[0].SecurityGroupID)
-			break
-		} else {
-			glog.Infof("Attempt %d: failed to delete security group: %v\n", i, err)
-		}
-		time.Sleep(RetryIntervalOnError)
+	sg_delete_response, err := an.deleteSecurityGroup(sg_response.ItemSet[0].SecurityGroupID)
+	err = an.waitJobStatus(sg_delete_response.JobID, anchnet_client.JobStatusSuccessful)
+	if err != nil {
+		return err
 	}
 
-	return err
+	return nil
 }
 
 // waitJobStatus waits until a job becomes desired status.
 func (an *Anchnet) waitJobStatus(jobID string, status anchnet_client.JobStatus) error {
+	glog.Infof("Wait Job %v to become status %v", jobID, status)
 	for i := 0; i < RetryCountOnWait; i++ {
 		request := anchnet_client.DescribeJobsRequest{
 			JobIDs: []string{jobID},
@@ -351,7 +349,7 @@ func (an *Anchnet) describeEip(eip string) (*anchnet_client.DescribeEipsResponse
 		glog.Infof("Attempt %d: failed to describe eip %v: %v\n", i, eip, err)
 		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, fmt.Errorf("Unable to find EIP %v\n", eip)
+	return nil, fmt.Errorf("Unable to find EIP %v", eip)
 }
 
 // createLoadBalancer creates a loadbalancer with given eip, with retry.
@@ -373,7 +371,7 @@ func (an *Anchnet) createLoadBalancer(name string, eip string) (*anchnet_client.
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, fmt.Errorf("Unable to create loadbalancer %v with eip %v\n", name, eip)
+	return nil, fmt.Errorf("Unable to create loadbalancer %v with eip %v", name, eip)
 }
 
 // deleteLoadbalancer deletes a loadbalancer and its eips, with retry.
@@ -393,7 +391,7 @@ func (an *Anchnet) deleteLoadBalancer(lbID string, eips []string) (*anchnet_clie
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, fmt.Errorf("Unable to delete loadbalancer %v with eips %v\n", lbID, eips)
+	return nil, fmt.Errorf("Unable to delete loadbalancer %v with eips %v", lbID, eips)
 }
 
 // searchLoadBalancer tries to find loadbalancer by name.
@@ -449,7 +447,7 @@ func (an *Anchnet) addLoadBalancerListeners(lbID string, port int) (*anchnet_cli
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, fmt.Errorf("Unable to add listener for loadbalancer %v\n", lbID)
+	return nil, fmt.Errorf("Unable to add listener for loadbalancer %v", lbID)
 }
 
 // addLoadBalancerBackends creates and adds a backend to given listener, with retry.
@@ -473,7 +471,7 @@ func (an *Anchnet) addLoadBalancerBackends(listenerID string, backends []anchnet
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, fmt.Errorf("Unable to add backends %+v to listener %v\n", backends, listenerID)
+	return nil, fmt.Errorf("Unable to add backends %+v to listener %v", backends, listenerID)
 }
 
 // updateLoadBalancer updates changes to loadbalancer, with retry.
@@ -492,7 +490,7 @@ func (an *Anchnet) updateLoadBalancer(lbID string) (*anchnet_client.UpdateLoadBa
 		}
 		time.Sleep(RetryIntervalOnError)
 	}
-	return nil, fmt.Errorf("Unable to update loadbalancer %v\n", lbID)
+	return nil, fmt.Errorf("Unable to update loadbalancer %v", lbID)
 }
 
 // waitForLoadBalancer waits for loadbalancer to desired status.
@@ -594,5 +592,24 @@ func (an *Anchnet) createLBSecurityGroup(name string, ports []*api.ServicePort, 
 		time.Sleep(RetryIntervalOnError)
 	}
 
-	return nil, fmt.Errorf("Unable to create security group %v for loadbalancer %v\n", name, lbID)
+	return nil, fmt.Errorf("Unable to create security group %v for loadbalancer %v", name, lbID)
+}
+
+// deleteSecurityGroup deletes a security group.
+func (an *Anchnet) deleteSecurityGroup(sgID string) (*anchnet_client.DeleteSecurityGroupsResponse, error) {
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.DeleteSecurityGroupsRequest{
+			SecurityGroupIDs: []string{sgID},
+		}
+		var delete_response anchnet_client.DeleteSecurityGroupsResponse
+		err := an.client.SendRequest(request, &delete_response)
+		if err == nil {
+			glog.Infof("Deleted security group %v", sgID)
+			return &delete_response, nil
+		} else {
+			glog.Infof("Attempt %d: failed to delete security group: %v\n", i, err)
+		}
+		time.Sleep(RetryIntervalOnError)
+	}
+	return nil, fmt.Errorf("Unable to delete security group %v", sgID)
 }

@@ -19,17 +19,17 @@
 # cluster executor.
 
 # Unique ID of the cluster.
-export CLUSTER_ID="default"
+export CLUSTER_ID=${CLUSTER_ID-"default"}
 
 # Define number of nodes (minions). There will be only one master.
-export NUM_MINIONS=1
+export NUM_MINIONS=${NUM_MINIONS-1}
 
 # The memory size of master node (in MB).
-export MASTER_MEM=1024
+export MASTER_MEM=${MASTER_MEM-1024}
 # The number of CPUs of the master.
-export MASTER_CPU_CORES=1
+export MASTER_CPU_CORES=${MASTER_CPU_CORES-1}
 
 # The memory size of master node (in MB).
-export NODE_MEM=1024
+export NODE_MEM=${NODE_MEM-1024}
 # The number of CPUs of a node.
-export NODE_CPU_CORES=1
+export NODE_CPU_CORES=${NODE_CPU_CORES-1}

@@ -252,6 +252,9 @@ func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
 	}
 
 	sg_delete_response, err := an.deleteSecurityGroup(sg_response.ItemSet[0].SecurityGroupID)
+	if err != nil {
+		return err
+	}
 	err = an.waitJobStatus(sg_delete_response.JobID, anchnet_client.JobStatusSuccessful)
 	if err != nil {
 		return err
@@ -279,7 +282,7 @@ func (an *Anchnet) waitJobStatus(jobID string, status anchnet_client.JobStatus) 
 		} else {
 			glog.Infof("Attempt %d: failed to wait job status: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnWait)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnWait)
 	}
 	return fmt.Errorf("Time out waiting for job %v", jobID)
 }
@@ -308,7 +311,7 @@ func (an *Anchnet) allocateEIP() (*anchnet_client.AllocateEipsResponse, error) {
 		} else {
 			glog.Infof("Attempt %d: failed to allocate eip: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to allocate eip")
 }
@@ -326,7 +329,7 @@ func (an *Anchnet) releaseEIP(eip string) (*anchnet_client.ReleaseEipsResponse, 
 		} else {
 			glog.Infof("Attempt %d: failed to release eip: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to release eip")
 }
@@ -347,7 +350,7 @@ func (an *Anchnet) describeEip(eip string) (*anchnet_client.DescribeEipsResponse
 			}
 		}
 		glog.Infof("Attempt %d: failed to describe eip %v: %v\n", i, eip, err)
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to find EIP %v", eip)
 }
@@ -369,7 +372,7 @@ func (an *Anchnet) createLoadBalancer(name string, eip string) (*anchnet_client.
 		} else {
 			glog.Infof("Attempt %d: failed to create loadbalancer: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to create loadbalancer %v with eip %v", name, eip)
 }
@@ -389,7 +392,7 @@ func (an *Anchnet) deleteLoadBalancer(lbID string, eips []string) (*anchnet_clie
 		} else {
 			glog.Infof("Attempt %d: failed to delete loadbalancer: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to delete loadbalancer %v with eips %v", lbID, eips)
 }
@@ -412,7 +415,7 @@ func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.Descr
 		} else {
 			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, search_word, err)
 		}
-		time.Sleep(RetryIntervalOnWait)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnWait)
 	}
 	return nil, false, fmt.Errorf("Unable to get loadbalancer %v", search_word)
 }
@@ -445,7 +448,7 @@ func (an *Anchnet) addLoadBalancerListeners(lbID string, port int) (*anchnet_cli
 		} else {
 			glog.Infof("Attempt %d: failed to add listener: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to add listener for loadbalancer %v", lbID)
 }
@@ -469,7 +472,7 @@ func (an *Anchnet) addLoadBalancerBackends(listenerID string, backends []anchnet
 		} else {
 			glog.Infof("Attempt %d: failed to add backend: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to add backends %+v to listener %v", backends, listenerID)
 }
@@ -488,7 +491,7 @@ func (an *Anchnet) updateLoadBalancer(lbID string) (*anchnet_client.UpdateLoadBa
 		} else {
 			glog.Infof("Attempt %d: failed to update loadbalancer %v: %v\n", i, lbID, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to update loadbalancer %v", lbID)
 }
@@ -515,7 +518,7 @@ func (an *Anchnet) waitForLoadBalancer(lbID string, status anchnet_client.LoadBa
 		} else {
 			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, lbID, err)
 		}
-		time.Sleep(RetryIntervalOnWait)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnWait)
 	}
 	return fmt.Errorf("Loadbalancer %v is not in desired %v status after timeout", lbID, status)
 }
@@ -538,7 +541,7 @@ func (an *Anchnet) searchSecurityGroup(search_word string) (*anchnet_client.Desc
 		} else {
 			glog.Infof("Attempt %d: failed to get security group %v: %v\n", i, search_word, err)
 		}
-		time.Sleep(RetryIntervalOnWait)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnWait)
 	}
 	return nil, false, fmt.Errorf("Unable to get security group %v", search_word)
 }
@@ -573,7 +576,7 @@ func (an *Anchnet) createLBSecurityGroup(name string, ports []*api.ServicePort, 
 		} else {
 			glog.Infof("Attempt %d: failed to create security group: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 
 	var lb_response anchnet_client.ModifyLoadBalancerAttributesResponse
@@ -589,7 +592,7 @@ func (an *Anchnet) createLBSecurityGroup(name string, ports []*api.ServicePort, 
 		} else {
 			glog.Infof("Attempt %d: failed to apply security group: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 
 	return nil, fmt.Errorf("Unable to create security group %v for loadbalancer %v", name, lbID)
@@ -609,7 +612,7 @@ func (an *Anchnet) deleteSecurityGroup(sgID string) (*anchnet_client.DeleteSecur
 		} else {
 			glog.Infof("Attempt %d: failed to delete security group: %v\n", i, err)
 		}
-		time.Sleep(RetryIntervalOnError)
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to delete security group %v", sgID)
 }

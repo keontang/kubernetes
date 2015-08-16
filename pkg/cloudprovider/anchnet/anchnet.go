@@ -29,19 +29,18 @@ import (
 const (
 	ProviderName = "anchnet"
 
-	// Number of retries when getting errors while accessing anchnet, e.g. request too frequent.
+	// Number of retries when getting errors while accessing anchnet, e.g.
+	// request too frequent.
 	RetryCountOnError = 5
-	// Interval between two retries for the above situation.
-	RetryIntervalOnError = 4 * time.Second
+	// Initial interval between two retries for the above situation. Following
+	// retry interval will be doubled.
+	RetryIntervalOnError = 2 * time.Second
 
 	// Number of retries when waitting on resources to become desired status.
 	RetryCountOnWait = 60
-	// Interval between two retries for the above situation.
-	RetryIntervalOnWait = 4 * time.Second
-
-	// TODO: This is used to find node security group id, and to update node security group for
-	// node port. Find a better way to access the information.
-	NodeSecurityGroupName = "node-security-group"
+	// Initial interval between two retries for the above situation. Following
+	// retry interval will be doubled.
+	RetryIntervalOnWait = 2 * time.Second
 )
 
 // TODO: Create cache layer to reduce calls to anchnet.

@@ -32,7 +32,7 @@ sed -i "" "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover g
 
 
 # Restore 'github.com' files.
-sed -i "" "s|http://43.254.52.18:9999/etcd/etcd-v2.0.0-linux-amd64.tar.gz|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
+sed -i "" "s|http://internal-get.caicloud.io/etcd/etcd-v2.0.0-linux-amd64.tar.gz|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
 
 

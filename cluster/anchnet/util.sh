@@ -23,26 +23,57 @@ set +o errexit
 KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 
 # KUBE_UP_MODE defines how do we run kube-up, there are currently three modes:
-# - "dev": when running in dev mode, no machine will be created. Developer is
-#     responsible to specify the instance IDs, eip IDs, etc.
-# - "image": when using existing-image, it is assumed that base image has been
-#     created in anchnet and has binaries pre-installed, see below.
-# - "full": when running in full mode, binaries will be copied to the instances.
-#     This can be slow depending on connections between local and remote host.
+# - "full": In full mode, everything will be built from scratch. Following is
+#   the major steps in full mode:
+#   1. Clean up the repository and rebuild everything, including client and
+#      server kube binaries;
+#   2. Fetch non-kube binaries, e.g. etcd, flannel, to localhost. There binaries
+#      are hosted at "internal-get.caicloud.io". The official releases are hosted
+#      at github.com; however, to make full-mode faster, we download them and
+#      host them separately at .
+#   3. Create instances from anchnet's system image, e.g. trustysrvx64c; then
+#      copy all binaries to these instances [can be very slow depending on
+#      internet connection].
+#   4. Install docker and bridge-utils. Install docker from get.docker.io is
+#      slow, so we host our own ubuntu apt mirror on "internal-get.caicloud.io".
+#   5. Create other anchnet resources, configure kubernetes, etc. These are
+#      the same with other modes.
+#
+# - "tarball": In tarball mode, we fetch kube binaries, non-kube binaries as
+#   a tarball, instead of building and copying it from localhost. The tarball
+#   size is around 200MB, so we host it on qiniu.com, which has better download
+#   speed than "internal-get.caicloud.io". (internal-get.caicloud.io is just
+#   a file server, while qiniu.com provides a whole stack of storage solution).
+#   Tarball mode is faster than full mode, but it's only useful for release,
+#   since we can only fetch pre-uploaded tarballs. Also, using qiniu.com will
+#   incur charges, though not too much.
+#
+# - "image": In image mode, we use pre-built custom image. It is assumed that
+#   the custom image has binaries and packages installed, i.e. kube binaries,
+#   non-kube binaries, docker, bridge-utils, etc. Image mode is the fastest of
+#   the above three modes, but requires we pre-built the image and requires the
+#   image to be accessible when running kube-up. This is currently not possible
+#   in anchnet, since every account can only see its own custom image.
+#
+# - "dev": In dev mode, no machine will be created. Developer is responsible to
+#   specify the instance IDs, eip IDs, etc. This is primarily used for debugging.
 KUBE_UP_MODE=${KUBE_UP_MODE:-"full"}
 
-# The base image used to create master and node instance in image mode. This image
-# is created from scripts like 'image-from-devserver.sh', which install caicloud-k8s
-# release binaries, docker, etc. This approach avoids downloading/installing when
-# bootstrapping a cluster, which saves a lot of time. For now, the image must be
-# created from ubuntu, and has:
-#   ~/kube/master - Directory containing all master binaries
-#   ~/kube/node - Directory containing all node binaries
-# Preferrably, it also has following packages installed:
-#   Installed docker
-#   Installed bridge-utils
-# Note when running in full mode, we use base image from anchnet.
+# Non-kube binaries versions
+# == This is Full Mode specific parameter.
+FLANNEL_VERSION=${FLANNEL_VERSION-0.4.0}
+ETCD_VERSION=${ETCD_VERSION-v2.0.12}
+
+# Package version.
+# == This is Full and Tarball Mode specific parameter.
+DOCKER_VERSION=${DOCKER_VERSION-1.7.1}
+
+# The base image used to create master and node instance in image mode. This
+# image is created from scripts like 'image-from-devserver.sh'.
+# == This is Image Mode specific parameter.
 INSTANCE_IMAGE=${INSTANCE_IMAGE:-"img-C0SA7DD5"}
+
+# Instance user and password.
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
@@ -51,16 +82,12 @@ KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 IP_GROUP=${IP_GROUP:-"eipg-00000000"}
 
 # Namespace used to create cluster wide services.
-SYSTEM_NAMESPACE=kube-system
+SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
 
 # To indicate if the execution status needs to be reported back to Caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"}
-
-# Package versions
-DOCKER_VERSION=1.7.1
-FLANNEL_VERSION=0.4.0
-ETCD_VERSION=v2.0.12
+source "${KUBE_ROOT}/cluster/anchnet/executor_service.sh"
 
 # Daocloud registry accelerator. Before implementing our own registry (or registry
 # mirror), use this accelerator to make pulling image faster. The variable is a
@@ -80,8 +107,6 @@ BASE_IMAGE="trustysrvx64c"
 if [[ "${KUBE_UP_MODE}" == "full" ]]; then
   INSTANCE_IMAGE=${BASE_IMAGE}  # Use bare base image from anchnet in full mode.
 fi
-
-source "${KUBE_ROOT}/cluster/anchnet/executor_service.sh"
 
 # Get all cluster configuration parameters from config-default and user-config.
 # config-default is mostly static information configured by caicloud admin, like
@@ -145,12 +170,6 @@ function verify-prereqs {
 
 # Step2 of cluster bootstrapping: create all machines and provision them.
 function kube-up {
-  # Create KUBE_INSTANCE_PASSWORD, which will be used to login into anchnet instances.
-  if false; then
-    # Disable to save some typing.
-    prompt-instance-password
-  fi
-
   # Make sure we have a staging area.
   ensure-temp-dir
 
@@ -195,12 +214,7 @@ function kube-up {
   create-node-internal-ips
   create-etcd-initial-cluster
 
-  # TODO: Add retry logic to install instances and provision instances.
-
-  # Now start installing master/nodes all together.
-  install-instances
-
-  # Start master/nodes all together.
+  # Configure master/nodes instances and start kubernetes.
   provision-instances
 
   # After everything's done, we re-apply firewall to make sure it works.
@@ -1082,15 +1096,72 @@ EOF
 }
 
 
+# Configure master/nodes and start them concurrently.
+#
+# TODO: Add retry logic to install instances and provision instances.
+#
+# Assumed vars:
+#   KUBE_INSTANCE_PASSWORD
+#   MASTER_EIP
+#   NODE_EIPS
+function provision-instances {
+  install-configurations
+
+  local pids=""
+  echo "+++++ Start provisioning master"
+  # Call master-start.sh to start master.
+  ${EXPECT_CMD} <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+  pids="$pids $!"
+
+  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
+  local i=0
+  for node_eip in "${node_eip_arr[@]}"; do
+    echo "+++++ Start provisioning node-${i}"
+    # Call node${i}-start.sh to start node. Note we must run expect in background;
+    # otherwise, there will be a deadlock: node0-start.sh keeps retrying for etcd
+    # connection (for docker-flannel configuration) because other nodes aren't
+    # ready. If we run expect in foreground, we can't start other nodes; thus node0
+    # will wait until timeout.
+    ${EXPECT_CMD} <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node${i}-start.sh"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+    pids="$pids $!"
+    i=$(($i+1))
+  done
+
+  echo "Wait for all instances to be provisioned..."
+  wait $pids
+  echo "All instances have been provisioned..."
+}
+
+
 # The method assumes instances are running. It does the following things:
 # 1. Copies master component configurations to working directory (~/kube).
 # 2. Create a master-start.sh file which applies the configs, setup network, and
-#   starts k8s master. The base image we use have the binaries in place.
+#   starts k8s master.
 # 3. Copies node component configurations to working directory (~/kube).
 # 4. Create a node${i}-start.sh file which applies the configs, setup network, and
-#   starts k8s node. The base image we use have the binaries in place.
-#
-# This is a long method, but it helps use do the installation concurrently.
+#   starts k8s node.
 #
 # Assumed vars:
 #   KUBE_ROOT
@@ -1107,10 +1178,10 @@ EOF
 #   DNS_SERVER_IP
 #   DNS_DOMAIN
 #   POD_INFRA_CONTAINER
-function install-instances {
+function install-configurations {
   local pids=""
 
-  echo "++++++++++ Start installing master"
+  echo "++++++++++ Start installing master configurations ..."
   # Create master startup script.
   (
     echo "#!/bin/bash"
@@ -1186,7 +1257,7 @@ function install-instances {
   echo "Use daocloud registry mirror ${reg_mirror}"
 
   for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    echo "+++++++++ Start installing node-${i}"
+    echo "+++++++++ Start installing node-${i} configurations ..."
     local node_internal_ip=${node_iip_arr[${i}]}
     local node_eip=${node_eip_arr[${i}]}
     local node_instance_id=${node_instance_arr[${i}]}
@@ -1249,65 +1320,9 @@ function install-instances {
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for all instances to be installed ... "
+  echo -n "++++++++++ Waiting for all configurations to be installed ... "
   wait $pids
   echo "Done"
-}
-
-
-# Start master/nodes concurrently.
-#
-# Assumed vars:
-#   KUBE_INSTANCE_PASSWORD
-#   MASTER_EIP
-#   NODE_EIPS
-function provision-instances {
-  local pids=""
-
-  echo "+++++ Start provisioning master"
-  # Call master-start.sh to start master.
-  ${EXPECT_CMD} <<EOF &
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh"
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-  pids="$pids $!"
-
-  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
-  local i=0
-  for node_eip in "${node_eip_arr[@]}"; do
-    echo "+++++ Start provisioning node-${i}"
-    # Call node${i}-start.sh to start node. Note we must run expect in background;
-    # otherwise, there will be a deadlock: node0-start.sh keeps retrying for etcd
-    # connection (for docker-flannel configuration) because other nodes aren't
-    # ready. If we run expect in foreground, we can't start other nodes; thus node0
-    # will wait until timeout.
-    ${EXPECT_CMD} <<EOF &
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node${i}-start.sh"
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-    pids="$pids $!"
-    i=$(($i+1))
-  done
-
-  echo "Wait for all instances to be provisioned..."
-  wait $pids
-  echo "All instances have been provisioned..."
 }
 
 
@@ -1658,17 +1673,16 @@ EOF
 #   KUBE_ROOT
 function test-build-release {
   # In e2e test, we will run in full mode, i.e. build release and copy binaries,
-  # so we do not build release here.
+  # so we do not need to build release here.  Note also, e2e test will test client
+  # & server version match. Server binary uses dockerized build; however, developer
+  # may use local kubectl (_output/local/bin/kubectl), so we do a local build here.
   echo "Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
-  # e2e test will test client & server version match. Server binary uses dockerized
-  # build; however, developer may use local kubectl (_output/local/bin/kubectl), so
-  # we do a local build here.
   (
     cd ${KUBE_ROOT}
     make clean
+    hack/build-go.sh
     cd -
   )
-  ${KUBE_ROOT}/hack/build-go.sh
 }
 
 

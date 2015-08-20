@@ -127,7 +127,7 @@ function verify-prereqs {
   if [[ "$(which kubectl)" == "" ]]; then
     (
       cd ${KUBE_ROOT}
-      build/run.sh hack/build-go.sh
+      hack/build-go.sh
       if [[ "$?" != "0" ]]; then
         echo "Can't find kubectl binary in PATH, please fix and retry."
         exit 1
@@ -1002,11 +1002,11 @@ function install-kube-binaries {
     # Fetch etcd and flanneld.
     (
       cd ${KUBE_TEMP}
-      curl -L -O http://get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz
+      curl -L -O http://internal-get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz
       tar xzf etcd-$ETCD_VERSION-linux-amd64.tar.gz
       mv etcd-$ETCD_VERSION-linux-amd64/etcd .
       mv etcd-$ETCD_VERSION-linux-amd64/etcdctl .
-      curl -L -O http://get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz
+      curl -L -O http://internal-get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz
       tar xzf flannel-$FLANNEL_VERSION-linux-amd64.tar.gz
       mv flannel-$FLANNEL_VERSION/flanneld .
       cd -

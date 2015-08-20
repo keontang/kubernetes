@@ -246,9 +246,9 @@ function config-hostname {
 function install-packages {
   if [[ "$(which docker)" == "" ]]; then
     # Adding key to ubuntu.com is not stable (due to China network), so we just
-    # trust our own source.
-    # $ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
-    sudo sh -c "echo deb [arch=amd64] http://get.caicloud.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
+    # trust our own source, which is mirrored from docker.io.
+    # $ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys D8576A8BA88D21E9
+    sudo sh -c "echo deb [arch=amd64] http://internal-get.caicloud.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
     sudo apt-get update
     sudo apt-get install --allow-unauthenticated -y lxc-docker-$1
     sudo usermod -a -G docker $USER

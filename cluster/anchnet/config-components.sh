@@ -206,7 +206,8 @@ function config-docker-net {
 
   source /run/flannel/subnet.env
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
-       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$2\" > /etc/default/docker
+       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$2 \
+       --insecure-registry=internal-registry.caicloud.io\" > /etc/default/docker
   sudo service docker start
 }
 

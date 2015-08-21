@@ -41,7 +41,7 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #
 # - "tarball": In tarball mode, we fetch kube binaries, non-kube binaries as
 #   a tarball, instead of building and copying it from localhost. The tarball
-#   size is around 200MB, so we host it on qiniu.com, which has better download
+#   size is around 40MB, so we host it on qiniu.com, which has better download
 #   speed than "internal-get.caicloud.io". (internal-get.caicloud.io is just
 #   a file server, while qiniu.com provides a whole stack of storage solution).
 #   Tarball mode is faster than full mode, but it's only useful for release,
@@ -70,7 +70,7 @@ DOCKER_VERSION=${DOCKER_VERSION:-1.7.1}
 
 # Tarball URL.
 # == This is Tarball mode specific parameter.
-TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar"}
+TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar.gz"}
 
 # The base image used to create master and node instance in image mode. This
 # image is created from scripts like 'image-from-devserver.sh'.
@@ -209,13 +209,21 @@ function kube-up {
     create-firewall
   fi
 
+  local pids=""
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
-    install-kube-binaries
+    install-kube-binaries &
+    pids="$pids $!"
+    install-packages &
+    pids="$pids $!"
   fi
 
   if [[ "${KUBE_UP_MODE}" = "tarball" ]]; then
-    install-tarball-binaries
+    install-tarball-binaries &
+    pids="$pids $!"
+    install-packages &
+    pids="$pids $!"
   fi
+  wait $pids
 
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
@@ -345,11 +353,10 @@ expect {
 EOF
       pids="$pids $!"
     else
-      index=${name#"${CLUSTER_ID}-node-"}
       expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${eip} "sudo ./kube/node${index}-start.sh"
+  ${INSTANCE_USER}@${eip} "sudo ./kube/node-start.sh"
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -362,9 +369,9 @@ EOF
     fi
   done
 
-  echo "Wait for all instances to be provisioned..."
+  echo "Wait for all instances to be provisioned ..."
   wait $pids
-  echo "All instances have been provisioned..."
+  echo "All instances have been provisioned ..."
 }
 
 
@@ -632,10 +639,6 @@ eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 
 # Create node instances from anchnet.
 #
-# TODO: Create nodes at once (In anchnet API, it's possible to create N
-#   instances at once). However, all instances will have the same name,
-#   is it acceptable?
-#
 # Assumed vars:
 #   NUM_MINIONS
 #   NODE_MEM
@@ -647,19 +650,20 @@ eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 #   NODE_EIP_IDS - comma separated string of instance external IP IDs
 #   NODE_EIPS - comma separated string of instance external IPs
 function create-node-instances {
-  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    echo "++++++++++ Creating kubernetes ${i}th node from anchnet, node name: ${NODE_NAME_PREFIX}-${i} ..."
+  echo "++++++++++ Creating kubernetes nodes from anchnet, node name prefix: ${NODE_NAME_PREFIX} ..."
 
-    # Create a 'raw' node instance from anchnet, i.e. un-provisioned.
-    anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX}-${i} \
+  # Create 'raw' node instances from anchnet, i.e. un-provisioned.
+  anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
--c=${NODE_CPU_CORES} -g=${IP_GROUP}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
+-c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS}"
+  anchnet-wait-job ${ANCHNET_RESPONSE} 240 3
 
+  # Node name starts from 1.
+  for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
     # Get node information.
     local node_info=${ANCHNET_RESPONSE}
-    local node_instance_id=$(echo ${node_info} | json_val '["instances"][0]')
-    local node_eip_id=$(echo ${node_info} | json_val '["eips"][0]')
+    local node_instance_id=$(echo ${node_info} | json_val "['instances'][$(($i-1))]")
+    local node_eip_id=$(echo ${node_info} | json_val "['eips'][$(($i-1))]")
 
     # Check instance status and its external IP address.
     check-instance-status "${node_instance_id}"
@@ -847,8 +851,6 @@ function create-sdn-network {
 
 # Create firewall rules to allow certain traffic.
 #
-# TODO: This is slow, can we improve?
-#
 # Assumed vars:
 #   MASTER_SECURE_PORT
 #   MASTER_INSTANCE_ID
@@ -1003,9 +1005,9 @@ function cdr2mask {
 function create-etcd-initial-cluster {
   ETCD_INITIAL_CLUSTER="kubernetes-master=http://${MASTER_INTERNAL_IP}:2380"
   IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
-  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    node_internal_ip="${node_iip_arr[i]}"
-    ETCD_INITIAL_CLUSTER="$ETCD_INITIAL_CLUSTER,kubernetes-node${i}=http://${node_internal_ip}:2380"
+  for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
+    node_internal_ip="${node_iip_arr[$(($i-1))]}"
+    ETCD_INITIAL_CLUSTER="$ETCD_INITIAL_CLUSTER,kubernetes-node-${i}=http://${node_internal_ip}:2380"
   done
 }
 
@@ -1027,13 +1029,12 @@ function install-kube-binaries {
     # Fetch etcd and flanneld.
     (
       cd ${KUBE_TEMP}
-      curl -L -O http://internal-get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz
-      tar xzf etcd-$ETCD_VERSION-linux-amd64.tar.gz
-      mv etcd-$ETCD_VERSION-linux-amd64/etcd .
-      mv etcd-$ETCD_VERSION-linux-amd64/etcdctl .
-      curl -L -O http://internal-get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz
-      tar xzf flannel-$FLANNEL_VERSION-linux-amd64.tar.gz
-      mv flannel-$FLANNEL_VERSION/flanneld .
+      wget http://internal-get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz -O etcd-linux.tar.gz
+      mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
+      mv etcd-linux/etcd etcd-linux/etcdctl .
+      wget http://internal-get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz -O flannel-linux.tar.gz
+      mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
+      mv flannel-linux/flanneld .
       cd -
     )
 
@@ -1117,38 +1118,19 @@ function install-tarball-binaries {
   local pids=""
   echo "++++++++++ Start fetching and installing tarball ..."
 
-  ${EXPECT_CMD} <<EOF &
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "wget ${TARBALL_URL} -O caicloud-kube.tar && tar xvf caicloud-kube.tar && \
-  mkdir -p ~/kube/master && \
-  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
-  caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
-  mkdir -p ~/kube/node && \
-  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
-  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node"
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-  pids="$pids $!"
-
-  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
-  local i=0
-  for node_eip in "${node_eip_arr[@]}"; do
+  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
+  IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
+  for instance_eip in ${instance_eip_arr[*]}; do
     ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_eip} "wget ${TARBALL_URL} -O caicloud-kube.tar && tar xvf caicloud-kube.tar && \
-  mkdir -p ~/kube/master && \
-  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
+  ${INSTANCE_USER}@${instance_eip} "\
+wget ${TARBALL_URL} -O caicloud-kube.tar.gz && tar xvzf caicloud-kube.tar.gz && \
+mkdir -p ~/kube/master && \
+cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
   caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
-  mkdir -p ~/kube/node && \
-  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
+mkdir -p ~/kube/node && \
+cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
   caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node"
 expect {
   "*?assword*" {
@@ -1158,14 +1140,49 @@ expect {
   eof {}
 }
 EOF
-
     pids="$pids $!"
-    i=$(($i+1))
   done
 
   echo "Wait for all instances to fetch and install tarball ..."
   wait $pids
   echo "All instances finished installing tarball ..."
+}
+
+
+# Install necessary packages for running kubernetes.
+#
+# Assumed vars:
+#   MASTER_EIP
+#   NODE_IPS
+function install-packages {
+  local pids=""
+  echo "++++++++++ Start installing packages ..."
+
+  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
+  IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
+  for instance_eip in ${instance_eip_arr[*]}; do
+    ${EXPECT_CMD} <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${instance_eip} "\
+sudo sh -c 'echo deb \[arch=amd64\] http://internal-get.caicloud.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list' && \
+sudo apt-get update && \
+sudo apt-get install --allow-unauthenticated -y lxc-docker-$DOCKER_VERSION && \
+sudo apt-get install bridge-utils"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+    pids="$pids $!"
+  done
+
+  echo "Wait for all instances to install packages ..."
+  wait $pids
+  echo "All instances finished installing packages ..."
 }
 
 
@@ -1197,11 +1214,10 @@ expect {
 EOF
   pids="$pids $!"
 
+  echo "++++++++++ Start provisioning nodes ..."
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
-  local i=0
   for node_eip in "${node_eip_arr[@]}"; do
-    echo "++++++++++ Start provisioning node-${i} ..."
-    # Call node${i}-start.sh to start node. Note we must run expect in background;
+    # Call node-start.sh to start node. Note we must run expect in background;
     # otherwise, there will be a deadlock: node0-start.sh keeps retrying for etcd
     # connection (for docker-flannel configuration) because other nodes aren't
     # ready. If we run expect in foreground, we can't start other nodes; thus node0
@@ -1209,7 +1225,7 @@ EOF
     ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node${i}-start.sh"
+  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node-start.sh"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1219,7 +1235,6 @@ expect {
 }
 EOF
     pids="$pids $!"
-    i=$(($i+1))
   done
 
   echo "Wait for all instances to be provisioned ..."
@@ -1233,7 +1248,7 @@ EOF
 # 2. Create a master-start.sh file which applies the configs, setup network, and
 #   starts k8s master.
 # 3. Copies node component configurations to working directory (~/kube).
-# 4. Create a node${i}-start.sh file which applies the configs, setup network, and
+# 4. Create a node-start.sh file which applies the configs, setup network, and
 #   starts k8s node.
 #
 # Assumed vars:
@@ -1263,7 +1278,6 @@ function install-configurations {
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     grep -v "^#" "${USER_CONFIG_FILE}"
     echo ""
-    echo "install-packages ${DOCKER_VERSION}"
     echo "config-hostname ${MASTER_INSTANCE_ID}"
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
@@ -1329,26 +1343,27 @@ function install-configurations {
   reg_mirror=${reg_mirror_arr[$(( ${RANDOM} % 4 ))]}
   echo "Use daocloud registry mirror ${reg_mirror}"
 
-  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-    echo "+++++++++ Start installing node-${i} configurations ..."
-    local node_internal_ip=${node_iip_arr[${i}]}
-    local node_eip=${node_eip_arr[${i}]}
-    local node_instance_id=${node_instance_arr[${i}]}
+  for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
+    index=$(($i-1))
+    echo "+++++++++ Start installing node-${index} configurations ..."
+    local node_internal_ip=${node_iip_arr[${index}]}
+    local node_eip=${node_eip_arr[${index}]}
+    local node_instance_id=${node_instance_arr[${index}]}
     # Create node startup script. Note we assume the base image has necessary
     # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
     # master startup script.
+    mkdir -p ${KUBE_TEMP}/node${i}
     (
       echo "#!/bin/bash"
       echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
       echo ""
-      echo "install-packages ${DOCKER_VERSION}"
       echo "config-hostname ${node_instance_id}"
       # Create component options. Note in 'create-kubelet-opts', we use
       # ${node_instance_id} as hostname override for each node - see
       # 'pkg/cloudprovider/anchnet/anchnet_instances.go' for how this works.
-      echo "create-etcd-opts kubernetes-node${i} ${node_internal_ip} \"${ETCD_INITIAL_CLUSTER}\""
+      echo "create-etcd-opts kubernetes-node-${i} ${node_internal_ip} \"${ETCD_INITIAL_CLUSTER}\""
       echo "create-kubelet-opts ${node_instance_id} ${node_internal_ip} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
       echo "create-kube-proxy-opts \"${MASTER_INTERNAL_IP}\""
       echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
@@ -1378,14 +1393,14 @@ function install-configurations {
       echo "sudo service etcd start"
       # Configure docker network to use flannel overlay.
       echo "config-docker-net ${FLANNEL_NET} ${reg_mirror}"
-    ) > "${KUBE_TEMP}/node${i}-start.sh"
-    chmod a+x ${KUBE_TEMP}/node${i}-start.sh
+    ) > "${KUBE_TEMP}/node${i}/node-start.sh"
+    chmod a+x ${KUBE_TEMP}/node${i}/node-start.sh
 
     # Copy node component configurations and startup script to node instance. The
     # base image we use have the binaries in place.
     scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
         ${KUBE_ROOT}/cluster/anchnet/node/* \
-        ${KUBE_TEMP}/node${i}-start.sh \
+        ${KUBE_TEMP}/node${i}/node-start.sh \
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
         ~/.anchnet/config \

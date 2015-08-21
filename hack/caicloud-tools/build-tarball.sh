@@ -30,11 +30,11 @@ build/run.sh hack/build-go.sh
 
 # Fetch non-kube binaries.
 wget http://internal-get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz -O etcd-linux.tar.gz
-mkdir etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
+mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
 wget http://internal-get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz -O flannel-linux.tar.gz
-mkdir flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
+mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
 
-# Make tarball
+# Make tarball.
 mkdir caicloud-kube
 cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kube-apiserver \
@@ -44,7 +44,7 @@ cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kubectl \
    _output/dockerized/bin/linux/amd64/kubelet \
    caicloud-kube
-tar cvf caicloud-kube-release-$CAICLOUD_VERSION.tar caicloud-kube
+tar cvzf caicloud-kube-release-$CAICLOUD_VERSION.tar.gz caicloud-kube
 rm -rf etcd-linux.tar.gz flannel-linux.tar.gz etcd-linux flannel-linux caicloud-kube
 
 cd -

@@ -30,7 +30,7 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #   2. Fetch non-kube binaries, e.g. etcd, flannel, to localhost. There binaries
 #      are hosted at "internal-get.caicloud.io". The official releases are hosted
 #      at github.com; however, to make full-mode faster, we download them and
-#      host them separately at .
+#      host them separately.
 #   3. Create instances from anchnet's system image, e.g. trustysrvx64c; then
 #      copy all binaries to these instances [can be very slow depending on
 #      internet connection].
@@ -61,12 +61,16 @@ KUBE_UP_MODE=${KUBE_UP_MODE:-"full"}
 
 # Non-kube binaries versions
 # == This is Full Mode specific parameter.
-FLANNEL_VERSION=${FLANNEL_VERSION-0.4.0}
-ETCD_VERSION=${ETCD_VERSION-v2.0.12}
+FLANNEL_VERSION=${FLANNEL_VERSION:-0.4.0}
+ETCD_VERSION=${ETCD_VERSION:-v2.0.12}
 
 # Package version.
 # == This is Full and Tarball Mode specific parameter.
-DOCKER_VERSION=${DOCKER_VERSION-1.7.1}
+DOCKER_VERSION=${DOCKER_VERSION:-1.7.1}
+
+# Tarball URL.
+# == This is Tarball mode specific parameter.
+TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar"}
 
 # The base image used to create master and node instance in image mode. This
 # image is created from scripts like 'image-from-devserver.sh'.
@@ -80,6 +84,9 @@ KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
 # 'eipg-00000000' is anchnet's own BGP.
 IP_GROUP=${IP_GROUP:-"eipg-00000000"}
+
+# Anchnet config path to use.
+ANCHNET_CONFIG_PATH=${ANCHNET_CONFIG_PATH:-"~/.kube/config"}
 
 # Namespace used to create cluster wide services.
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
@@ -104,8 +111,8 @@ ANCHNET_CMD="anchnet"
 CURL_CMD="curl"
 EXPECT_CMD="expect"
 BASE_IMAGE="trustysrvx64c"
-if [[ "${KUBE_UP_MODE}" == "full" ]]; then
-  INSTANCE_IMAGE=${BASE_IMAGE}  # Use bare base image from anchnet in full mode.
+if [[ "${KUBE_UP_MODE}" == "full" || "${KUBE_UP_MODE}" == "tarball" ]]; then
+  INSTANCE_IMAGE=${BASE_IMAGE} # Use base image from anchnet in full and tarball mode.
 fi
 
 # Get all cluster configuration parameters from config-default and user-config.
@@ -204,6 +211,10 @@ function kube-up {
 
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
     install-kube-binaries
+  fi
+
+  if [[ "${KUBE_UP_MODE}" = "tarball" ]]; then
+    install-tarball-binaries
   fi
 
   # Create certificates and credentials to secure cluster communication.
@@ -1096,6 +1107,68 @@ EOF
 }
 
 
+# Fetch tarball and install binaries to master and nodes, used in tarball mode.
+#
+# Assumed vars:
+#   INSTANCE_USER
+#   MASTER_EIP
+#   KUBE_INSTANCE_PASSWORD
+function install-tarball-binaries {
+  local pids=""
+  echo "++++++++++ Start fetching and installing tarball ..."
+
+  ${EXPECT_CMD} <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} "wget ${TARBALL_URL} -O caicloud-kube.tar && tar xvf caicloud-kube.tar && \
+  mkdir -p ~/kube/master && \
+  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
+  caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
+  mkdir -p ~/kube/node && \
+  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
+  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+  pids="$pids $!"
+
+  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
+  local i=0
+  for node_eip in "${node_eip_arr[@]}"; do
+    ${EXPECT_CMD} <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${node_eip} "wget ${TARBALL_URL} -O caicloud-kube.tar && tar xvf caicloud-kube.tar && \
+  mkdir -p ~/kube/master && \
+  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
+  caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
+  mkdir -p ~/kube/node && \
+  cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
+  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+
+    pids="$pids $!"
+    i=$(($i+1))
+  done
+
+  echo "Wait for all instances to fetch and install tarball ..."
+  wait $pids
+  echo "All instances finished installing tarball ..."
+}
+
+
 # Configure master/nodes and start them concurrently.
 #
 # TODO: Add retry logic to install instances and provision instances.
@@ -1108,7 +1181,7 @@ function provision-instances {
   install-configurations
 
   local pids=""
-  echo "+++++ Start provisioning master"
+  echo "++++++++++ Start provisioning master ..."
   # Call master-start.sh to start master.
   ${EXPECT_CMD} <<EOF &
 set timeout -1
@@ -1127,7 +1200,7 @@ EOF
   IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
   local i=0
   for node_eip in "${node_eip_arr[@]}"; do
-    echo "+++++ Start provisioning node-${i}"
+    echo "++++++++++ Start provisioning node-${i} ..."
     # Call node${i}-start.sh to start node. Note we must run expect in background;
     # otherwise, there will be a deadlock: node0-start.sh keeps retrying for etcd
     # connection (for docker-flannel configuration) because other nodes aren't
@@ -1149,9 +1222,9 @@ EOF
     i=$(($i+1))
   done
 
-  echo "Wait for all instances to be provisioned..."
+  echo "Wait for all instances to be provisioned ..."
   wait $pids
-  echo "All instances have been provisioned..."
+  echo "All instances have been provisioned ..."
 }
 
 

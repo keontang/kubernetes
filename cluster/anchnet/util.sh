@@ -267,6 +267,7 @@ function kube-up {
   # TODO: Fix hardcoded CONTEXT
   CONTEXT="anchnet_kubernetes"
   create-kubeconfig
+  kube-up-complete Y
 }
 
 

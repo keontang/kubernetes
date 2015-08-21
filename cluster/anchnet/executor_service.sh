@@ -134,29 +134,14 @@ function kube-up-complete {
 # Make an info log.
 #
 # Input:
-# $1 a code of InfoLogType in execution_report_collection.go
-#
-function log-info {
+# $1 a code of LogErrorType in execution_report_collection.go
+# $2 a message to log
+function report-log-entry {
   if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
     if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-      send-request-with-retry "$EXECUTOR_HOST_NAME/info?id=${EXECUTION_ID}&info_code=$1"
+      send-request-with-retry "$EXECUTOR_HOST_NAME/log?id=${EXECUTION_ID}&level=$1&msg=$2"
     else
-      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. log-info failed."
-    fi
-  fi
-}
-
-# Make an error log.
-#
-# Input:
-# $1 a code of ErrorLogType in execution_report_collection.go
-#
-function log-error {
-  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
-    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-      send-request-with-retry "$EXECUTOR_HOST_NAME/error?id=${EXECUTION_ID}&error_code=$1"
-    else
-      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. log-error failed."
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-log-entry failed."
     fi
   fi
 }
@@ -169,9 +154,8 @@ function log-error {
 # report-ips ip1,ip2 M
 # report-ips ip1,ip2 N
 # report-instance-ids master-instance,node-instance1,node-instance2 N
-# report-security-group-ids sg1,sg2
+# report-security-group-ids sg1,sg2 M
 # report-eip-ids eip1,eip2
 # kube-up-complete Y
 # kube-up-complete N
-# log-info 1
-# log-error 1
+# report-log-entry 1 msg

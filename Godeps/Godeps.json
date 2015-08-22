@@ -132,7 +132,7 @@
     },
     {
 			"ImportPath": "github.com/caicloud/anchnet-go",
-			"Rev": "cb8b8e93c17fd34e47541dba8b856f10d86b8991"
+			"Rev": "116c2253b023267921c9ac1565da7f3227bf889f"
 		},
 		{
 			"ImportPath": "github.com/boltdb/bolt",

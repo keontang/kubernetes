@@ -56,6 +56,8 @@ func getFlag(cmd *cobra.Command, flag string) *pflag.Flag {
 // getAnchnetClient returns the path to configuration file.
 func getAnchnetClient(cmd *cobra.Command) *anchnet.Client {
 	f := cmd.InheritedFlags().Lookup("config-path")
+	p := cmd.InheritedFlags().Lookup("project")
+
 	if f == nil {
 		fmt.Fprintln(os.Stderr, "flag accessed but not defined for command %s: config-path", cmd.Name())
 		os.Exit(1)
@@ -65,10 +67,22 @@ func getAnchnetClient(cmd *cobra.Command) *anchnet.Client {
 		path = anchnet.DefaultConfigPath()
 	}
 
+	if p == nil {
+		fmt.Fprintln(os.Stderr, "flag accessed but not defined for command %s: project", cmd.Name())
+		os.Exit(1)
+	}
+
 	auth, err := anchnet.LoadConfig(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error loading auth config: %v", err)
 		os.Exit(1)
+	}
+
+	// we only set ProjectId if --project is set because
+	// projectid can also be set in config file itself already
+	project := p.Value.String()
+	if project != "" {
+		auth.ProjectId = project
 	}
 
 	client, err := anchnet.NewClient(anchnet.DefaultEndpoint, auth)

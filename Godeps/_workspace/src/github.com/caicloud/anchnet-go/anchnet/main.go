@@ -17,8 +17,9 @@ func main() {
 		Use:   "anchnet",
 		Short: "anchnet is the command line interface for anchnet",
 	}
-	var config_path string
+	var config_path, project string
 	cmds.PersistentFlags().StringVarP(&config_path, "config-path", "", "", "configuration path for anchnet")
+	cmds.PersistentFlags().StringVarP(&project, "project", "", "", "anchnet sub account id")
 
 	addInstancesCLI(cmds, os.Stdout)
 	addEipsCLI(cmds, os.Stdout)
@@ -40,9 +41,10 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 			execRunInstance(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
-	var cpu, memory, bandwidth int
+	var cpu, memory, amount, bandwidth int
 	var passwd, image_id, ip_group string
 	cmdRunInstance.Flags().IntVarP(&cpu, "cpu", "c", 1, "Number of cpu cores")
+	cmdRunInstance.Flags().IntVarP(&amount, "amount", "a", 1, "Number of instances to run")
 	cmdRunInstance.Flags().IntVarP(&memory, "memory", "m", 1024, "Number of memory in MB")
 	cmdRunInstance.Flags().IntVarP(&bandwidth, "bandwidth", "b", 1, "Public network bandwidth, in MB/s")
 	cmdRunInstance.Flags().StringVarP(&passwd, "passwd", "p", "caicloud2015ABC", "Login password for new instance")

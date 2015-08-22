@@ -116,9 +116,10 @@ type Client struct {
 // is set to "ac1" which is the only zone supported.
 // http://cloud.51idc.com/help/api/public_params.html
 type RequestCommon struct {
-	Action string `json:"action,omitempty"`
-	Token  string `json:"token,omitempty"`
-	Zone   string `json:"zone,omitempty"`
+	Action  string `json:"action,omitempty"`
+	Token   string `json:"token,omitempty"`
+	Zone    string `json:"zone,omitempty"`
+	Project string `json:"project,omitempty"`
 }
 
 // ResponseCommon is the common response from all server responses. RetCode is returned
@@ -157,6 +158,7 @@ func (c *Client) SendRequest(request interface{}, response interface{}) error {
 	// Set request common parameters. Note 'ac1' is the only supported zone, so we set it here.
 	v := reflect.ValueOf(dst).Elem()
 	v.FieldByName("RequestCommon").FieldByName("Token").SetString(c.auth.PublicKey)
+	v.FieldByName("RequestCommon").FieldByName("Project").SetString(c.auth.ProjectId)
 	v.FieldByName("RequestCommon").FieldByName("Zone").SetString("ac1")
 	t := reflect.TypeOf(request).String()
 	found := false

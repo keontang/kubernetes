@@ -93,6 +93,10 @@ ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 # Namespace used to create cluster wide services.
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
 
+# Project id actually stands for an anchnet sub-account. If PROJECT_ID is
+# not set, all the subsequent anchnet calls will use the default account
+PROJECT_ID=${PROJECT_ID:-""}
+
 # To indicate if the execution status needs to be reported back to Caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"}
@@ -258,7 +262,7 @@ function kube-up {
 function kube-push {
   # Find all instances prefixed with CLUSTER_ID (caicloud convention - every instance
   # is prefixed with a unique CLUSTER_ID).
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID} --project=${PROJECT_ID}"
   local count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
 
   # Print instance information
@@ -383,7 +387,7 @@ EOF
 #   CLUSTER_ID
 function kube-down {
   # Find all instances prefixed with CLUSTER_ID.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID} --project=${PROJECT_ID}"
   count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     # Print and collect instance information
@@ -406,14 +410,14 @@ function kube-down {
     done
     echo
     # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
     anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
-    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS} --project=${PROJECT_ID}"
     anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
   # Find all vxnets prefixed with CLUSTER_ID.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_ID} --project=${PROJECT_ID}"
   count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
   # We'll also find default one - bug in anchnet.
   if [[ "${count}" != "" && "${count}" != "1" ]]; then
@@ -434,12 +438,12 @@ function kube-down {
     echo
 
     # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
     anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
   # Find all security group prefixed with CLUSTER_ID.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_ID} --project=${PROJECT_ID}"
   count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     echo -n "Found security group: "
@@ -456,7 +460,7 @@ function kube-down {
     echo
 
     # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
     anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
@@ -477,7 +481,7 @@ function detect-master {
   while true; do
     echo "Attempt $(($attempt+1)) to detect kube master"
     echo "$MASTER_NAME"
-    local eip=$(${ANCHNET_CMD} searchinstance $MASTER_NAME | json_val '["item_set"][0]["eip"]["eip_addr"]')
+    local eip=$(${ANCHNET_CMD} searchinstance $MASTER_NAME --project=${PROJECT_ID} | json_val '["item_set"][0]["eip"]["eip_addr"]')
     local exit_code="$?"
     echo ${eip}
     if [[ "${exit_code}" != "0" || ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
@@ -651,6 +655,27 @@ except:
 '
 }
 
+# Add a top level field in a json file. e.g.:
+# $ json_add_field key.json "privatekey" "456"
+# {"publickey": "123"} ==> {"publickey": "123", "privatekey": "456"}
+#
+# Input:
+#   $1 Absolute path to the json file
+#   $2 Key of the field to be added
+#   $3 Value of the field to be added
+#
+# Output:
+#   A top level field gets added to $1
+function json_add_field {
+  python -c '
+import json
+with open("'$1'") as f:
+  data = json.load(f)
+data.update({"'$2'": "'$3'"})
+with open("'$1'", "w") as f:
+  json.dump(data, f)
+'
+}
 
 # Create a single master instance from anchnet.
 #
@@ -674,7 +699,7 @@ function create-master-instance {
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${MASTER_MEM} \
--c=${MASTER_CPU_CORES} -g=${IP_GROUP}"
+-c=${MASTER_CPU_CORES} -g=${IP_GROUP} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
 
   # Get master information.
@@ -716,7 +741,7 @@ function create-node-instances {
   # Create 'raw' node instances from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
--c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS}"
+-c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE} 240 3
 
   # Node name starts from 1.
@@ -766,7 +791,7 @@ function check-instance-status {
   local attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to check for instance running"
-    local status=$(${ANCHNET_CMD} describeinstance $1 | json_val '["item_set"][0]["status"]')
+    local status=$(${ANCHNET_CMD} describeinstance $1 --project=${PROJECT_ID} | json_val '["item_set"][0]["status"]')
     if [[ ${status} != "running" ]]; then
       if (( attempt > 20 )); then
         echo
@@ -800,7 +825,7 @@ function get-ip-address-from-eipid {
   local attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to get eip"
-    local eip=$(${ANCHNET_CMD} describeeips $1 | json_val '["item_set"][0]["eip_addr"]')
+    local eip=$(${ANCHNET_CMD} describeeips $1 --project=${PROJECT_ID} | json_val '["item_set"][0]["eip_addr"]')
     # Test the return value roughly matches ipv4 format.
     if [[ ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
       if (( attempt > 20 )); then
@@ -892,7 +917,7 @@ function create-sdn-network {
   echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
-  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_ID}-${VXNET_NAME}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_ID}-${VXNET_NAME} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 
   # Get vxnet information.
@@ -902,7 +927,7 @@ function create-sdn-network {
   # Add all instances to the vxnet.
   local all_instance_ids="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
   echo "Add all instances (both master and nodes) to vxnet ${VXNET_ID} ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
@@ -927,7 +952,7 @@ function create-firewall {
   echo "++++++++++ Creating master security group rules ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_ID}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
---direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT}"
+--direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
 
   # Get security group information.
@@ -936,7 +961,7 @@ function create-firewall {
 
   # Now, apply all above changes.
   report-security-group-ids ${MASTER_SG_ID} M
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 
   #
@@ -947,7 +972,7 @@ function create-firewall {
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_ID}-${NODE_SG_NAME} \
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
---value1=22,30000,30000 --value2=22,32767,32767"
+--value1=22,30000,30000 --value2=22,32767,32767 --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
 
   # Get security group information.
@@ -956,15 +981,15 @@ function create-firewall {
 
   # Now, apply all above changes.
   report-security-group-ids ${NODE_SG_ID} N
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 }
 
 
 # Re-apply firewall to make sure firewall is properly set up.
 function ensure-firewall {
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID}"
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
 }
 
 
@@ -1354,7 +1379,7 @@ function install-configurations {
     # pleasant when running the script multiple times, we ignore errors.
     echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security 1>/dev/null 2>&1"
     echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security 1>/dev/null 2>&1"
-    echo "mv ~/kube/$(basename ${ANCHNET_CONFIG_FILE}) ~/kube/security/anchnet-config 1>/dev/null 2>&1"
+    echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"
     echo "sudo mkdir -p /etc/kubernetes"
@@ -1381,6 +1406,10 @@ function install-configurations {
   ) > "${KUBE_TEMP}/master-start.sh"
   chmod a+x ${KUBE_TEMP}/master-start.sh
 
+  # Add a project field in anchnet config file which will be used by k8s cloudprovider
+  cp ${ANCHNET_CONFIG_FILE} ${KUBE_TEMP}/anchnet-config
+  json_add_field ${KUBE_TEMP}/anchnet-config "projectid" "${PROJECT_ID}"
+
   # Copy master component configs and startup scripts to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/master/* \
@@ -1390,7 +1419,7 @@ function install-configurations {
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
-      ${ANCHNET_CONFIG_FILE} \
+      ${KUBE_TEMP}/anchnet-config \
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube &
   pids="$pids $!"
 
@@ -1432,7 +1461,7 @@ function install-configurations {
       echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${node_internal_ip} ${INTERNAL_IP_MASK}"
       # Organize files a little bit.
       echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/null 2>&1"
-      echo "mv ~/kube/$(basename ${ANCHNET_CONFIG_FILE}) ~/kube/security/anchnet-config 1>/dev/null 2>&1"
+      echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
       # Create the system directories used to hold the final data.
       echo "sudo mkdir -p /opt/bin"
       echo "sudo mkdir -p /etc/kubernetes"
@@ -1464,7 +1493,7 @@ function install-configurations {
         ${KUBE_TEMP}/node${i}/node-start.sh \
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
-        ${ANCHNET_CONFIG_FILE} \
+        ${KUBE_TEMP}/anchnet-config \
         "${INSTANCE_USER}@${node_eip}":~/kube &
     pids="$pids $!"
   done

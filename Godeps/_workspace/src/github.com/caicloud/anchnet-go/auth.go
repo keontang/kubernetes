@@ -14,6 +14,7 @@ import (
 type AuthConfiguration struct {
 	PublicKey  string `json:"publickey"`
 	PrivateKey string `json:"privatekey"`
+	ProjectId  string `json:"projectid"`
 }
 
 // LoadConfig loads API keys from given path.

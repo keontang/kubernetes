@@ -21,6 +21,7 @@ func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, 
 	}
 
 	cpu := getFlagInt(cmd, "cpu")
+	amount := getFlagInt(cmd, "amount")
 	memory := getFlagInt(cmd, "memory")
 	passwd := getFlagString(cmd, "passwd")
 	bandwidth := getFlagInt(cmd, "bandwidth")
@@ -43,6 +44,7 @@ func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, 
 					IPGroup:   anchnet.IPGroupType(ip_group),
 					Bandwidth: bandwidth,
 				},
+				Amount: amount,
 			},
 		},
 	}

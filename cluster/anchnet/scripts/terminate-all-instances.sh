@@ -56,7 +56,7 @@ for i in `seq 0 $(($count-1))`; do
 done
 
 # Executing commands.
-anchnet-exec-and-retry "anchnet terminateinstances ${ALL_INSTANCES}"
+anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES}"
 anchnet-wait-job ${ANCHNET_RESPONSE} 120 6
-anchnet-exec-and-retry "anchnet releaseeips ${ALL_EIPS}"
+anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS}"
 anchnet-wait-job ${ANCHNET_RESPONSE} 120 6

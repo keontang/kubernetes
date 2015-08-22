@@ -39,14 +39,15 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #   5. Create other anchnet resources, configure kubernetes, etc. These are
 #      the same with other modes.
 #
-# - "tarball": In tarball mode, we fetch kube binaries, non-kube binaries as
-#   a tarball, instead of building and copying it from localhost. The tarball
-#   size is around 40MB, so we host it on qiniu.com, which has better download
-#   speed than "internal-get.caicloud.io". (internal-get.caicloud.io is just
-#   a file server, while qiniu.com provides a whole stack of storage solution).
-#   Tarball mode is faster than full mode, but it's only useful for release,
-#   since we can only fetch pre-uploaded tarballs. Also, using qiniu.com will
-#   incur charges, though not too much.
+# - "tarball": In tarball mode, we fetch kube binaries and non-kube binaries
+#   as a single tarball, instead of building and copying it from localhost. The
+#   tarball size is around 40MB, so we host it on qiniu.com, which has better
+#   download speed than "internal-get.caicloud.io". (internal-get.caicloud.io
+#   is just a file server, while qiniu.com provides a whole stack of storage
+#   solution). Tarball mode is faster than full mode, but it's only useful for
+#   release, since we can only fetch pre-uploaded tarballs. Using qiniu.com will
+#   incur charges, so by default, we download tarball from caicloud; If speed
+#   matters, we can use qiniu.com by simply changing TARBALL_URL.
 #
 # - "image": In image mode, we use pre-built custom image. It is assumed that
 #   the custom image has binaries and packages installed, i.e. kube binaries,
@@ -70,7 +71,8 @@ DOCKER_VERSION=${DOCKER_VERSION:-1.7.1}
 
 # Tarball URL.
 # == This is Tarball mode specific parameter.
-TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar.gz"}
+# http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar.gz
+TARBALL_URL=${TARBALL_URL:-"http://internal-get.caicloud.io/caicloud/caicloud-kube-release-0.1.tar.gz"}
 
 # The base image used to create master and node instance in image mode. This
 # image is created from scripts like 'image-from-devserver.sh'.
@@ -85,8 +87,8 @@ KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 # 'eipg-00000000' is anchnet's own BGP.
 IP_GROUP=${IP_GROUP:-"eipg-00000000"}
 
-# Anchnet config path to use.
-ANCHNET_CONFIG_PATH=${ANCHNET_CONFIG_PATH:-"~/.kube/config"}
+# Anchnet config file to use.
+ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"~/.anchnet/config"}
 
 # Namespace used to create cluster wide services.
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
@@ -107,7 +109,7 @@ DAOCLOUD_ACCELERATOR="http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.i
 http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
 
 # Helper constants.
-ANCHNET_CMD="anchnet"
+ANCHNET_CMD="anchnet --config-path=${ANCHNET_CONFIG_FILE}"
 CURL_CMD="curl"
 EXPECT_CMD="expect"
 BASE_IMAGE="trustysrvx64c"
@@ -141,17 +143,17 @@ setup-anchnet-env
 
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
 function verify-prereqs {
-  if [[ "$(which ${ANCHNET_CMD})" == "" ]]; then
+  if [[ "$(which anchnet)" == "" ]]; then
     echo "Can't find anchnet cli binary in PATH, please fix and retry."
     echo "See https://github.com/caicloud/anchnet-go/tree/master/anchnet"
     exit 1
   fi
-  if [[ "$(which ${CURL_CMD})" == "" ]]; then
+  if [[ "$(which curl)" == "" ]]; then
     echo "Can't find curl in PATH, please fix and retry."
     echo "For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
     exit 1
   fi
-  if [[ "$(which ${EXPECT_CMD})" == "" ]]; then
+  if [[ "$(which expect)" == "" ]]; then
     echo "Can't find expect binary in PATH, please fix and retry."
     echo "For ubuntu/debian, if you have root access, run: sudo apt-get install expect."
     exit 1
@@ -167,9 +169,9 @@ function verify-prereqs {
       cd -
     )
   fi
-  if [[ ! -f ~/.anchnet/config  ]]; then
-    echo "Can't find anchnet config file in ~/.anchnet, please fix and retry."
-    echo "File ~/.anchnet/config contains credentials used to access anchnet API."
+  if [[ ! -f "${ANCHNET_CONFIG_FILE}" ]]; then
+    echo "Can't find anchnet config file ${ANCHNET_CONFIG_FILE}, please fix and retry."
+    echo "Anchnet config file contains credentials used to access anchnet API."
     exit 1
   fi
 }
@@ -1291,9 +1293,9 @@ function install-configurations {
     echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_INTERNAL_IP} ${INTERNAL_IP_MASK}"
     # The following lines organize file structure a little bit. To make it
     # pleasant when running the script multiple times, we ignore errors.
-    echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security 1>/dev/nul 2>&1"
-    echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security 1>/dev/nul 2>&1"
-    echo "mv ~/kube/config ~/kube/security/anchnet-config 1>/dev/nul 2>&1"
+    echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security 1>/dev/null 2>&1"
+    echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security 1>/dev/null 2>&1"
+    echo "mv ~/kube/$(basename ${ANCHNET_CONFIG_FILE}) ~/kube/security/anchnet-config 1>/dev/null 2>&1"
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"
     echo "sudo mkdir -p /etc/kubernetes"
@@ -1329,7 +1331,7 @@ function install-configurations {
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
-      ~/.anchnet/config \
+      ${ANCHNET_CONFIG_FILE} \
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube &
   pids="$pids $!"
 
@@ -1370,8 +1372,8 @@ function install-configurations {
       # Create network options.
       echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${node_internal_ip} ${INTERNAL_IP_MASK}"
       # Organize files a little bit.
-      echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/nul 2>&1"
-      echo "mv ~/kube/config ~/kube/security/anchnet-config 1>/dev/nul 2>&1"
+      echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/null 2>&1"
+      echo "mv ~/kube/$(basename ${ANCHNET_CONFIG_FILE}) ~/kube/security/anchnet-config 1>/dev/null 2>&1"
       # Create the system directories used to hold the final data.
       echo "sudo mkdir -p /opt/bin"
       echo "sudo mkdir -p /etc/kubernetes"
@@ -1403,7 +1405,7 @@ function install-configurations {
         ${KUBE_TEMP}/node${i}/node-start.sh \
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
-        ~/.anchnet/config \
+        ${ANCHNET_CONFIG_FILE} \
         "${INSTANCE_USER}@${node_eip}":~/kube &
     pids="$pids $!"
   done

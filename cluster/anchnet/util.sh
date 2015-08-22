@@ -88,7 +88,7 @@ KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 IP_GROUP=${IP_GROUP:-"eipg-00000000"}
 
 # Anchnet config file to use.
-ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"~/.anchnet/config"}
+ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 
 # Namespace used to create cluster wide services.
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
@@ -502,7 +502,7 @@ function prompt-instance-password {
 
 # Create ~/.ssh/id_rsa.pub if it doesn't exist.
 function ensure-pub-key {
-  if [[ ! -f ~/.ssh/id_rsa.pub ]]; then
+  if [[ ! -f $HOME/.ssh/id_rsa.pub ]]; then
     echo "+++++++++ Creating public key ..."
     ${EXPECT_CMD} <<EOF
 spawn ssh-keygen -t rsa -b 4096

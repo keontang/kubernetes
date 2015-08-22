@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# The script builds tarball containing caicloud kubernetes binaries and
+# other binaries (etcd, flannel). After building the tarball, we should
+# upload it to internal-get.caicloud.io or qiniu.com.
+
 # The tarball version.
 CAICLOUD_VERSION=0.1
 
@@ -21,7 +25,7 @@ CAICLOUD_VERSION=0.1
 FLANNEL_VERSION=${FLANNEL_VERSION-0.4.0}
 ETCD_VERSION=${ETCD_VERSION-v2.0.12}
 
-# Build kube server binaries.
+# Build kube server binaries from current code base.
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 cd ${KUBE_ROOT}
 hack/caicloud-tools/k8s-replace.sh

@@ -19,7 +19,7 @@
 # cluster executor.
 
 # Unique ID of the cluster.
-export CLUSTER_ID=${CLUSTER_ID-"default"}
+export CLUSTER_ID=${CLUSTER_ID-"kube-default"}
 
 # Define number of nodes (minions). There will be only one master.
 export NUM_MINIONS=${NUM_MINIONS-1}

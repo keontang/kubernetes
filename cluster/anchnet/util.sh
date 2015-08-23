@@ -71,8 +71,8 @@ DOCKER_VERSION=${DOCKER_VERSION:-1.7.1}
 
 # Tarball URL.
 # == This is Tarball mode specific parameter.
-# http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar.gz
-TARBALL_URL=${TARBALL_URL:-"http://internal-get.caicloud.io/caicloud/caicloud-kube-release-0.1.tar.gz"}
+# TARBALL_URL=${TARBALL_URL:-"http://internal-get.caicloud.io/caicloud/caicloud-kube-release-0.1.tar.gz"}
+TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar.gz"}
 
 # The base image used to create master and node instance in image mode. This
 # image is created from scripts like 'image-from-devserver.sh'.
@@ -377,31 +377,90 @@ EOF
 }
 
 
-# Delete a kubernete cluster from anchnet.
+# Delete a kubernete cluster from anchnet, using CLUSTER_ID.
 #
 # Assumed vars:
-#   INSTANCE_IDS - comma separated string of instance IDs
-#   EIP_IDS - comma separated string of instance external IP IDs
-#   LB_ID - the id of load balancer
-#   LB_PUBLIC_IPS - comma separated string of public ips.
-#   SECURITY_GROUP_IDS - comma separated string of security group ids.
+#   CLUSTER_ID
 function kube-down {
-  if [[ ! -z "${INSTANCE_IDS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${INSTANCE_IDS}"
+  # Find all instances prefixed with CLUSTER_ID.
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID}"
+  count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  if [[ "${count}" != "" ]]; then
+    # Print and collect instance information
+    echo -n "Found instances: "
+    for i in `seq 0 $(($count-1))`; do
+      instance_name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+      instance_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
+      eip_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_id']")
+      echo -n "${instance_name},${instance_id},${eip_id}; "
+      if [[ -z "${ALL_INSTANCES-}" ]]; then
+        ALL_INSTANCES="${instance_id}"
+      else
+        ALL_INSTANCES="${ALL_INSTANCES},${instance_id}"
+      fi
+      if [[ -z "${ALL_EIPS-}" ]]; then
+        ALL_EIPS="${eip_id}"
+      else
+        ALL_EIPS="${ALL_EIPS},${eip_id}"
+      fi
+    done
+    echo
+    # Executing commands.
+    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES}"
+    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
+    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS}"
+    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
-  if [[ ! -z "${EIP_IDS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${EIP_IDS}"
+  # Find all vxnets prefixed with CLUSTER_ID.
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_ID}"
+  count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  # We'll also find default one - bug in anchnet.
+  if [[ "${count}" != "" && "${count}" != "1" ]]; then
+    echo -n "Found vxnets: "
+    for i in `seq 0 $(($count-1))`; do
+      vxnet_name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['vxnet_name']")
+      vxnet_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['vxnet_id']")
+      if [[ "${vxnet_id}" = "vxnet-0" ]]; then
+        continue
+      fi
+      echo -n "${vxnet_name},${vxnet_id}; "
+      if [[ -z "${ALL_VXNETS-}" ]]; then
+        ALL_VXNETS="${vxnet_id}"
+      else
+        ALL_VXNETS="${ALL_VXNETS},${vxnet_id}"
+      fi
+    done
+    echo
+
+    # Executing commands.
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS}"
+    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
-  # TODO(jiang) test cleaning up LB_PUBLIC_IPS
-  if [[ ! -z "${LB_ID-}" && ! -z "${LB_PUBLIC_IPS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} deleteloadbalancer ${LB_ID} ${LB_PUBLIC_IPS}"
+  # Find all security group prefixed with CLUSTER_ID.
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_ID}"
+  count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  if [[ "${count}" != "" ]]; then
+    echo -n "Found security group: "
+    for i in `seq 0 $(($count-1))`; do
+      security_group_name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['security_group_name']")
+      security_group_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['security_group_id']")
+      echo -n "${security_group_name},${security_group_id}; "
+      if [[ -z "${ALL_SECURITY_GROUPS-}" ]]; then
+        ALL_SECURITY_GROUPS="${security_group_id}"
+      else
+        ALL_SECURITY_GROUPS="${ALL_SECURITY_GROUPS},${security_group_id}"
+      fi
+    done
+    echo
+
+    # Executing commands.
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS}"
+    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
-  if [[ ! -z "${SECURITY_GROUP_IDS-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS}"
-  fi
+  # TODO: Find all loadbalancers.
 }
 
 
@@ -833,7 +892,7 @@ function create-sdn-network {
   echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
-  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${VXNET_NAME}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_ID}-${VXNET_NAME}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 
   # Get vxnet information.
@@ -866,7 +925,7 @@ function create-firewall {
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   #
   echo "++++++++++ Creating master security group rules ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup master-security-group \
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_ID}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
 --direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT}"
   anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
@@ -885,7 +944,7 @@ function create-firewall {
   # (tcp/30000-32767, udp/30000-32767).
   #
   echo "++++++++++ Creating node security group rules ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup node-security-group \
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_ID}-${NODE_SG_NAME} \
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
 --value1=22,30000,30000 --value2=22,32767,32767"

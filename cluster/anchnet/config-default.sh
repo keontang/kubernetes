@@ -23,6 +23,9 @@ SERVICE_CLUSTER_IP_RANGE=10.254.0.0/16  # formerly PORTAL_NET
 FLANNEL_NET=172.16.0.0/12
 # Define the private SDN network name in anchnet.
 VXNET_NAME="caicloud"
+# Define master/node security group name.
+MASTER_SG_NAME="master-sg"
+NODE_SG_NAME="node-sg"
 # Define the internal IPs for instances in the above private SDN network.
 INTERNAL_IP_RANGE=10.244.0.0/16
 INTERNAL_IP_MASK=255.255.0.0

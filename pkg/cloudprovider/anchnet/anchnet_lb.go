@@ -105,12 +105,14 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	// Create a loadbalancer using the above external IP.
 	lb_response, err := an.createLoadBalancer(name, ip_response.EipIDs[0])
 	if err != nil {
-		an.releaseEIP(ip_response.EipIDs[0])
+		releaseip_response, _ := an.releaseEIP(ip_response.EipIDs[0])
+		an.waitJobStatus(releaseip_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 	err = an.waitJobStatus(lb_response.JobID, anchnet_client.JobStatusSuccessful)
 	if err != nil {
-		an.releaseEIP(ip_response.EipIDs[0])
+		releaseip_response, _ := an.releaseEIP(ip_response.EipIDs[0])
+		an.waitJobStatus(releaseip_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 
@@ -118,7 +120,8 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	// loadbalancer to apply the changes do require.
 	err = an.waitForLoadBalancer(lb_response.LoadbalancerID, anchnet_client.LoadBalancerStatusActive)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 
@@ -131,12 +134,14 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	for _, port := range ports {
 		listener_response, err := an.addLoadBalancerListeners(lb_response.LoadbalancerID, port.Port)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 			return nil, err
 		}
 		err = an.waitJobStatus(listener_response.JobID, anchnet_client.JobStatusSuccessful)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 			return nil, err
 		}
 
@@ -151,12 +156,14 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 		}
 		add_response, err := an.addLoadBalancerBackends(listener_response.ListenerIDs[0], backends)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 			return nil, err
 		}
 		err = an.waitJobStatus(add_response.JobID, anchnet_client.JobStatusSuccessful)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 			return nil, err
 		}
 	}
@@ -164,31 +171,36 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 	// Create a security group and apply it to loadbalancer.
 	sg_response, err := an.createLBSecurityGroup(name, ports, lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 	err = an.waitJobStatus(sg_response.JobID, anchnet_client.JobStatusSuccessful)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 
 	// Calling update loadbalancer will apply the above changes.
 	update_response, err := an.updateLoadBalancer(lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 	err = an.waitJobStatus(update_response.JobID, anchnet_client.JobStatusSuccessful)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 
 	// Get loadbalancer ip address and return it to k8s.
 	response, err := an.describeEip(ip_response.EipIDs[0])
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		deletelb_response, _ := an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.waitJobStatus(deletelb_response.JobID, anchnet_client.JobStatusSuccessful)
 		return nil, err
 	}
 	status := &api.LoadBalancerStatus{}

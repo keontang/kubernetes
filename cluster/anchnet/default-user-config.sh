@@ -18,8 +18,10 @@
 # are specified by users, e.g. NODE_MEM; and some values are specified by
 # cluster executor.
 
-# Unique ID of the cluster.
-export CLUSTER_ID=${CLUSTER_ID-"kube-default"}
+# Label of the cluster. This is used for constructing the prefix of resource
+# ids from anchnet. The same label needs to be specified when running
+# kube-down to release the resources acquired during kube-up. 
+export CLUSTER_LABEL=${CLUSTER_LABEL-"default"}
 
 # Define number of nodes (minions). There will be only one master.
 export NUM_MINIONS=${NUM_MINIONS-1}

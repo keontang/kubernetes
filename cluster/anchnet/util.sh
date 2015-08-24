@@ -137,8 +137,8 @@ function setup-anchnet-env {
   USER_CONFIG_FILE=${USER_CONFIG_FILE:-"${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"}
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
   source "${USER_CONFIG_FILE}"
-  MASTER_NAME="${CLUSTER_ID}-master"
-  NODE_NAME_PREFIX="${CLUSTER_ID}-node"
+  MASTER_NAME="${CLUSTER_LABEL}-master"
+  NODE_NAME_PREFIX="${CLUSTER_LABEL}-node"
 }
 
 # Before running any function, we setup all anchnet env variables.
@@ -267,15 +267,15 @@ function kube-up {
   # TODO: Fix hardcoded CONTEXT
   CONTEXT="anchnet_kubernetes"
   create-kubeconfig
-  kube-up-complete Y
+  kube-up-complete
 }
 
 
 # Update a kubernetes cluster with latest source.
 function kube-push {
-  # Find all instances prefixed with CLUSTER_ID (caicloud convention - every instance
-  # is prefixed with a unique CLUSTER_ID).
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID} --project=${PROJECT_ID}"
+  # Find all instances prefixed with CLUSTER_LABEL (caicloud convention - every instance
+  # is prefixed with a unique CLUSTER_LABEL).
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
   local count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
 
   # Print instance information
@@ -394,13 +394,13 @@ EOF
 }
 
 
-# Delete a kubernete cluster from anchnet, using CLUSTER_ID.
+# Delete a kubernete cluster from anchnet, using CLUSTER_LABEL.
 #
 # Assumed vars:
-#   CLUSTER_ID
+#   CLUSTER_LABEL
 function kube-down {
-  # Find all instances prefixed with CLUSTER_ID.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_ID} --project=${PROJECT_ID}"
+  # Find all instances prefixed with CLUSTER_LABEL.
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
   count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     # Print and collect instance information
@@ -429,8 +429,8 @@ function kube-down {
     anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
-  # Find all vxnets prefixed with CLUSTER_ID.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_ID} --project=${PROJECT_ID}"
+  # Find all vxnets prefixed with CLUSTER_LABEL.
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_LABEL} --project=${PROJECT_ID}"
   count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
   # We'll also find default one - bug in anchnet.
   if [[ "${count}" != "" && "${count}" != "1" ]]; then
@@ -455,8 +455,8 @@ function kube-down {
     anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
   fi
 
-  # Find all security group prefixed with CLUSTER_ID.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_ID} --project=${PROJECT_ID}"
+  # Find all security group prefixed with CLUSTER_LABEL.
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_LABEL} --project=${PROJECT_ID}"
   count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     echo -n "Found security group: "
@@ -926,7 +926,7 @@ function create-sdn-network {
   echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
-  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_ID}-${VXNET_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_LABEL}-${VXNET_NAME} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE}
 
   # Get vxnet information.
@@ -959,7 +959,7 @@ function create-firewall {
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   #
   echo "++++++++++ Creating master security group rules ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_ID}-${MASTER_SG_NAME} \
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
 --direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
   anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
@@ -978,7 +978,7 @@ function create-firewall {
   # (tcp/30000-32767, udp/30000-32767).
   #
   echo "++++++++++ Creating node security group rules ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_ID}-${NODE_SG_NAME} \
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${NODE_SG_NAME} \
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
 --value1=22,30000,30000 --value2=22,32767,32767 --project=${PROJECT_ID}"
@@ -1842,7 +1842,7 @@ function prepare-e2e() {
   ensure-temp-dir
 
   cat > ${KUBE_TEMP}/e2e-config.sh <<EOF
-export CLUSTER_ID="e2e-test"
+export CLUSTER_LABEL="e2e-test"
 export NUM_MINIONS=2
 export MASTER_MEM=2048
 export MASTER_CPU_CORES=2

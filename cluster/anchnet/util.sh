@@ -58,7 +58,7 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #
 # - "dev": In dev mode, no machine will be created. Developer is responsible to
 #   specify the instance IDs, eip IDs, etc. This is primarily used for debugging.
-KUBE_UP_MODE=${KUBE_UP_MODE:-"full"}
+KUBE_UP_MODE=${KUBE_UP_MODE:-"tarball"}
 
 # Non-kube binaries versions
 # == This is Full Mode specific parameter.
@@ -217,7 +217,7 @@ function kube-up {
 
   local pids=""
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
-    install-kube-binaries &
+    install-all-binaries &
     pids="$pids $!"
     install-packages &
     pids="$pids $!"
@@ -1106,7 +1106,8 @@ function create-etcd-initial-cluster {
 #   NODE_IPS
 #   INSTANCE_USER
 #   KUBE_INSTANCE_PASSWORD
-function install-kube-binaries {
+function install-all-binaries {
+  echo "++++++++++ Start installing all binaries ..."
   (
     cd ${KUBE_ROOT}
     anchnet-build-server

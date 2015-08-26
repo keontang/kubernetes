@@ -93,6 +93,9 @@ ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 # Namespace used to create cluster wide services.
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
 
+# USER_ID uniquely identifies a caicloud user
+USER_ID=${USER_ID:-""}
+
 # Project id actually stands for an anchnet sub-account. If PROJECT_ID is
 # not set, all the subsequent anchnet calls will use the default account
 PROJECT_ID=${PROJECT_ID:-""}
@@ -188,6 +191,15 @@ function kube-up {
 
   # Make sure we have a public/private key pair used to provision instances.
   ensure-pub-key
+
+  # Create an anchnet project if projectid is not set and report
+  # it back to executor. 
+  # TODO: PROJECT_ID creation is dummy for now. This will be replaced
+  # with anchnet api call to dynamically create sub account
+  if [[ -z ${PROJECT_ID-} ]]; then
+      PROJECT_ID="pro-AXXLYN3M"
+      report-project-id ${PROJECT_ID}
+  fi
 
   # For dev, set to existing instances.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then

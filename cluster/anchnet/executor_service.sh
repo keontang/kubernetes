@@ -106,6 +106,16 @@ function report-eip-ids {
   fi
 }
 
+function report-project-id {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${USER_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_project_id?uid=${USER_ID}&projectid=$1"
+    else
+      echo "EXECUTOR_HOST_NAME or USER_ID is not set up. report-project-id failed."
+    fi
+  fi
+}
+
 # Report if kube-up succeeds or not.
 #
 # Input:

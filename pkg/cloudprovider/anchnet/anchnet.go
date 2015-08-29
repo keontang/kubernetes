@@ -21,7 +21,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
+	"k8s.io/kubernetes/pkg/cloudprovider"
 
 	anchnet_client "github.com/caicloud/anchnet-go"
 )

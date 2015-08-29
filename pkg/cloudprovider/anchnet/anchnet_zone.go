@@ -17,7 +17,7 @@ limitations under the License.
 package anchnet_cloud
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
+	"k8s.io/kubernetes/pkg/cloudprovider"
 )
 
 const AnchnetZone = "ac1"

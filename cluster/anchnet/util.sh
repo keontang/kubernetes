@@ -193,11 +193,11 @@ function kube-up {
   ensure-pub-key
 
   # Create an anchnet project if projectid is not set and report
-  # it back to executor. 
+  # it back to executor.
   # TODO: PROJECT_ID creation is dummy for now. This will be replaced
   # with anchnet api call to dynamically create sub account
   if [[ -z ${PROJECT_ID-} ]]; then
-      PROJECT_ID="pro-AXXLYN3M"
+      PROJECT_ID="pro-PAHG3JWF"
       report-project-id ${PROJECT_ID}
   fi
 
@@ -807,11 +807,7 @@ function check-instance-status {
     if [[ ${status} != "running" ]]; then
       if (( attempt > 20 )); then
         echo
-<<<<<<< HEAD
         echo -e "${color_red}instance $1 failed to start (sorry!)${color_norm}" >&2
-=======
-        echo -e "${color_red}Instance $1 failed to start (sorry!)${color_norm}" >&2
->>>>>>> 11414ce... Create simple kube-down script
         exit 1
       fi
     else

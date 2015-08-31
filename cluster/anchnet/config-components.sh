@@ -241,3 +241,15 @@ function config-hostname {
 
   echo "Hostname settings have been changed to ${new_hostname}."
 }
+
+# Add an entry in /etc/hosts file if not already exists. This is used for master to
+# contact kubelet using hostname, as anchnet is unable to do hostname resolution.
+#
+# Input:
+#   $1 hostname
+#   $2 host IP address
+function add-hosts-entry {
+  if ! grep "$1" /etc/hosts > /dev/null; then
+    echo -e "$2 $1" >> /etc/hosts
+  fi
+}

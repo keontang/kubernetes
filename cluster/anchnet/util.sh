@@ -197,8 +197,8 @@ function kube-up {
   # TODO: PROJECT_ID creation is dummy for now. This will be replaced
   # with anchnet api call to dynamically create sub account
   if [[ -z ${PROJECT_ID-} ]]; then
-      PROJECT_ID="pro-PAHG3JWF"
-      report-project-id ${PROJECT_ID}
+    PROJECT_ID="pro-9VTJ7QAT"
+    report-project-id ${PROJECT_ID}
   fi
 
   # For dev, set to existing instances.
@@ -1364,6 +1364,10 @@ EOF
 function install-configurations {
   local pids=""
 
+  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
+  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
+  IFS=',' read -ra node_instance_arr <<< "${NODE_INSTANCE_IDS}"
+
   echo "++++++++++ Start installing master configurations ..."
   # Create master startup script.
   (
@@ -1374,6 +1378,10 @@ function install-configurations {
     grep -v "^#" "${USER_CONFIG_FILE}"
     echo ""
     echo "config-hostname ${MASTER_INSTANCE_ID}"
+    # Make sure master is able to find nodes using node hostname.
+    for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
+      echo "add-hosts-entry ${node_instance_arr[$i]} ${node_iip_arr[$i]}"
+    done
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
     echo "create-etcd-opts kubernetes-master \"${MASTER_INTERNAL_IP}\" \"${ETCD_INITIAL_CLUSTER}\""
@@ -1432,16 +1440,12 @@ function install-configurations {
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube &
   pids="$pids $!"
 
-  # Start installing nodes.
-  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
-  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
-  IFS=',' read -ra node_instance_arr <<< "${NODE_INSTANCE_IDS}"
-
   # Randomly choose one daocloud accelerator.
   IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATOR}"
   reg_mirror=${reg_mirror_arr[$(( ${RANDOM} % 4 ))]}
   echo "Use daocloud registry mirror ${reg_mirror}"
 
+  # Start installing nodes.
   for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
     index=$(($i-1))
     echo "+++++++++ Start installing node-${index} configurations ..."

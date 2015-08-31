@@ -100,6 +100,11 @@ USER_ID=${USER_ID:-""}
 # not set, all the subsequent anchnet calls will use the default account
 PROJECT_ID=${PROJECT_ID:-""}
 
+# Path to save per user k8s config file
+if [[ ! -z ${USER_ID-} ]]; then
+  KUBECONFIG="$HOME/.kube/config_${USER_ID}"
+fi
+
 # To indicate if the execution status needs to be reported back to Caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"}
@@ -264,8 +269,8 @@ function kube-up {
   # just assign MASTER_EIP to KUBE_MASTER_EIP. If non-standard port is used, then we need
   # to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
   KUBE_MASTER_IP="${MASTER_EIP}"
-  # TODO: Fix hardcoded CONTEXT
-  CONTEXT="anchnet_kubernetes"
+
+  CONTEXT="anchnet_${CLUSTER_LABEL}"
   create-kubeconfig
   kube-up-complete
 }

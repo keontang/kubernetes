@@ -24,7 +24,7 @@
 # Label of the cluster. This is used for constructing the prefix of resource
 # ids from anchnet. The same label needs to be specified when running
 # kube-down to release the resources acquired during kube-up.
-CLUSTER_LABEL=${CLUSTER_LABEL-"default"}
+CLUSTER_LABEL=${CLUSTER_LABEL:-"default"}
 
 # Project id actually stands for an anchnet sub-account. If PROJECT_ID is
 # not set, all the subsequent anchnet calls will use the default account.
@@ -35,7 +35,7 @@ USER_ID=${USER_ID:-""}
 
 # To indicate if the execution status needs to be reported back to Caicloud
 # executor via curl. Set it to be Y if reporting is needed.
-REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"}
+REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
 
 # Number of retries and interval (in second) for waiting master creation job.
 # Adjust the value based on the number of master instances created.
@@ -73,17 +73,17 @@ SG_NODES_WAIT_INTERVAL=${SG_NODES_WAIT_INTERVAL:-3}
 # Params from user for kube-up.
 
 # Define number of nodes (minions). There will be only one master.
-NUM_MINIONS=${NUM_MINIONS-1}
+NUM_MINIONS=${NUM_MINIONS:-1}
 
 # The memory size of master node (in MB).
-MASTER_MEM=${MASTER_MEM-1024}
+MASTER_MEM=${MASTER_MEM:-1024}
 # The number of CPUs of the master.
-MASTER_CPU_CORES=${MASTER_CPU_CORES-1}
+MASTER_CPU_CORES=${MASTER_CPU_CORES:-1}
 
 # The memory size of master node (in MB).
-NODE_MEM=${NODE_MEM-1024}
+NODE_MEM=${NODE_MEM:-1024}
 # The number of CPUs of a node.
-NODE_CPU_CORES=${NODE_CPU_CORES-1}
+NODE_CPU_CORES=${NODE_CPU_CORES:-1}
 
 # -----------------------------------------------------------------------------
 # Derived params for kube-up (calculated based on above params).

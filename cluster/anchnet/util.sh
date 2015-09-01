@@ -246,7 +246,7 @@ function kube-up {
 
   # Report kube-up completes. As we can't hook into validate-cluster, this is the
   # best place to report. Executor should validate cluster itself.
-  kube-up-complete
+  kube-up-complete Y
 }
 
 
@@ -802,6 +802,7 @@ function check-instance-status {
       if (( attempt > 20 )); then
         echo
         echo -e "${color_red}instance $1 failed to start (sorry!)${color_norm}" >&2
+        kube-up-complete N
         exit 1
       fi
     else
@@ -833,6 +834,7 @@ function get-ip-address-from-eipid {
       if (( attempt > 20 )); then
         echo
         echo -e "${color_red}failed to get eip address (sorry!)${color_norm}" >&2
+        kube-up-complete N
         exit 1
       fi
     else
@@ -891,6 +893,7 @@ EOF
       if (( attempt > 40 )); then
         echo
         echo -e "${color_red}Unable to setup instance ssh for $1 (sorry!)${color_norm}" >&2
+        kube-up-complete N
         exit 1
       fi
     else
@@ -1043,6 +1046,7 @@ function create-node-internal-ips {
 
   if (( NUM_MINIONS > (total_count - used_count) )); then
     echo "Number of nodes is larger than allowed node internal IP address"
+    kube-up-complete N
     exit 1
   fi
 
@@ -1825,6 +1829,7 @@ function command-exec-and-retry {
       if (( attempt > ${count} )); then
         echo
         echo -e "${color_red}Unable to execute command [$1]${color_norm}" >&2
+        kube-up-complete N
         exit 1
       fi
     else
@@ -1838,7 +1843,8 @@ function command-exec-and-retry {
 }
 
 
-# Wait until job finishes. If job doesn't finish within timeout, return error.
+# Wait until job finishes. If job doesn't finish within timeout, the script
+# will exit directly.
 #
 # Input:
 #   $1 anchnet response, typically COMMAND_EXEC_RESPONSE.
@@ -1850,14 +1856,13 @@ function anchnet-wait-job {
   local job_id=$(echo ${1} | json_val '["job_id"]')
   ${ANCHNET_CMD} waitjob ${job_id} -c=${2-60} -i=${3-3}
 
-  local exit_code=$?
-  if [[ "$exit_code" == "0" ]]; then
+  if [[ "$?" == "0" ]]; then
     echo -e "${color_green}Done${color_norm}"
   else
     echo -e "${color_red}Failed${color_norm}"
+    kube-up-complete N
+    exit 1
   fi
-
-  return $exit_code
 }
 
 

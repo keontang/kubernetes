@@ -25,16 +25,14 @@ grep -rl "caicloudgcr/[^\", ]*" \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib |
   xargs sed -i "" 's|caicloudgcr/|gcr.io/google_containers/|g'
 
-
 # Restore 'golang.org' packages.
 sed -i "" "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
 
-
 # Restore 'github.com' files.
-sed -i "" "s|http://internal-get.caicloud.io/etcd/etcd-v2.0.0-linux-amd64.tar.gz|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
+sed -i "" "s|http://internal-get.caicloud.io/etcd/etcd-v2.0.0-linux-amd64.tar.gz|\
+https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
-
 
 # Restore supported e2e tests.
 sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|g" \

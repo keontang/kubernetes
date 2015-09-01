@@ -12,7 +12,10 @@ package anchnet
 type DescribeVxnetsRequest struct {
 	RequestCommon `json:",inline"`
 	VxnetIDs      []string `json:"vxnets,omitempty"` // IDs of network to describe
+	SearchWord    string   `json:"search_word,omitempty"`
 	Verbose       int      `json:"verbose,omitempty"`
+	Offset        int      `json:"offset,omitempty"`
+	Limit         int      `json:"limit,omitempty"`
 }
 
 type DescribeVxnetsResponse struct {

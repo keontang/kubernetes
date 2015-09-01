@@ -61,6 +61,48 @@ func execCreateSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.
 	sendResult(response, out)
 }
 
+func execDescribeSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "Security group IDs required")
+		os.Exit(1)
+	}
+
+	request := anchnet.DescribeSecurityGroupsRequest{
+		SecurityGroupIDs: []string{args[0]},
+		Verbose:          1,
+	}
+	var response anchnet.DescribeSecurityGroupsResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command DescribeSecurityGroup: %v\n", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}
+
+func execSearchSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "Security group name required")
+		os.Exit(1)
+	}
+
+	request := anchnet.DescribeSecurityGroupsRequest{
+		SearchWord: args[0],
+		Verbose:    1,
+	}
+	var response anchnet.DescribeSecurityGroupsResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command DescribeSecurityGroup (for searching security group): %v\n", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}
+
 func execAddSecurityGroupRule(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
 	if len(args) != 2 {
 		fmt.Fprintln(os.Stderr, "Rule name and security group ID required")

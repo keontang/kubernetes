@@ -27,6 +27,7 @@ func main() {
 	addLoadBalancerCLI(cmds, os.Stdout)
 	addSecurityGroupCLI(cmds, os.Stdout)
 	addJobCLI(cmds, os.Stdout)
+	addUserProjectCLI(cmds, os.Stdout)
 
 	cmds.Execute()
 }
@@ -61,7 +62,7 @@ func addInstancesCLI(cmds *cobra.Command, out io.Writer) {
 
 	cmdSearchInstance := &cobra.Command{
 		Use:   "searchinstance name",
-		Short: "Get information of an instance by name",
+		Short: "Search instances by name",
 		Run: func(cmd *cobra.Command, args []string) {
 			execSearchInstance(cmd, args, getAnchnetClient(cmd), out)
 		},
@@ -126,9 +127,17 @@ func addVxnetsCLI(cmds *cobra.Command, out io.Writer) {
 
 	cmdDescribeVxnets := &cobra.Command{
 		Use:   "describevxnets id",
-		Short: "Describe a private SDN network in anchnet",
+		Short: "Get information of a private SDN network by id",
 		Run: func(cmd *cobra.Command, args []string) {
 			execDescribeVxnets(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	cmdSearchVxnets := &cobra.Command{
+		Use:   "searchvxnets name",
+		Short: "Search private SDN network by name",
+		Run: func(cmd *cobra.Command, args []string) {
+			execSearchVxnets(cmd, args, getAnchnetClient(cmd), out)
 		},
 	}
 
@@ -140,10 +149,20 @@ func addVxnetsCLI(cmds *cobra.Command, out io.Writer) {
 		},
 	}
 
+	cmdDeleteVxnets := &cobra.Command{
+		Use:   "deletevxnets ids",
+		Short: "Delete private SDN network",
+		Run: func(cmd *cobra.Command, args []string) {
+			execDeleteVxnets(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
 	// Add all sub-commands.
 	cmds.AddCommand(cmdCreateVxnets)
 	cmds.AddCommand(cmdDescribeVxnets)
+	cmds.AddCommand(cmdSearchVxnets)
 	cmds.AddCommand(cmdJoinVxnet)
+	cmds.AddCommand(cmdDeleteVxnets)
 }
 
 // addLoadBalancerCLI adds LoadBalancer commands.
@@ -231,6 +250,22 @@ func addSecurityGroupCLI(cmds *cobra.Command, out io.Writer) {
 		},
 	}
 
+	cmdDescribeSecurityGroup := &cobra.Command{
+		Use:   "describesecuritygroup ids",
+		Short: "Get security group information by id",
+		Run: func(cmd *cobra.Command, args []string) {
+			execDescribeSecurityGroup(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	cmdSearchSecurityGroup := &cobra.Command{
+		Use:   "searchsecuritygroup name",
+		Short: "Search security group by name",
+		Run: func(cmd *cobra.Command, args []string) {
+			execSearchSecurityGroup(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
 	cmdDeleteSecurityGroups := &cobra.Command{
 		Use:   "deletesecuritygroups securitygroup_ids",
 		Short: "Delete of a list of security groups by ids.",
@@ -243,6 +278,8 @@ func addSecurityGroupCLI(cmds *cobra.Command, out io.Writer) {
 	cmds.AddCommand(cmdCreateSecurityGroup)
 	cmds.AddCommand(cmdAddSecurityGroupRule)
 	cmds.AddCommand(cmdApplySecurityGroup)
+	cmds.AddCommand(cmdDescribeSecurityGroup)
+	cmds.AddCommand(cmdSearchSecurityGroup)
 	cmds.AddCommand(cmdDeleteSecurityGroups)
 }
 
@@ -272,4 +309,24 @@ func addJobCLI(cmds *cobra.Command, out io.Writer) {
 	// Add all sub-commands.
 	cmds.AddCommand(cmdDescribeJob)
 	cmds.AddCommand(cmdWaitJob)
+}
+
+func addUserProjectCLI(cmds *cobra.Command, out io.Writer) {
+	var sex, mobile, loginpasswd string
+	cmdCreateUserProject := &cobra.Command{
+		Use:   "createuserproject userid",
+		Short: "create user project under anchnet account",
+		Run: func(cmd *cobra.Command, args []string) {
+			execCreateUserProject(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+	cmdCreateUserProject.Flags().StringVarP(&sex, "sex", "s", "M",
+		"Gender of the person")
+	cmdCreateUserProject.Flags().StringVarP(&mobile, "mobile", "m", "13888888888",
+		"Cell phone number")
+	cmdCreateUserProject.Flags().StringVarP(&loginpasswd, "passwd", "p", "caicloud2015ABC",
+		"Password of the sub account")
+
+	// Add all sub-commands.
+	cmds.AddCommand(cmdCreateUserProject)
 }

@@ -56,6 +56,27 @@ func execDescribeVxnets(cmd *cobra.Command, args []string, client *anchnet.Clien
 	sendResult(response, out)
 }
 
+func execSearchVxnets(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Vxnet name required")
+		os.Exit(1)
+	}
+
+	request := anchnet.DescribeVxnetsRequest{
+		SearchWord: args[0],
+		Verbose:    1,
+	}
+	var response anchnet.DescribeVxnetsResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command DescribeVxnet (for searching vxnet): %v\n", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}
+
 func execJoinVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
 	if len(args) != 2 {
 		fmt.Fprintln(os.Stderr, "Vxnet and instances IDs required")
@@ -71,6 +92,26 @@ func execJoinVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, ou
 	err := client.SendRequest(request, &response)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error running command JoinVxnet: %v\n", err)
+		os.Exit(1)
+	}
+
+	sendResult(response, out)
+}
+
+func execDeleteVxnets(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Vxnet IDs required")
+		os.Exit(1)
+	}
+
+	request := anchnet.DeleteVxnetsRequest{
+		VxnetIDs: strings.Split(args[0], ","),
+	}
+	var response anchnet.DeleteVxnetsResponse
+
+	err := client.SendRequest(request, &response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running command DeleteVxnets: %v\n", err)
 		os.Exit(1)
 	}
 

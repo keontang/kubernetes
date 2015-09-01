@@ -69,6 +69,10 @@ SG_MASTER_WAIT_INTERVAL=${SG_MASTER_WAIT_INTERVAL:-3}
 SG_NODES_WAIT_RETRY=${SG_NODES_WAIT_RETRY:-120}
 SG_NODES_WAIT_INTERVAL=${SG_NODES_WAIT_INTERVAL:-3}
 
+# Number of retries and interval (in second) for waiting user project job.
+USER_PROJECT_WAIT_RETRY=${USER_PROJECT_WAIT_RETRY:-120}
+USER_PROJECT_WAIT_INTERVAL=${USER_PROJECT_WAIT_INTERVAL:-3}
+
 # -----------------------------------------------------------------------------
 # Params from user for kube-up.
 

@@ -671,15 +671,18 @@ with open("'$1'", "w") as f:
 
 
 # Create an anchnet project if PROJECT_ID is not specified and report it back
-# to executor.
-#
-# TODO: PROJECT_ID creation is dummy for now. This will be replaced
-# with anchnet api call to dynamically create sub account
+# to executor. Note that we do not create user project if neither PROJECT_ID
+# nor USER_ID is specified.
 #
 # Vars set:
 #   PROJECT_ID
 function create-project {
-  report-project-id ${PROJECT_ID}
+  if [[ -z "${PROJECT_ID-}" && ! -z "${USER_ID-}" ]]; then
+    command-exec-and-retry "${ANCHNET_CMD} createuserproject ${USER_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
+    PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
+    report-project-id ${PROJECT_ID}
+  fi
 }
 
 

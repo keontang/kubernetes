@@ -100,6 +100,8 @@ func init() {
 	actions["ModifySecurityGroupRuleAttributes"] = true
 
 	actions["DescribeJobs"] = true
+
+	actions["CreateUserProject"] = true
 }
 
 // Client represents an anchnet client.

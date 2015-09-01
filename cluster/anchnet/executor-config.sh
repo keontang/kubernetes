@@ -95,6 +95,13 @@ NODE_CPU_CORES=${NODE_CPU_CORES-1}
 MASTER_NAME="${CLUSTER_LABEL}-master"
 NODE_NAME_PREFIX="${CLUSTER_LABEL}-node"
 
+# If USER_ID is specified, set the path to save per user k8s config file;
+# otherwise, use default one from k8s.
+if [[ ! -z ${USER_ID-} ]]; then
+  KUBECONFIG="$HOME/.kube/config_${USER_ID}"
+fi
+CONTEXT="anchnet_${CLUSTER_LABEL}"
+
 # -----------------------------------------------------------------------------
 # Params from executor for kube-down.
 

@@ -71,7 +71,8 @@ function setup-cluster-env {
   source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
 }
 
-# Before running any function, we setup all anchnet env variables.
+# Before running any function or creating any variable, we setup all cluster
+# environment variables.
 setup-cluster-env
 
 # ===== Full Mode specific parameter
@@ -84,6 +85,7 @@ ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
 DOCKER_VERSION=${DOCKER_VERSION:-1.7.1}
 
 # ===== Tarball mode specific parameter.
+# DO NOT USE qiniu for now, costly.
 # TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-2015-09-01.tar.gz"}
 TARBALL_URL=${TARBALL_URL:-"http://internal-get.caicloud.io/caicloud/caicloud-kube-2015-09-01.tar.gz"}
 
@@ -108,16 +110,6 @@ ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 # Namespace used to create cluster wide services. The name is from upstream
 # and shouldn't be changed.
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
-
-# Path to save per user k8s config file
-if [[ ! -z ${USER_ID-} ]]; then
-  KUBECONFIG="$HOME/.kube/config_${USER_ID}"
-fi
-
-# To indicate if the execution status needs to be reported back to Caicloud
-# executor via curl. Set it to be Y if reporting is needed.
-REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS-"N"}
-source "${KUBE_ROOT}/cluster/anchnet/executor_service.sh"
 
 # Daocloud registry accelerator. Before implementing our own registry (or registry
 # mirror), use this accelerator to make pulling image faster. The variable is a
@@ -217,17 +209,13 @@ function kube-up {
   # Install binaries and packages concurrently
   local pids=""
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
-    install-all-binaries &
-    pids="$pids $!"
-    install-packages &
-    pids="$pids $!"
+    install-all-binaries & pids="$pids $!"
+    install-packages & pids="$pids $!"
   fi
 
   if [[ "${KUBE_UP_MODE}" = "tarball" ]]; then
-    install-tarball-binaries &
-    pids="$pids $!"
-    install-packages &
-    pids="$pids $!"
+    install-tarball-binaries & pids="$pids $!"
+    install-packages & pids="$pids $!"
   fi
   wait $pids
 
@@ -245,16 +233,19 @@ function kube-up {
   # After everything's done, we re-apply firewall to make sure it works.
   ensure-firewall
 
-  # common.sh defines create-kubeconfig, which is used to create client kubeconfig for
-  # kubectl. To properly create kubeconfig, make sure to we supply it with assumed vars.
+  # common.sh defines create-kubeconfig, which is used to create client kubeconfig
+  # for kubectl. To properly create kubeconfig, make sure to we supply it with
+  # assumed vars (see comments from create-kubeconfig). In particular, KUBECONFIG
+  # and CONTEXT.
   source "${KUBE_ROOT}/cluster/common.sh"
-  # By default, kubeconfig uses https://${KUBE_MASTER_IP}. Since we use standard port 443,
-  # just assign MASTER_EIP to KUBE_MASTER_EIP. If non-standard port is used, then we need
-  # to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
+  # By default, kubeconfig uses https://${KUBE_MASTER_IP}. Since we use standard
+  # port 443, just assign MASTER_EIP to KUBE_MASTER_EIP. If non-standard port is
+  # used, then we need to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
   KUBE_MASTER_IP="${MASTER_EIP}"
-
-  CONTEXT="anchnet_${CLUSTER_LABEL}"
   create-kubeconfig
+
+  # Report kube-up completes. As we can't hook into validate-cluster, this is the
+  # best place to report. Executor should validate cluster itself.
   kube-up-complete
 }
 
@@ -263,14 +254,14 @@ function kube-up {
 function kube-push {
   # Find all instances prefixed with CLUSTER_LABEL (caicloud convention - every instance
   # is prefixed with a unique CLUSTER_LABEL).
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
-  local count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  local count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
 
   # Print instance information
   echo -n "Found instances: "
   for i in `seq 0 $(($count-1))`; do
-    name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-    id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
+    name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+    id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
     echo -n "${name},${id}; "
   done
   echo
@@ -281,8 +272,8 @@ function kube-push {
   # Push new binaries to master and nodes.
   echo "++++++++++ Pushing binaries to master and nodes ..."
   for i in `seq 0 $(($count-1))`; do
-    name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-    eip=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
+    name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+    eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
     if [[ $name == *"master"* ]]; then
       ${EXPECT_CMD} <<EOF
 set timeout -1
@@ -343,8 +334,8 @@ EOF
   # Restart cluster.
   pids=""
   for i in `seq 0 $(($count-1))`; do
-    name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-    eip=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
+    name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+    eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
     if [[ $name == *"master"* ]]; then
       expect <<EOF &
 set timeout -1
@@ -388,15 +379,15 @@ EOF
 #   CLUSTER_LABEL
 function kube-down {
   # Find all instances prefixed with CLUSTER_LABEL.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
-  count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     # Print and collect instance information
     echo -n "Found instances: "
     for i in `seq 0 $(($count-1))`; do
-      instance_name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-      instance_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
-      eip_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_id']")
+      instance_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+      instance_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
+      eip_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_id']")
       echo -n "${instance_name},${instance_id},${eip_id}; "
       if [[ -z "${ALL_INSTANCES-}" ]]; then
         ALL_INSTANCES="${instance_id}"
@@ -411,21 +402,21 @@ function kube-down {
     done
     echo
     # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
-    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} ${EIP_RELEASE_WAIT_RETRY} ${EIP_RELEASE_WAIT_INTERVAL}
+    command-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
+    command-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${EIP_RELEASE_WAIT_RETRY} ${EIP_RELEASE_WAIT_INTERVAL}
   fi
 
   # Find all vxnets prefixed with CLUSTER_LABEL.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_LABEL} --project=${PROJECT_ID}"
-  count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  command-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   # We'll also find default one - bug in anchnet.
   if [[ "${count}" != "" && "${count}" != "1" ]]; then
     echo -n "Found vxnets: "
     for i in `seq 0 $(($count-1))`; do
-      vxnet_name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['vxnet_name']")
-      vxnet_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['vxnet_id']")
+      vxnet_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_name']")
+      vxnet_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_id']")
       if [[ "${vxnet_id}" = "vxnet-0" ]]; then
         continue
       fi
@@ -439,18 +430,18 @@ function kube-down {
     echo
 
     # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} ${VXNET_DELETE_WAIT_RETRY} ${VXNET_DELETE_WAIT_INTERVAL}
+    command-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_DELETE_WAIT_RETRY} ${VXNET_DELETE_WAIT_INTERVAL}
   fi
 
   # Find all security group prefixed with CLUSTER_LABEL.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_LABEL} --project=${PROJECT_ID}"
-  count=$(echo ${ANCHNET_RESPONSE} | json_len '["item_set"]')
+  command-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     echo -n "Found security group: "
     for i in `seq 0 $(($count-1))`; do
-      security_group_name=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['security_group_name']")
-      security_group_id=$(echo ${ANCHNET_RESPONSE} | json_val "['item_set'][$i]['security_group_id']")
+      security_group_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_name']")
+      security_group_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_id']")
       echo -n "${security_group_name},${security_group_id}; "
       if [[ -z "${ALL_SECURITY_GROUPS-}" ]]; then
         ALL_SECURITY_GROUPS="${security_group_id}"
@@ -461,8 +452,8 @@ function kube-down {
     echo
 
     # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
+    command-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
   fi
 
   # TODO: Find all loadbalancers.
@@ -712,13 +703,13 @@ function create-master-instance {
   echo "++++++++++ Creating kubernetes master from anchnet, master name: ${MASTER_NAME} ..."
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
-  anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
+  command-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${MASTER_MEM} \
 -c=${MASTER_CPU_CORES} -g=${IP_GROUP} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
 
   # Get master information.
-  local master_info=${ANCHNET_RESPONSE}
+  local master_info=${COMMAND_EXEC_RESPONSE}
   MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
   MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
 
@@ -754,15 +745,15 @@ function create-node-instances {
   echo "++++++++++ Creating kubernetes nodes from anchnet, node name prefix: ${NODE_NAME_PREFIX} ..."
 
   # Create 'raw' node instances from anchnet, i.e. un-provisioned.
-  anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
+  command-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
 -c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} ${NODES_WAIT_RETRY} ${NODES_WAIT_INTERVAL}
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${NODES_WAIT_RETRY} ${NODES_WAIT_INTERVAL}
 
   # Node name starts from 1.
   for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
     # Get node information.
-    local node_info=${ANCHNET_RESPONSE}
+    local node_info=${COMMAND_EXEC_RESPONSE}
     local node_instance_id=$(echo ${node_info} | json_val "['instances'][$(($i-1))]")
     local node_eip_id=$(echo ${node_info} | json_val "['eips'][$(($i-1))]")
 
@@ -928,18 +919,18 @@ function create-sdn-network {
   echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
-  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_LABEL}-${VXNET_NAME} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} ${VXNET_CREATE_WAIT_RETRY} ${VXNET_CREATE_WAIT_INTERVAL}
+  command-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_LABEL}-${VXNET_NAME} --project=${PROJECT_ID}"
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_CREATE_WAIT_RETRY} ${VXNET_CREATE_WAIT_INTERVAL}
 
   # Get vxnet information.
-  local vxnet_info=${ANCHNET_RESPONSE}
+  local vxnet_info=${COMMAND_EXEC_RESPONSE}
   VXNET_ID=$(echo ${vxnet_info} | json_val '["vxnets"][0]')
 
   # Add all instances to the vxnet.
   local all_instance_ids="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
   echo "Add all instances (both master and nodes) to vxnet ${VXNET_ID} ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} ${VXNET_JOIN_WAIT_RETRY} ${VXNET_JOIN_WAIT_INTERVAL}
+  command-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids} --project=${PROJECT_ID}"
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_JOIN_WAIT_RETRY} ${VXNET_JOIN_WAIT_INTERVAL}
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
@@ -961,46 +952,46 @@ function create-firewall {
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   #
   echo "++++++++++ Creating master security group rules ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${MASTER_SG_NAME} \
+  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
 --direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} ${SG_MASTER_WAIT_RETRY} ${SG_MASTER_WAIT_INTERVAL}
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_MASTER_WAIT_RETRY} ${SG_MASTER_WAIT_INTERVAL}
 
   # Get security group information.
-  local master_sg_info=${ANCHNET_RESPONSE}
+  local master_sg_info=${COMMAND_EXEC_RESPONSE}
   MASTER_SG_ID=$(echo ${master_sg_info} | json_val '["security_group_id"]')
 
   # Now, apply all above changes.
   report-security-group-ids ${MASTER_SG_ID} M
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
+  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE}
 
   #
   # Node security group contains firewall for ssh (tcp/22) and nodeport range
   # (tcp/30000-32767, udp/30000-32767).
   #
   echo "++++++++++ Creating node security group rules ..."
-  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${NODE_SG_NAME} \
+  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${NODE_SG_NAME} \
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
 --value1=22,30000,30000 --value2=22,32767,32767 --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} ${SG_NODES_WAIT_RETRY} ${SG_NODES_WAIT_INTERVAL}
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_NODES_WAIT_RETRY} ${SG_NODES_WAIT_INTERVAL}
 
   # Get security group information.
-  local node_sg_info=${ANCHNET_RESPONSE}
+  local node_sg_info=${COMMAND_EXEC_RESPONSE}
   NODE_SG_ID=$(echo ${node_sg_info} | json_val '["security_group_id"]')
 
   # Now, apply all above changes.
   report-security-group-ids ${NODE_SG_ID} N
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
+  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE}
 }
 
 
 # Re-apply firewall to make sure firewall is properly set up.
 function ensure-firewall {
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
+  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
 }
 
 
@@ -1206,15 +1197,21 @@ EOF
 }
 
 
+# Wrapper of install-tarball-binaries-internal.
+function install-tarball-binaries {
+  command-exec-and-retry "install-tarball-binaries-internal" 3 "false"
+}
+
+
 # Fetch tarball and install binaries to master and nodes, used in tarball mode.
 #
 # Assumed vars:
 #   INSTANCE_USER
 #   MASTER_EIP
 #   KUBE_INSTANCE_PASSWORD
-function install-tarball-binaries {
+function install-tarball-binaries-internal {
   local pids=""
-  echo "++++++++++ Start fetching and installing tarball ..."
+  echo "++++++++++ Start fetching and installing tarball from: ${TARBALL_URL} ..."
 
   INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
   IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
@@ -1235,24 +1232,39 @@ expect {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
   eof {}
 }
 EOF
     pids="$pids $!"
   done
 
-  echo "Wait for all instances to fetch and install tarball ..."
-  wait $pids
-  echo "All instances finished installing tarball ..."
+  echo "++++++++++ Wait for all instances to fetch and install tarball ..."
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 
-# Install necessary packages for running kubernetes.
+# Wrapper of install-packages-internal.
+function install-packages {
+  command-exec-and-retry "install-packages-internal" 3 "false"
+}
+
+
+# Install necessary packages for running kubernetes. For installing distro
+# packages, we use mirrors from 163.com.
 #
 # Assumed vars:
 #   MASTER_EIP
 #   NODE_IPS
-function install-packages {
+function install-packages-internal {
   local pids=""
   echo "++++++++++ Start installing packages ..."
 
@@ -1263,6 +1275,12 @@ function install-packages {
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
+sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty main restricted universe multiverse > /etc/apt/sources.list' && \
+sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty-security main restricted universe multiverse >> /etc/apt/sources.list' && \
+sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty-updates main restricted universe multiverse >> /etc/apt/sources.list' && \
+sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty main restricted universe multiverse >> /etc/apt/sources.list' && \
+sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-security main restricted universe multiverse >> /etc/apt/sources.list' && \
+sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-updates main restricted universe multiverse >> /etc/apt/sources.list' && \
 sudo sh -c 'echo deb \[arch=amd64\] http://internal-get.caicloud.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list' && \
 sudo apt-get update && \
 sudo apt-get install --allow-unauthenticated -y lxc-docker-$DOCKER_VERSION && \
@@ -1272,27 +1290,39 @@ expect {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
   eof {}
 }
 EOF
     pids="$pids $!"
   done
 
-  echo "Wait for all instances to install packages ..."
-  wait $pids
-  echo "All instances finished installing packages ..."
+  echo "++++++++++ Waiting for all instances to install packages ..."
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+
+# Wrapper of provision-instances-internal.
+function provision-instances {
+  command-exec-and-retry "provision-instances-internal" 3 "false"
 }
 
 
 # Configure master/nodes and start them concurrently.
 #
-# TODO: Add retry logic to install instances and provision instances.
-#
 # Assumed vars:
 #   KUBE_INSTANCE_PASSWORD
 #   MASTER_EIP
 #   NODE_EIPS
-function provision-instances {
+function provision-instances-internal {
   install-configurations
 
   local pids=""
@@ -1307,6 +1337,7 @@ expect {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
   eof {}
 }
 EOF
@@ -1329,15 +1360,29 @@ expect {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
   eof {}
 }
 EOF
     pids="$pids $!"
   done
 
-  echo "Wait for all instances to be provisioned ..."
-  wait $pids
-  echo "All instances have been provisioned ..."
+  echo "++++++++++ Waiting for all instances to be provisioned ..."
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+
+# Wrapper of install-configurations-internal
+function install-configurations {
+  command-exec-and-retry "install-configurations-internal" 3 "false"
 }
 
 
@@ -1360,11 +1405,10 @@ EOF
 #   ETCD_INITIAL_CLUSTER
 #   SERVICE_CLUSTER_IP_RANGE
 #   PRIVATE_SDN_INTERFACE
-#   USER_CONFIG_FILE
 #   DNS_SERVER_IP
 #   DNS_DOMAIN
 #   POD_INFRA_CONTAINER
-function install-configurations {
+function install-configurations-internal {
   local pids=""
 
   IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
@@ -1378,7 +1422,6 @@ function install-configurations {
     echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
-    grep -v "^#" "${USER_CONFIG_FILE}"
     echo ""
     echo "config-hostname ${MASTER_INSTANCE_ID}"
     # Make sure master is able to find nodes using node hostname.
@@ -1514,9 +1557,16 @@ function install-configurations {
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for all configurations to be installed ... "
-  wait $pids
-  echo "Done"
+  echo "++++++++++ Waiting for all configurations to be installed ... "
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 
@@ -1570,7 +1620,7 @@ function install-configurations {
 #   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/kubectl.crt
 #   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/kubectl.key
 function create-certs-and-credentials {
-  echo "+++++ Creating certificats and credentials"
+  echo "++++++++++ Creating certificats, credentials and secrets ..."
 
   # 'octects' will be an arrary of segregated IP, e.g. 192.168.3.0/24 => 192 168 3 0
   # 'service_ip' is the first IP address in SERVICE_CLUSTER_IP_RANGE; it is the service
@@ -1683,7 +1733,6 @@ EOF
     echo "${KUBE_PASSWORD},${KUBE_USER},admin" > "${KUBE_TEMP}/basic-auth.csv"
   )
 
-  echo "Creating service accounts secrets..."
   # Create tokens for service accounts. 'service_accounts' refers to things that
   # provide services based on apiserver, including scheduler, controller_manager
   # and addons (Note scheduler and controller_manager are not actually used in
@@ -1749,22 +1798,31 @@ EOF
 }
 
 
-# A helper function that executes a command (which interacts with anchnet), and retries
-# on failure. If the command can't succeed within given attempts, the script will exit
-# directly.
+# A helper function that executes a command (or shell function), and retries on
+# failure. If the command can't succeed within given attempts, the script will
+# exit directly.
 #
 # Input:
 #   $1 command string to execute
+#   $2 number of retries, default to 20
+#   $3 return response: if true, then save output to COMMAND_EXEC_RESPONSE; otherwise,
+#      print output directly, default to true.
 #
 # Output:
-#   ANCHNET_RESPONSE response from anchnet. It is a global variable, so we can't use
-#     then function concurrently.
-function anchnet-exec-and-retry {
+#   COMMAND_EXEC_RESPONSE response from command if $3 is true. It is a global variable,
+#      so we can't use the function concurrently.
+function command-exec-and-retry {
   local attempt=0
+  local count=${2-20}
+  local return_response=${3-"true"}
   while true; do
-    ANCHNET_RESPONSE=$(eval $1)
+    if [[ ${return_response} == "true" ]]; then
+      COMMAND_EXEC_RESPONSE=$(eval $1)
+    else
+      eval $1
+    fi
     if [[ "$?" != "0" ]]; then
-      if (( attempt > 20 )); then
+      if (( attempt > ${count} )); then
         echo
         echo -e "${color_red}Unable to execute command [$1]${color_norm}" >&2
         exit 1
@@ -1783,7 +1841,7 @@ function anchnet-exec-and-retry {
 # Wait until job finishes. If job doesn't finish within timeout, return error.
 #
 # Input:
-#   $1 anchnet response, typically ANCHNET_RESPONSE.
+#   $1 anchnet response, typically COMMAND_EXEC_RESPONSE.
 #   $2 number of retry, default to 60
 #   $3 retry interval, in second, default to 3
 function anchnet-wait-job {
@@ -1843,18 +1901,19 @@ function anchnet-build-server {
 function prepare-e2e() {
   ensure-temp-dir
 
-  cat > ${KUBE_TEMP}/e2e-config.sh <<EOF
-export CLUSTER_LABEL="e2e-test"
-export NUM_MINIONS=2
-export MASTER_MEM=2048
-export MASTER_CPU_CORES=2
-export NODE_MEM=2048
-export NODE_CPU_CORES=2
-EOF
-  export USER_CONFIG_FILE=${KUBE_TEMP}/e2e-config.sh
-  export KUBE_UP_MODE="full"
-  # Since we changed our config above, we reset anchnet env.
+  # cluster configs for e2e test.
+  CLUSTER_LABEL="e2e-test"
+  NUM_MINIONS=2
+  MASTER_MEM=2048
+  MASTER_CPU_CORES=2
+  NODE_MEM=2048
+  NODE_CPU_CORES=2
+  KUBE_UP_MODE="full"
+
+  # Since we changed our config above, we reset cluster env.
+  # Otherwise, we'll see default value from executor-config.sh
   setup-cluster-env
+
   # As part of e2e preparation, we fix image path.
   ${KUBE_ROOT}/hack/caicloud-tools/k8s-replace.sh
   trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
@@ -1871,12 +1930,10 @@ function test-build-release {
   # & server version match. Server binary uses dockerized build; however, developer
   # may use local kubectl (_output/local/bin/kubectl), so we do a local build here.
   echo "Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
-  (
-    cd ${KUBE_ROOT}
-    make clean
-    hack/build-go.sh
-    cd -
-  )
+  cd ${KUBE_ROOT}
+  make clean
+  hack/build-go.sh
+  cd -
 }
 
 

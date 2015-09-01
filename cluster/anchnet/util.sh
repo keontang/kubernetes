@@ -32,8 +32,8 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #      at github.com; however, to make full-mode faster, we download them and
 #      host them separately.
 #   3. Create instances from anchnet's system image, e.g. trustysrvx64c; then
-#      copy all binaries to these instances [can be very slow depending on
-#      internet connection].
+#      copy all binaries to these instances (can be very slow depending on
+#      internet connection).
 #   4. Install docker and bridge-utils. Install docker from get.docker.io is
 #      slow, so we host our own ubuntu apt mirror on "internal-get.caicloud.io".
 #   5. Create other anchnet resources, configure kubernetes, etc. These are
@@ -60,23 +60,36 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #   specify the instance IDs, eip IDs, etc. This is primarily used for debugging.
 KUBE_UP_MODE=${KUBE_UP_MODE:-"tarball"}
 
-# Non-kube binaries versions
-# == This is Full Mode specific parameter.
-FLANNEL_VERSION=${FLANNEL_VERSION:-0.4.0}
-ETCD_VERSION=${ETCD_VERSION:-v2.0.12}
+# Get cluster configuration parameters from config-default and executor-config.
+# config-default is mostly static information configured by caicloud admin, like
+# node ip range; while executor-config is mostly dynamic information configured
+# by user and executor, like number of nodes, cluster name, etc. Also, retrieve
+# executor related methods from executor-service.sh.
+function setup-cluster-env {
+  source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+  source "${KUBE_ROOT}/cluster/anchnet/executor-config.sh"
+  source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
+}
 
+# Before running any function, we setup all anchnet env variables.
+setup-cluster-env
+
+# ===== Full Mode specific parameter
+# Non-kube binaries versions
+FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.3}
+ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
+
+# ===== Full and Tarball Mode specific parameter
 # Package version.
-# == This is Full and Tarball Mode specific parameter.
 DOCKER_VERSION=${DOCKER_VERSION:-1.7.1}
 
-# Tarball URL.
-# == This is Tarball mode specific parameter.
-# TARBALL_URL=${TARBALL_URL:-"http://internal-get.caicloud.io/caicloud/caicloud-kube-release-0.1.tar.gz"}
-TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-release-0.1.tar.gz"}
+# ===== Tarball mode specific parameter.
+# TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-2015-09-01.tar.gz"}
+TARBALL_URL=${TARBALL_URL:-"http://internal-get.caicloud.io/caicloud/caicloud-kube-2015-09-01.tar.gz"}
 
-# The base image used to create master and node instance in image mode. This
-# image is created from scripts like 'image-from-devserver.sh'.
-# == This is Image Mode specific parameter.
+# ===== Image Mode specific parameter.
+# The base image used to create master and node instance in image mode.
+# This image is created from scripts like 'image-from-devserver.sh'.
 INSTANCE_IMAGE=${INSTANCE_IMAGE:-"img-C0SA7DD5"}
 
 # Instance user and password.
@@ -84,21 +97,17 @@ INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
-# 'eipg-00000000' is anchnet's own BGP.
+# 'eipg-00000000' is anchnet's own BGP. Usually, we just use BGP.
 IP_GROUP=${IP_GROUP:-"eipg-00000000"}
 
-# Anchnet config file to use.
+# Anchnet config file to use. All user clusters will be created under one
+# anchnet account (register@caicloud.io) using sub-account, so this file
+# rarely changes.
 ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 
-# Namespace used to create cluster wide services.
+# Namespace used to create cluster wide services. The name is from upstream
+# and shouldn't be changed.
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
-
-# USER_ID uniquely identifies a caicloud user
-USER_ID=${USER_ID:-""}
-
-# Project id actually stands for an anchnet sub-account. If PROJECT_ID is
-# not set, all the subsequent anchnet calls will use the default account
-PROJECT_ID=${PROJECT_ID:-""}
 
 # Path to save per user k8s config file
 if [[ ! -z ${USER_ID-} ]]; then
@@ -120,34 +129,16 @@ source "${KUBE_ROOT}/cluster/anchnet/executor_service.sh"
 DAOCLOUD_ACCELERATOR="http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
 http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
 
-# Helper constants.
+# Override base image in full and tarball mode.
+RAW_BASE_IMAGE=${RAW_BASE_IMAGE:-"trustysrvx64c"}
+if [[ "${KUBE_UP_MODE}" == "full" || "${KUBE_UP_MODE}" == "tarball" ]]; then
+  INSTANCE_IMAGE=${RAW_BASE_IMAGE}
+fi
+
+# Command alias.
 ANCHNET_CMD="anchnet --config-path=${ANCHNET_CONFIG_FILE}"
 CURL_CMD="curl"
 EXPECT_CMD="expect"
-BASE_IMAGE="trustysrvx64c"
-if [[ "${KUBE_UP_MODE}" == "full" || "${KUBE_UP_MODE}" == "tarball" ]]; then
-  INSTANCE_IMAGE=${BASE_IMAGE} # Use base image from anchnet in full and tarball mode.
-fi
-
-# Get all cluster configuration parameters from config-default and user-config.
-# config-default is mostly static information configured by caicloud admin, like
-# node ip range; while user-config is configured by user, like number of nodes.
-# We also create useful vars based on config information:
-#   MASTER_NAME, NODE_NAME_PREFIX
-# Note that master_name and node_name are name of the instances in anchnet, which
-# is helpful to group instances; however, anchnet API works well with instance id,
-# so we provide instance id to kubernetes as nodename and hostname, which makes it
-# easy to query anchnet in kubernetes.
-function setup-anchnet-env {
-  USER_CONFIG_FILE=${USER_CONFIG_FILE:-"${KUBE_ROOT}/cluster/anchnet/default-user-config.sh"}
-  source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-  source "${USER_CONFIG_FILE}"
-  MASTER_NAME="${CLUSTER_LABEL}-master"
-  NODE_NAME_PREFIX="${CLUSTER_LABEL}-node"
-}
-
-# Before running any function, we setup all anchnet env variables.
-setup-anchnet-env
 
 
 # -----------------------------------------------------------------------------
@@ -171,15 +162,13 @@ function verify-prereqs {
     exit 1
   fi
   if [[ "$(which kubectl)" == "" ]]; then
-    (
-      cd ${KUBE_ROOT}
-      hack/build-go.sh
-      if [[ "$?" != "0" ]]; then
-        echo "Can't find kubectl binary in PATH, please fix and retry."
-        exit 1
-      fi
-      cd -
-    )
+    cd ${KUBE_ROOT}
+    hack/build-go.sh
+    if [[ "$?" != "0" ]]; then
+      echo "Can't find kubectl binary in PATH, please fix and retry."
+      exit 1
+    fi
+    cd -
   fi
   if [[ ! -f "${ANCHNET_CONFIG_FILE}" ]]; then
     echo "Can't find anchnet config file ${ANCHNET_CONFIG_FILE}, please fix and retry."
@@ -197,15 +186,6 @@ function kube-up {
   # Make sure we have a public/private key pair used to provision instances.
   ensure-pub-key
 
-  # Create an anchnet project if projectid is not set and report
-  # it back to executor.
-  # TODO: PROJECT_ID creation is dummy for now. This will be replaced
-  # with anchnet api call to dynamically create sub account
-  if [[ -z ${PROJECT_ID-} ]]; then
-    PROJECT_ID="pro-9VTJ7QAT"
-    report-project-id ${PROJECT_ID}
-  fi
-
   # For dev, set to existing instances.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
     MASTER_INSTANCE_ID="i-8DRF060F"
@@ -216,6 +196,8 @@ function kube-up {
     NODE_EIPS="43.254.55.53,43.254.55.92"
     PRIVATE_SDN_INTERFACE="eth1"
   else
+    # Create an anchnet project if PROJECT_ID is empty.
+    create-project
     # Create master/node instances from anchnet without provision. The following
     # two methods will create a set of vars to be used later:
     #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
@@ -232,6 +214,7 @@ function kube-up {
     create-firewall
   fi
 
+  # Install binaries and packages concurrently
   local pids=""
   if [[ "${KUBE_UP_MODE}" = "full" ]]; then
     install-all-binaries &
@@ -429,9 +412,9 @@ function kube-down {
     echo
     # Executing commands.
     anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
+    anchnet-wait-job ${ANCHNET_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
     anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
+    anchnet-wait-job ${ANCHNET_RESPONSE} ${EIP_RELEASE_WAIT_RETRY} ${EIP_RELEASE_WAIT_INTERVAL}
   fi
 
   # Find all vxnets prefixed with CLUSTER_LABEL.
@@ -457,7 +440,7 @@ function kube-down {
 
     # Executing commands.
     anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
+    anchnet-wait-job ${ANCHNET_RESPONSE} ${VXNET_DELETE_WAIT_RETRY} ${VXNET_DELETE_WAIT_INTERVAL}
   fi
 
   # Find all security group prefixed with CLUSTER_LABEL.
@@ -479,7 +462,7 @@ function kube-down {
 
     # Executing commands.
     anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
-    anchnet-wait-job ${ANCHNET_RESPONSE} 240 6
+    anchnet-wait-job ${ANCHNET_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
   fi
 
   # TODO: Find all loadbalancers.
@@ -695,6 +678,20 @@ with open("'$1'", "w") as f:
 '
 }
 
+
+# Create an anchnet project if PROJECT_ID is not specified and report it back
+# to executor.
+#
+# TODO: PROJECT_ID creation is dummy for now. This will be replaced
+# with anchnet api call to dynamically create sub account
+#
+# Vars set:
+#   PROJECT_ID
+function create-project {
+  report-project-id ${PROJECT_ID}
+}
+
+
 # Create a single master instance from anchnet.
 #
 # TODO: Investigate HA master setup.
@@ -718,7 +715,7 @@ function create-master-instance {
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${MASTER_MEM} \
 -c=${MASTER_CPU_CORES} -g=${IP_GROUP} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
+  anchnet-wait-job ${ANCHNET_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
 
   # Get master information.
   local master_info=${ANCHNET_RESPONSE}
@@ -760,7 +757,7 @@ function create-node-instances {
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
 -c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} 240 3
+  anchnet-wait-job ${ANCHNET_RESPONSE} ${NODES_WAIT_RETRY} ${NODES_WAIT_INTERVAL}
 
   # Node name starts from 1.
   for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
@@ -899,7 +896,7 @@ expect {
 }
 EOF
     if [[ "$?" != "0" ]]; then
-      # We give more attempts for setting up ssh to allow slow startup.
+      # We give more attempts for setting up ssh to allow slow instance startup.
       if (( attempt > 40 )); then
         echo
         echo -e "${color_red}Unable to setup instance ssh for $1 (sorry!)${color_norm}" >&2
@@ -932,7 +929,7 @@ function create-sdn-network {
 
   # Create a private SDN network.
   anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_LABEL}-${VXNET_NAME} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
+  anchnet-wait-job ${ANCHNET_RESPONSE} ${VXNET_CREATE_WAIT_RETRY} ${VXNET_CREATE_WAIT_INTERVAL}
 
   # Get vxnet information.
   local vxnet_info=${ANCHNET_RESPONSE}
@@ -942,7 +939,7 @@ function create-sdn-network {
   local all_instance_ids="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
   echo "Add all instances (both master and nodes) to vxnet ${VXNET_ID} ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE}
+  anchnet-wait-job ${ANCHNET_RESPONSE} ${VXNET_JOIN_WAIT_RETRY} ${VXNET_JOIN_WAIT_INTERVAL}
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
@@ -967,7 +964,7 @@ function create-firewall {
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
 --direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
+  anchnet-wait-job ${ANCHNET_RESPONSE} ${SG_MASTER_WAIT_RETRY} ${SG_MASTER_WAIT_INTERVAL}
 
   # Get security group information.
   local master_sg_info=${ANCHNET_RESPONSE}
@@ -987,7 +984,7 @@ function create-firewall {
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
 --value1=22,30000,30000 --value2=22,32767,32767 --project=${PROJECT_ID}"
-  anchnet-wait-job ${ANCHNET_RESPONSE} 120 3
+  anchnet-wait-job ${ANCHNET_RESPONSE} ${SG_NODES_WAIT_RETRY} ${SG_NODES_WAIT_INTERVAL}
 
   # Get security group information.
   local node_sg_info=${ANCHNET_RESPONSE}
@@ -1112,7 +1109,7 @@ function create-etcd-initial-cluster {
 }
 
 
-# Push new binaries to master and nodes.
+# Build binaries from current repo and push to master and nodes, used in full mode.
 #
 # Assumed vars:
 #   KUBE_ROOT
@@ -1857,7 +1854,7 @@ EOF
   export USER_CONFIG_FILE=${KUBE_TEMP}/e2e-config.sh
   export KUBE_UP_MODE="full"
   # Since we changed our config above, we reset anchnet env.
-  setup-anchnet-env
+  setup-cluster-env
   # As part of e2e preparation, we fix image path.
   ${KUBE_ROOT}/hack/caicloud-tools/k8s-replace.sh
   trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT

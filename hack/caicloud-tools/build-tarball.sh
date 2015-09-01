@@ -19,11 +19,11 @@
 # upload it to internal-get.caicloud.io or qiniu.com.
 
 # The tarball version.
-CAICLOUD_VERSION=0.1
+CAICLOUD_VERSION="2015-09-01"
 
 # Binary version
-FLANNEL_VERSION=${FLANNEL_VERSION-0.4.0}
-ETCD_VERSION=${ETCD_VERSION-v2.0.12}
+FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.3}
+ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
 
 # Build kube server binaries from current code base.
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
@@ -31,6 +31,10 @@ cd ${KUBE_ROOT}
 hack/caicloud-tools/k8s-replace.sh
 trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
 build/run.sh hack/build-go.sh
+if [[ "$?" != "0" ]]; then
+  echo "Error building server binaries"
+  exit 1
+fi
 
 # Fetch non-kube binaries.
 wget http://internal-get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz -O etcd-linux.tar.gz
@@ -48,7 +52,7 @@ cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kubectl \
    _output/dockerized/bin/linux/amd64/kubelet \
    caicloud-kube
-tar cvzf caicloud-kube-release-$CAICLOUD_VERSION.tar.gz caicloud-kube
+tar cvzf caicloud-kube-$CAICLOUD_VERSION.tar.gz caicloud-kube
 rm -rf etcd-linux.tar.gz flannel-linux.tar.gz etcd-linux flannel-linux caicloud-kube
 
 cd -

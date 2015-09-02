@@ -153,6 +153,7 @@ function kube-up {
   fi
 
   # Configure master/nodes instances and start kubernetes.
+  install-configurations
   provision-instances
 
   # After everything's done, we re-apply firewall to make sure it works.
@@ -177,35 +178,60 @@ function kube-up {
 
 # Update a kubernetes cluster with latest source.
 function kube-push {
+  #
   # Find all instances prefixed with CLUSTER_NAME (caicloud convention - every instance
   # is prefixed with a unique CLUSTER_NAME).
+  #
   anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
   local count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
 
-  # Print instance information
+  #
+  # Print instance information and populate MASTER_EIP, NODE_EIPS.
+  #
+  echo "[`TZ=Asia/Shanghai date`] +++++ Searching for all instances ..."
   for i in `seq 0 $(($count-1))`; do
     name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
-    echo -n "[`TZ=Asia/Shanghai date`] Found instances: ${name},${id}"
+    eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
+    echo "[`TZ=Asia/Shanghai date`] Found instances: ${name},${id}"
+    if [[ $name == *"master"* ]]; then
+      MASTER_EIP=${eip}
+      MASTER_INSTANCE_ID=${id}
+    else
+      if [[ -z "${NODE_EIPS-}" ]]; then
+        NODE_EIPS="${eip}"
+        NODE_INSTANCE_IDS="${id}"
+      else
+        NODE_EIPS="${NODE_EIPS},${eip}"
+        NODE_INSTANCE_IDS="${NODE_INSTANCE_IDS},${id}"
+      fi
+    fi
   done
-  echo
 
+  IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
+  IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
+  export NUM_MINIONS=${#NODE_EIPS_ARR[@]}
+
+  #
   # Build server binaries.
+  #
+  ensure-temp-dir
+  cd ${KUBE_ROOT}
+  make clean
+  hack/build-go.sh
+  cd -
   anchnet-build-server
 
+  #
   # Push new binaries to master and nodes.
-  echo "[`TZ=Asia/Shanghai date`] +++++ Pushing binaries to master and nodes ..."
-  for i in `seq 0 $(($count-1))`; do
-    name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-    eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
-    if [[ $name == *"master"* ]]; then
-      expect <<EOF
+  #
+  echo "[`TZ=Asia/Shanghai date`] +++++ Pushing binaries to master ..."
+  expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
-  ${INSTANCE_USER}@${eip}:~/kube/master
+  ${INSTANCE_USER}@${MASTER_EIP}:~/kube/master
 expect {
   "*?assword:" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -214,13 +240,16 @@ expect {
   eof {}
 }
 EOF
-    else
-      expect <<EOF
+
+  echo "[`TZ=Asia/Shanghai date`] +++++ Pushing binaries to all nodes ..."
+  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
+    local node_eip=${NODE_EIPS_ARR[${i}]}
+    expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy \
-  ${INSTANCE_USER}@${eip}:~/kube/node
+  ${INSTANCE_USER}@${node_eip}:~/kube/node
 expect {
   "*?assword:" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -229,22 +258,33 @@ expect {
   eof {}
 }
 EOF
-    fi
-    if [[ -z "${KUBE_PUSH_ALL_EIPS-}" ]]; then
-      KUBE_PUSH_ALL_EIPS="${eip}"
-    else
-      KUBE_PUSH_ALL_EIPS="${KUBE_PUSH_ALL_EIPS},${eip}"
-    fi
   done
 
+  #
   # Stop running cluster.
-  IFS=',' read -ra instance_ip_arr <<< "${KUBE_PUSH_ALL_EIPS}"
-  echo "[`TZ=Asia/Shanghai date`] +++++ Stop services ..."
-  for instance_ip in ${instance_ip_arr[*]}; do
+  #
+  echo "[`TZ=Asia/Shanghai date`] +++++ Stop master ..."
+  expect <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} "sudo service etcd stop"
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+
+  echo "[`TZ=Asia/Shanghai date`] +++++ Stop nodes ..."
+  IFS=',' read -ra node_eips_arr <<< "${NODE_EIPS}"
+  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
+    local node_eip=${NODE_EIPS_ARR[${i}]}
     expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${instance_ip} "sudo service etcd stop"
+  ${INSTANCE_USER}@${node_eip} "sudo service flanneld stop"
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -255,45 +295,12 @@ expect {
 EOF
   done
 
+  #
   # Restart cluster.
-  pids=""
-  for i in `seq 0 $(($count-1))`; do
-    name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-    eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
-    if [[ $name == *"master"* ]]; then
-      expect <<EOF &
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${eip} "sudo ~/kube/master-start.sh"
-expect {
-  "*assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-      pids="$pids $!"
-    else
-      expect <<EOF &
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${eip} "sudo ./kube/node-start.sh"
-expect {
-  "*assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-      pids="$pids $!"
-    fi
-  done
-
-  echo "[`TZ=Asia/Shanghai date`] +++++ Wait for all instances to be provisioned ..."
-  wait $pids
-  echo "[`TZ=Asia/Shanghai date`] All instances have been provisioned ..."
+  #
+  KUBE_INSTANCE_LOGDIR="/tmp/kubepush-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"
+  mkdir -p ${KUBE_INSTANCE_LOGDIR}
+  provision-instances
 }
 
 
@@ -1419,12 +1426,13 @@ function provision-instances {
 #
 # Assumed vars:
 #   KUBE_INSTANCE_PASSWORD
+#   NUM_MINIONS
 #   MASTER_EIP
-#   NODE_EIPS
+#   MASTER_INSTANCE_ID
+#   NODE_EIPS_ARR
+#   NODE_INSTANCE_IDS_ADDR
+#   KUBE_INSTANCE_LOGDIR
 function provision-instances-internal {
-  # Install configurations on each node first.
-  install-configurations
-
   local pids=""
   echo "[`TZ=Asia/Shanghai date`] +++++ Start provisioning master and nodes. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
   # Call master-start.sh to start master.

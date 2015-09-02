@@ -136,3 +136,23 @@ func (an *Anchnet) Routes() (cloudprovider.Routes, bool) {
 func (an *Anchnet) ProviderName() string {
 	return ProviderName
 }
+
+type VolumeOptions struct {
+	CapacityMB int
+}
+
+// Volumes is an interface for managing cloud-provisioned volumes.
+type Volumes interface {
+	// AttachDisk attaches the disk to the specified instance. `instanceID` can be empty
+	// to mean "the instance on which we are running".
+	// Returns the device path (e.g. /dev/xvdf) where we attached the volume.
+	AttachDisk(instanceID string, volumeID string, readOnly bool) (string, error)
+	// DetachDisk detaches the disk from the specified instance. `instanceID` can be empty
+	// to mean "the instance on which we are running"
+	DetachDisk(instanceID string, volumeID string) error
+
+	// Create a volume with the specified options.
+	CreateVolume(volumeOptions *VolumeOptions) (volumeID string, err error)
+	// Delete a volume.
+	DeleteVolume(volumeID string) error
+}

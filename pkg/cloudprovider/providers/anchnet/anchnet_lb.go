@@ -58,7 +58,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 
 	status = &api.LoadBalancerStatus{}
 	status.Ingress = []api.LoadBalancerIngress{{IP: ip_response.ItemSet[0].EipAddr}}
-	glog.Infof("Anchnet: got loadbalancer %v, ingress ip %v\n", name, ip_response.ItemSet[0].EipAddr)
+	glog.Infof("got loadbalancer %v, ingress ip %v\n", name, ip_response.ItemSet[0].EipAddr)
 	return status, true, nil
 }
 
@@ -75,7 +75,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 // 5. create a security group for loadbalancer, number of rules = number of service ports;
 // 6. apply above changes.
 func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net.IP, ports []*api.ServicePort, hosts []string, affinityType api.ServiceAffinity) (*api.LoadBalancerStatus, error) {
-	glog.Infof("Anchnet: EnsureTCPLoadBalancer(%v, %v, %v, %v, %v)", name, region, loadBalancerIP, ports, hosts)
+	glog.Infof("EnsureTCPLoadBalancer(%v, %v, %v, %v, %v)", name, region, loadBalancerIP, ports, hosts)
 
 	// Anchnet doesn't support UDP (k8s doesn't support neither).
 	for i := range ports {
@@ -109,14 +109,14 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 		return nil, fmt.Errorf("error checking if anchnet load balancer %v already exists: %v", name, err)
 	}
 	if exists {
-		glog.Infof("Anchnet: EnsureTCPLoadBalancer found existing loadbalancer %v; deleting now", name)
+		glog.Infof("EnsureTCPLoadBalancer found existing loadbalancer %v; deleting now", name)
 		eip_ids = append(eip_ids, matching_lb.Eips[0].EipID)
 		err := an.EnsureTCPLoadBalancerDeletedHelper(name, region, true)
 		if err != nil {
 			return nil, fmt.Errorf("error deleting existing anchnet load balancer: %v", err)
 		}
 	} else {
-		glog.Infof("Anchnet: EnsureTCPLoadBalancer no loadbalancer %v found", name)
+		glog.Infof("EnsureTCPLoadBalancer no loadbalancer %v found", name)
 		// Create a public IP address resource. The externalIP field is thus ignored.
 		ip_response, err := an.allocateEIP()
 		if err != nil {
@@ -220,7 +220,7 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 	}
 	status := &api.LoadBalancerStatus{}
 	status.Ingress = []api.LoadBalancerIngress{{IP: response.ItemSet[0].EipAddr}}
-	glog.Infof("Anchnet: created loadbalancer %v, ingress ip %v\n", name, response.ItemSet[0].EipAddr)
+	glog.Infof("created loadbalancer %v, ingress ip %v\n", name, response.ItemSet[0].EipAddr)
 	return status, nil
 }
 

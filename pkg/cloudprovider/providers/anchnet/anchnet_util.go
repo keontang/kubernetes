@@ -18,7 +18,12 @@ package anchnet_cloud
 
 import (
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
+
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/resource"
 
 	anchnet_client "github.com/caicloud/anchnet-go"
 	"github.com/golang/glog"
@@ -46,4 +51,23 @@ func (an *Anchnet) WaitJobStatus(jobID string, status anchnet_client.JobStatus) 
 		time.Sleep(time.Duration(i+1) * RetryIntervalOnWait)
 	}
 	return fmt.Errorf("Time out waiting for job %v", jobID)
+}
+
+// makeResources converts bare resources to api spec'd resource, cpu is in cores, memory is in GiB.
+func makeResources(cpu, memory int) *api.NodeResources {
+	return &api.NodeResources{
+		Capacity: api.ResourceList{
+			api.ResourceCPU:    *resource.NewMilliQuantity(int64(cpu*1000), resource.DecimalSI),
+			api.ResourceMemory: *resource.NewQuantity(int64(memory*1024*1024*1024), resource.BinarySI),
+		},
+	}
+}
+
+// convertToInstanceID converts name to anchnet instance ID, e.g.
+//   i-ff830wku->i-FF830WKU, i-FF830WKU->i-FF830WKU.
+func convertToInstanceID(name string) string {
+	s := strings.ToUpper(name)
+	a := []rune(s)
+	a[0] = unicode.ToLower(a[0])
+	return string(a)
 }

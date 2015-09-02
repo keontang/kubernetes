@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org/).
 
-### Version 0.2.0 [TBD]
+### Version 0.2.1 [TBD]
+#### Changed
+- Support persistent volume in anchnet (see example/caicloud/anchnet_volume/README.md)
+- Fix issues with kube-push
+- Better NodeAddress error handling (inspired by volume support)
+- Add maintenance notes in hack/caicloud/README.md
+
+### Version 0.2.0 [2015-09-24]
 #### Changed
 - Rename `hack/caicloud-tools` to `hack/caicloud`, since it's not just tools now.
 - Rename `CAICLOUD_VERSION` to `CAICLOUD_KUBE_VERSION` to make it more explicit.

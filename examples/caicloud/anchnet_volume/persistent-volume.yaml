@@ -1,0 +1,12 @@
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: anchnet-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  anchnetPersistentDisk:
+    volumeID: vom-PGRF3I54
+    fsType: ext4

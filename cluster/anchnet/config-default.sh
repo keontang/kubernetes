@@ -182,7 +182,7 @@ ELASTICSEARCH_REPLICAS=${ELASTICSEARCH_REPLICAS:-2}
 KIBANA_REPLICAS=${KIBANA_REPLICAS:-1}
 
 # Optional: Install Kubernetes UI
-ENABLE_CLUSTER_UI=${KUBE_ENABLE_CLUSTER_UI:-true}
+ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-true}
 KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 
 # -----------------------------------------------------------------------------

@@ -42,6 +42,8 @@ EOF
 #
 # Input:
 #   $1 Service IP range. All kubernetes service will fall into the range.
+#   $2 Admmission control plugins.
+#   $3 Unique cluster name.
 function create-kube-apiserver-opts {
   cat <<EOF > ~/kube/default/kube-apiserver
 KUBE_APISERVER_OPTS="--logtostderr=true \
@@ -49,28 +51,32 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --insecure-port=${MASTER_INSECURE_PORT} \
 --bind-address=${MASTER_SECURE_ADDRESS} \
 --secure-port=${MASTER_SECURE_PORT} \
---etcd_servers=http://127.0.0.1:4001 \
+--etcd-servers=http://127.0.0.1:4001 \
 --service-cluster-ip-range=${1} \
---token_auth_file=/etc/kubernetes/known-tokens.csv \
---basic_auth_file=/etc/kubernetes/basic-auth.csv \
---client_ca_file=/etc/kubernetes/ca.crt \
---tls_cert_file=/etc/kubernetes/master.crt \
---tls_private_key_file=/etc/kubernetes/master.key \
---admission_control=${2} \
---cloud_config=/etc/kubernetes/anchnet-config \
---cloud_provider=anchnet"
+--token-auth-file=/etc/kubernetes/known-tokens.csv \
+--basic-auth-file=/etc/kubernetes/basic-auth.csv \
+--client-ca-file=/etc/kubernetes/ca.crt \
+--tls-cert-file=/etc/kubernetes/master.crt \
+--tls-private-key-file=/etc/kubernetes/master.key \
+--admission-control=${2} \
+--cloud-config=/etc/kubernetes/anchnet-config \
+--cloud-provider=anchnet \
+--cluster-name=${3}"
 EOF
 }
 
 # Create controller manager options.
+# Input:
+#   $1 Unique cluster name.
 function create-kube-controller-manager-opts {
   cat <<EOF > ~/kube/default/kube-controller-manager
 KUBE_CONTROLLER_MANAGER_OPTS="--logtostderr=true \
 --master=${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} \
---cloud_config=/etc/kubernetes/anchnet-config \
---cloud_provider=anchnet \
+--cloud-config=/etc/kubernetes/anchnet-config \
+--cloud-provider=anchnet \
 --service-account-private-key-file=/etc/kubernetes/master.key \
---root-ca-file=/etc/kubernetes/ca.crt"
+--root-ca-file=/etc/kubernetes/ca.crt \
+--cluster-name=${1}"
 EOF
 }
 
@@ -100,13 +106,13 @@ KUBELET_OPTS="--logtostderr=true \
 --address=${2} \
 --port=10250 \
 --hostname_override=${hostname} \
---api_servers=https://${3}:${MASTER_SECURE_PORT} \
---cluster_dns=${4} \
---cluster_domain=${5} \
+--api-servers=https://${3}:${MASTER_SECURE_PORT} \
+--cluster-dns=${4} \
+--cluster-domain=${5} \
 --pod-infra-container-image=${6} \
 --kubeconfig=/etc/kubernetes/kubelet-kubeconfig \
---cloud_config=/etc/kubernetes/anchnet-config \
---cloud_provider=anchnet"
+--cloud-config=/etc/kubernetes/anchnet-config \
+--cloud-provider=anchnet"
 EOF
 }
 

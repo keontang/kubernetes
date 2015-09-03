@@ -1,0 +1,53 @@
+## Anchnet cloudprovider
+
+Anchnet cloudprovider is internally supported by caicloud.io. It conforms to kubernetes cloudprovider plugin convention, and can be considered natively supported by kubernetes.
+
+### Background on anchnet cloudprovider
+
+[Anchnet](http://cloud.51idc.com/) is one of caicloud's IDC/IaaS parteners. It has most common features seen in other cloudproviders, e.g. Cloud Instances, External IPs, Load
+balancers, etc, see [help center](http://cloud.51idc.com/help/cloud/index.html). [API doc](http://cloud.51idc.com/help/api/index.html) lists all public APIs (there are some
+internal ones also). SDK is developed by caicloud team at https://github.com/caicloud/anchnet-go.
+
+### Create a cluster using anchnet
+
+To create a kubernetes cluster, make sure you've installed anchnet SDK and have a config file (e.g ~/.anchnet/config), then simply run:
+```
+KUBERNETES_PROVIDER=anchnet ./cluster/kube-up.sh
+```
+
+##### Options:
+
+Following is a curated list of options used for kube-up; there are a lot of other configurations not listed here, see `config-default.sh`, `executor-config.sh`.
+
+* `CLUSTER_NAME`: The name of newly created cluster. This is used to identify cluster; all resources will be prefixed with this name. The variable is default to "k8s-default".
+  E.g. the following command will create a cluster named "caicloud-rocks", and all instances (plus other resources) will be prefixed with "caicloud-rocks".
+    ```
+    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks ./cluster/kube-up.sh
+    ```
+
+* `PROJECT_ID`: The project to use. In anchnet, project is actually a sub-account, it helps admin to manage resources. All resouces under a project (sub-account) is isolated
+  from others. An anchnet account can have multiple sub-accounts. The variable is default to empty string, which means main-account. E.g. following command creates a cluster
+  named "caicloud-rocks" under project "pro-H4ZW87K2" ("pro-H4ZW87K2" must exist):
+    ```
+    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
+    ```
+
+* `ANCHNET_CONFIG_FILE`: The config file supplied to `anchnet` SDK CLI. Default value is `~/.anchnet/config`. Usually, you don't have to change the value, unless you want to
+  create cluster under another anchnet account (NOT sub-account).
+
+### Delete a cluster
+
+To bring down a cluster, run:
+
+```
+KUBERNETES_PROVIDER=anchnet ./cluster/kube-down.sh
+```
+
+The same options apply here, i.e.
+
+* `CLUSTER_NAME`: Delete cluster with given name.
+
+* `PROJECT_ID`: Delete cluster from sub-account with given id. E.g. following command deletes cluster "caicloud-rocks" under project "pro-H4ZW87K2".
+  ```
+  KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-down.sh
+  ```

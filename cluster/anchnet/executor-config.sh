@@ -16,7 +16,7 @@
 
 # The file contains configuration values that vary per user. Some values
 # are specified by users, e.g. NODE_MEM; and some values are specified by
-# cluster executor, e.g. CLUSTER_LABEL.
+# cluster executor, e.g. CLUSTER_NAME.
 
 # -----------------------------------------------------------------------------
 # Params from executor for kube-up.
@@ -24,7 +24,7 @@
 # Label of the cluster. This is used for constructing the prefix of resource
 # ids from anchnet. The same label needs to be specified when running
 # kube-down to release the resources acquired during kube-up.
-CLUSTER_LABEL=${CLUSTER_LABEL:-"default"}
+CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 
 # Project id actually stands for an anchnet sub-account. If PROJECT_ID is
 # not set, all the subsequent anchnet calls will use the default account.
@@ -96,15 +96,15 @@ NODE_CPU_CORES=${NODE_CPU_CORES:-1}
 # is helpful to group instances; however, anchnet API works well with instance id,
 # so we provide instance id to kubernetes as nodename and hostname, which makes it
 # easy to query anchnet in kubernetes.
-MASTER_NAME="${CLUSTER_LABEL}-master"
-NODE_NAME_PREFIX="${CLUSTER_LABEL}-node"
+MASTER_NAME="${CLUSTER_NAME}-master"
+NODE_NAME_PREFIX="${CLUSTER_NAME}-node"
 
 # If USER_ID is specified, set the path to save per user k8s config file;
 # otherwise, use default one from k8s.
 if [[ ! -z ${USER_ID-} ]]; then
   KUBECONFIG="$HOME/.kube/config_${USER_ID}"
 fi
-CONTEXT="anchnet_${CLUSTER_LABEL}"
+CONTEXT="anchnet_${CLUSTER_NAME}"
 
 # -----------------------------------------------------------------------------
 # Params from executor for kube-down.

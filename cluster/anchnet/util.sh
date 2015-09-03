@@ -252,9 +252,9 @@ function kube-up {
 
 # Update a kubernetes cluster with latest source.
 function kube-push {
-  # Find all instances prefixed with CLUSTER_LABEL (caicloud convention - every instance
-  # is prefixed with a unique CLUSTER_LABEL).
-  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  # Find all instances prefixed with CLUSTER_NAME (caicloud convention - every instance
+  # is prefixed with a unique CLUSTER_NAME).
+  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
   local count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
 
   # Print instance information
@@ -367,19 +367,19 @@ EOF
     fi
   done
 
-  echo "Wait for all instances to be provisioned ..."
+  echo "++++++++++ Waiting for all instances to be provisioned ..."
   wait $pids
   echo "All instances have been provisioned ..."
 }
 
 
-# Delete a kubernete cluster from anchnet, using CLUSTER_LABEL.
+# Delete a kubernete cluster from anchnet, using CLUSTER_NAME.
 #
 # Assumed vars:
-#   CLUSTER_LABEL
+#   CLUSTER_NAME
 function kube-down {
-  # Find all instances prefixed with CLUSTER_LABEL.
-  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  # Find all instances prefixed with CLUSTER_NAME.
+  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     # Print and collect instance information
@@ -408,8 +408,8 @@ function kube-down {
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${EIP_RELEASE_WAIT_RETRY} ${EIP_RELEASE_WAIT_INTERVAL}
   fi
 
-  # Find all vxnets prefixed with CLUSTER_LABEL.
-  command-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  # Find all vxnets prefixed with CLUSTER_NAME.
+  command-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_NAME} --project=${PROJECT_ID}"
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   # We'll also find default one - bug in anchnet.
   if [[ "${count}" != "" && "${count}" != "1" ]]; then
@@ -434,8 +434,8 @@ function kube-down {
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_DELETE_WAIT_RETRY} ${VXNET_DELETE_WAIT_INTERVAL}
   fi
 
-  # Find all security group prefixed with CLUSTER_LABEL.
-  command-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_LABEL} --project=${PROJECT_ID}"
+  # Find all security group prefixed with CLUSTER_NAME.
+  command-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_NAME} --project=${PROJECT_ID}"
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     echo -n "Found security group: "
@@ -925,7 +925,7 @@ function create-sdn-network {
   echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
-  command-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_LABEL}-${VXNET_NAME} --project=${PROJECT_ID}"
+  command-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_NAME}-${VXNET_NAME} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_CREATE_WAIT_RETRY} ${VXNET_CREATE_WAIT_INTERVAL}
 
   # Get vxnet information.
@@ -958,7 +958,7 @@ function create-firewall {
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   #
   echo "++++++++++ Creating master security group rules ..."
-  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${MASTER_SG_NAME} \
+  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
 --direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_MASTER_WAIT_RETRY} ${SG_MASTER_WAIT_INTERVAL}
@@ -977,7 +977,7 @@ function create-firewall {
   # (tcp/30000-32767, udp/30000-32767).
   #
   echo "++++++++++ Creating node security group rules ..."
-  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_LABEL}-${NODE_SG_NAME} \
+  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${NODE_SG_NAME} \
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
 --value1=22,30000,30000 --value2=22,32767,32767 --project=${PROJECT_ID}"
@@ -1246,7 +1246,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Wait for all instances to fetch and install tarball ..."
+  echo "++++++++++ Waiting for all instances to fetch and install tarball ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
@@ -1330,6 +1330,7 @@ function provision-instances {
 #   MASTER_EIP
 #   NODE_EIPS
 function provision-instances-internal {
+  # Install configurations on each node first.
   install-configurations
 
   local pids=""
@@ -1438,8 +1439,8 @@ function install-configurations-internal {
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
     echo "create-etcd-opts kubernetes-master \"${MASTER_INTERNAL_IP}\" \"${ETCD_INITIAL_CLUSTER}\""
-    echo "create-kube-apiserver-opts \"${SERVICE_CLUSTER_IP_RANGE}\" \"${ADMISSION_CONTROL}\""
-    echo "create-kube-controller-manager-opts"
+    echo "create-kube-apiserver-opts \"${SERVICE_CLUSTER_IP_RANGE}\" \"${ADMISSION_CONTROL}\" ${CLUSTER_NAME}"
+    echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
     echo "create-kube-scheduler-opts"
     echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
     # Function 'create-private-interface-opts' creates network options used to
@@ -1910,7 +1911,7 @@ function prepare-e2e() {
   ensure-temp-dir
 
   # cluster configs for e2e test.
-  CLUSTER_LABEL="e2e-test"
+  CLUSTER_NAME="e2e-test"
   NUM_MINIONS=2
   MASTER_MEM=2048
   MASTER_CPU_CORES=2

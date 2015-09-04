@@ -23,20 +23,20 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 grep -rl "gcr.io/google_containers/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib |
-  xargs sed -i "" 's|gcr.io/google_containers/|caicloudgcr/|g'
+  xargs perl -X -i -pe 's|gcr.io/google_containers/|caicloudgcr/|g'
 
 # 'golang.org' is blocked - remove it since we do not need it for building.
-sed -i "" "s|go get golang.org/x/tools/cmd/cover github.com/tools/godep|go get github.com/tools/godep|g" \
+perl -i -pe "s|go get golang.org/x/tools/cmd/cover github.com/tools/godep|go get github.com/tools/godep|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Accessing 'github.com' is slow, replace it with our own file server
-sed -i "" "s|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|\
+perl -i -pe "s|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|\
 http://internal-get.caicloud.io/etcd/etcd-v2.0.0-linux-amd64.tar.gz|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Our cloudprovider supports following e2e tests.
-sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|g" \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "anchnet")|g' \
     ${KUBE_ROOT}/test/e2e/kubectl.go
-sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|g" \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "anchnet")|g' \
     ${KUBE_ROOT}/test/e2e/service.go
-sed -i "" "s|google.com|baidu.com|g" ${KUBE_ROOT}/test/e2e/networking.go
+perl -i -pe "s|google.com|baidu.com|g" ${KUBE_ROOT}/test/e2e/networking.go

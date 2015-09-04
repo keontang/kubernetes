@@ -30,8 +30,8 @@ CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 # not set, all the subsequent anchnet calls will use the default account.
 PROJECT_ID=${PROJECT_ID:-""}
 
-# USER_ID uniquely identifies a caicloud user.
-USER_ID=${USER_ID:-""}
+# KUBE_USER uniquely identifies a caicloud user.
+KUBE_USER=${KUBE_USER:-""}
 
 # To indicate if the execution status needs to be reported back to Caicloud
 # executor via curl. Set it to be Y if reporting is needed.
@@ -99,10 +99,10 @@ NODE_CPU_CORES=${NODE_CPU_CORES:-1}
 MASTER_NAME="${CLUSTER_NAME}-master"
 NODE_NAME_PREFIX="${CLUSTER_NAME}-node"
 
-# If USER_ID is specified, set the path to save per user k8s config file;
+# If KUBE_USER is specified, set the path to save per user k8s config file;
 # otherwise, use default one from k8s.
-if [[ ! -z ${USER_ID-} ]]; then
-  KUBECONFIG="$HOME/.kube/config_${USER_ID}"
+if [[ ! -z ${KUBE_USER-} ]]; then
+  KUBECONFIG="$HOME/.kube/config_${KUBE_USER}"
 fi
 CONTEXT="anchnet_${CLUSTER_NAME}"
 

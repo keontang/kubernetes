@@ -53,6 +53,12 @@ var _ cloudprovider.Instances = (*Anchnet)(nil)
 // querying anchnet, we convert it to InstanceID.
 func (an *Anchnet) NodeAddresses(name string) ([]api.NodeAddress, error) {
 	name = convertToInstanceID(name)
+
+	data, exists, err := an.addressCache.GetByKey(name)
+	if exists && err == nil {
+		return data.(AddressCacheEntry).addresses, nil
+	}
+
 	response, err := an.describeInstance(name)
 	if err != nil {
 		return nil, err
@@ -85,6 +91,11 @@ func (an *Anchnet) NodeAddresses(name string) ([]api.NodeAddress, error) {
 		{Type: api.NodeInternalIP, Address: ip.String()},
 		{Type: api.NodeExternalIP, Address: response.ItemSet[0].EIP.EipAddr},
 	}
+
+	an.addressCache.Add(AddressCacheEntry{
+		name:      name,
+		addresses: addresses,
+	})
 
 	return addresses, nil
 }

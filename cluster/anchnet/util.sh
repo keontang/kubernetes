@@ -583,8 +583,10 @@ EOF
 #   KUBE_USER
 #   KUBE_PASSWORD
 function get-password {
-  if [[ -z ${KUBE_USER-} || -z ${KUBE_PASSWORD-} ]]; then
+  if [[ -z ${KUBE_USER-} ]]; then
     KUBE_USER=admin
+  fi
+  if [[ -z ${KUBE_PASSWORD-} ]]; then
     KUBE_PASSWORD=$(python -c 'import string,random; print "".join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(16))')
   fi
 }
@@ -672,13 +674,14 @@ with open("'$1'", "w") as f:
 
 # Create an anchnet project if PROJECT_ID is not specified and report it back
 # to executor. Note that we do not create user project if neither PROJECT_ID
-# nor USER_ID is specified.
+# nor KUBE_USER is specified. Also KUBE_USER at this point has not yet been set
+# to "admin" (in function get-password), so it's safe to check if it's empty.
 #
 # Vars set:
 #   PROJECT_ID
 function create-project {
-  if [[ -z "${PROJECT_ID-}" && ! -z "${USER_ID-}" ]]; then
-    command-exec-and-retry "${ANCHNET_CMD} createuserproject ${USER_ID}"
+  if [[ -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
+    command-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
     PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
     report-project-id ${PROJECT_ID}

@@ -23,20 +23,20 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 grep -rl "caicloudgcr/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib |
-  xargs sed -i "" 's|caicloudgcr/|gcr.io/google_containers/|g'
+  xargs perl -X -i -pe 's|caicloudgcr/|gcr.io/google_containers/|g'
 
 # Restore 'golang.org' packages.
-sed -i "" "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \
+perl -i -pe "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Restore 'github.com' files.
-sed -i "" "s|http://internal-get.caicloud.io/etcd/etcd-v2.0.0-linux-amd64.tar.gz|\
+perl -i -pe "s|http://internal-get.caicloud.io/etcd/etcd-v2.0.0-linux-amd64.tar.gz|\
 https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
     ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Restore supported e2e tests.
-sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|g" \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
     ${KUBE_ROOT}/test/e2e/kubectl.go
-sed -i "" "s|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\", \"anchnet\")|SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")|g" \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
     ${KUBE_ROOT}/test/e2e/service.go
-sed -i "" "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go
+perl -i -pe "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go

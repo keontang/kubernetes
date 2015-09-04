@@ -32,27 +32,25 @@ Following is a curated list of options used for kube-up; there are a lot of othe
     KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
     ```
 
+* `KUBE_USER`: The kubernetes user name. This variable is default to empty string. If `KUBE_USER` is set, the `kubeconfig` file, which has all the information of how to access
+  the cluster, will be created at `$HOME/.kube/config_${KUBE_USER}`. If not set, default location (`$HOME/.kube/config`) will be used. In production, we should always set
+  `KUBE_USER`, leaving it empty should only be used during development. The variable has some correlation with `PROJECT_ID`:
+
+  * If `PROJECT_ID` is set, it means this `KUBE_USER` has already been accociated with a sub account before, so that we just bring up cluster under that sub account:
+    E.g. following command creates a cluster under a specific sub account:
+    ```
+    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
+    ```
+
+  * If `PROJECT_ID` is not set, it means this is the first time user wants to create a cluster and there is no anchnet sub account associated with `KUBE_USER`. In this case,
+    an anchnet sub account will be automatically created and reported back to executor service, and the cluster will be allocated to the newly created sub account.
+    E.g. following command will create a sub-account and then create a cluster:
+    ```
+    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user ./cluster/kube-up.sh
+    ```
+
 * `ANCHNET_CONFIG_FILE`: The config file supplied to `anchnet` SDK CLI. Default value is `~/.anchnet/config`. Usually, you don't have to change the value, unless you want to
   create cluster under another anchnet account (NOT sub-account).
-
-* `KUBE_USER`: The caicloud usesr id. This variable is default to empty string. It has some correlation with `PROJECT_ID`.
-  * We always set `KUBE_USER` in production. In this case, the `kubeconfig` file which has all the information of how to access the cluster will be created at 
-    `$HOME/.kube/config_${KUBE_USER}`. And depending on whether `PROJECT_ID` is set, we will decide if we have to create an anchnet sub account and report it back to executor
-    service. If `PROJECT_ID` is set, it means this `KUBE_USER` has already been accociated with a sub account before so that we just bring up cluster under that sub account.
-    E.g. following command creates a cluster under a specific sub account.
-      ```
-      KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
-      ```
-    If `PROJECT_ID` is not set, it means this is the first time user wants to create a cluster and there is no anchnet sub account associated with `KUBE_USER`. In this case,
-    an anchnet sub account will be automatically created and reported back to executor service, and the cluster will be allocated to the newly created sub account.
-    E.g. following command creates a cluster with no sub account created beforehand.
-      ```
-      KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user ./cluster/kube-up.sh
-      ```
-
-  * Though we should never do this in production, we can leave `KUBE_USER` unset in development when testing other features so that it can save us a lot of troubles. In this
-    case, the `kubeconfig` file will be created at the default location.
-
 
 ### Delete a cluster
 
@@ -62,7 +60,7 @@ To bring down a cluster, run:
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-down.sh
 ```
 
-The same options apply here, i.e.
+##### Options:
 
 * `CLUSTER_NAME`: Delete cluster with given name.
 
@@ -70,3 +68,17 @@ The same options apply here, i.e.
   ```
   KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-down.sh
   ```
+
+### Update a cluster
+
+To update a cluster, run:
+
+```
+KUBERNETES_PROVIDER=anchnet ./cluster/kube-push.sh
+```
+
+Updating a cluster will build current code base and push/restart cluster, useful for development.
+
+##### Options:
+
+Same options as deleting a cluster.

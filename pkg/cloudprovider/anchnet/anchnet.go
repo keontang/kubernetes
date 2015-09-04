@@ -18,9 +18,12 @@ package anchnet_cloud
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"time"
 
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 
 	anchnet_client "github.com/caicloud/anchnet-go"
@@ -41,11 +44,24 @@ const (
 	// Initial interval between two retries for the above situation. Following
 	// retry interval will be doubled.
 	RetryIntervalOnWait = 2 * time.Second
+
+	// TTL for API call cache.
+	cacheTTL = 10 * time.Minute
 )
 
-// TODO: Create cache layer to reduce calls to anchnet.
+// Anchnet is the implementation of kubernetes cloud plugin.
 type Anchnet struct {
+	// Anchnet SDK client.
 	client *anchnet_client.Client
+
+	// An address cache used to cache NodeAddresses.
+	addressCache cache.Store
+}
+
+// An entry in addressCache.
+type AddressCacheEntry struct {
+	name      string
+	addresses []api.NodeAddress
 }
 
 func init() {
@@ -62,7 +78,17 @@ func newAnchnet(config io.Reader) (cloudprovider.Interface, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Anchnet{client}, nil
+	keyFunc := func(obj interface{}) (string, error) {
+		entry, ok := obj.(AddressCacheEntry)
+		if !ok {
+			return "", cache.KeyError{Obj: obj, Err: fmt.Errorf("Unable to convert entry object to AddressCacheEntry")}
+		}
+		return entry.name, nil
+	}
+	return &Anchnet{
+		client:       client,
+		addressCache: cache.NewTTLStore(keyFunc, cacheTTL),
+	}, nil
 }
 
 //

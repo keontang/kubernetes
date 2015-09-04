@@ -22,8 +22,8 @@ set -o pipefail
 # and restarts kubernetes.
 
 # Set master and node internal IPs.
-MASTER_IP="10.57.42.91"
-NODE_IPS="10.57.42.68"
+MASTER_IP="10.57.53.139"
+NODE_IPS="10.57.57.64"
 KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
 CLEAN_ETCD=false
 
@@ -130,7 +130,7 @@ for node_eip in "${node_ip_arr[@]}"; do
   expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ubuntu@${node_eip} "sudo ./kube/node${i}-start.sh"
+  ubuntu@${node_eip} "sudo ./kube/node-start.sh"
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"

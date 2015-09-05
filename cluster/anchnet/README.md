@@ -10,7 +10,13 @@ internal ones also). SDK is developed by caicloud team at https://github.com/cai
 
 ### Create a cluster using anchnet
 
-To create a kubernetes cluster, make sure you've installed anchnet SDK and have a config file (e.g ~/.anchnet/config), then simply run:
+To create a kubernetes cluster, make sure you've installed anchnet SDK. To install:
+```
+go get github.com/caicloud/anchnet-go/anchnet
+```
+
+This will install binary `anchnet` under `$GOPATH/bin`. The binary also needs a config file (e.g ~/.anchnet/config) with API keys, see [anchnet SDK](https://github.com/caicloud/anchnet-go),
+After the setup, you can create the cluster by simply run:
 ```
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-up.sh
 ```

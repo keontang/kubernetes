@@ -377,6 +377,7 @@ EOF
 #
 # Assumed vars:
 #   CLUSTER_NAME
+#   PROJECT_ID
 function kube-down {
   # Find all instances prefixed with CLUSTER_NAME.
   command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
@@ -1913,14 +1914,15 @@ function anchnet-build-server {
 function prepare-e2e() {
   ensure-temp-dir
 
-  # cluster configs for e2e test.
-  CLUSTER_NAME="e2e-test"
-  NUM_MINIONS=2
-  MASTER_MEM=2048
-  MASTER_CPU_CORES=2
-  NODE_MEM=2048
-  NODE_CPU_CORES=2
-  KUBE_UP_MODE="full"
+  # Cluster configs for e2e test. Note we must export the variables; otherwise,
+  # they won't be visible outside of the function.
+  export CLUSTER_NAME="e2e-test"
+  export NUM_MINIONS=2
+  export MASTER_MEM=2048
+  export MASTER_CPU_CORES=2
+  export NODE_MEM=2048
+  export NODE_CPU_CORES=2
+  export KUBE_UP_MODE="tarball"
 
   # Since we changed our config above, we reset cluster env.
   # Otherwise, we'll see default value from executor-config.sh
@@ -1962,5 +1964,6 @@ function test-setup {
 # Execute after running tests to perform any required clean-up. This is called
 # from hack/e2e.go
 function test-teardown {
-  echo "No special handling for test-teardown"
+  export CLUSTER_NAME="e2e-test"
+  kube-down
 }

@@ -180,12 +180,12 @@ function kube-up {
 
   # For dev, set to existing instances.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
-    MASTER_INSTANCE_ID="i-8DRF060F"
-    MASTER_EIP_ID="eip-1BG18SPI"
-    MASTER_EIP="43.254.54.196"
-    NODE_INSTANCE_IDS="i-LKC0Y64C,i-S8Q6V8YG"
-    NODE_EIP_IDS="eip-WO4BB47Y,eip-91WBNBM1"
-    NODE_EIPS="43.254.55.53,43.254.55.92"
+    MASTER_INSTANCE_ID="i-CJGM3F3N"
+    MASTER_EIP_ID="eip-WXZYOAK5"
+    MASTER_EIP="43.254.55.44"
+    NODE_INSTANCE_IDS="i-C7BTSN79"
+    NODE_EIP_IDS="eip-XWH13SKT"
+    NODE_EIPS="43.254.55.90"
     PRIVATE_SDN_INTERFACE="eth1"
   else
     # Create an anchnet project if PROJECT_ID is empty.
@@ -213,7 +213,7 @@ function kube-up {
     install-packages & pids="$pids $!"
   fi
 
-  if [[ "${KUBE_UP_MODE}" = "tarball" ]]; then
+  if [[ "${KUBE_UP_MODE}" = "tarball" || "${KUBE_UP_MODE}" = "dev" ]]; then
     install-tarball-binaries & pids="$pids $!"
     install-packages & pids="$pids $!"
   fi
@@ -1210,7 +1210,7 @@ EOF
 
 # Wrapper of install-tarball-binaries-internal.
 function install-tarball-binaries {
-  command-exec-and-retry "install-tarball-binaries-internal" 3 "false"
+  command-exec-and-retry "install-tarball-binaries-internal" 2 "false"
 }
 
 
@@ -1237,12 +1237,14 @@ cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube
   caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
 mkdir -p ~/kube/node && \
 cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
-  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node"
+  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node || \
+echo 'Command failed installing tarball binaries on remote host $instance_eip'"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "Command failed" {exit 1}
   "lost connection" { exit 1 }
   eof {}
 }
@@ -1265,7 +1267,7 @@ EOF
 
 # Wrapper of install-packages-internal.
 function install-packages {
-  command-exec-and-retry "install-packages-internal" 3 "false"
+  command-exec-and-retry "install-packages-internal" 2 "false"
 }
 
 
@@ -1295,12 +1297,14 @@ sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-updates main rest
 sudo sh -c 'echo deb \[arch=amd64\] http://internal-get.caicloud.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list' && \
 sudo apt-get update && \
 sudo apt-get install --allow-unauthenticated -y lxc-docker-$DOCKER_VERSION && \
-sudo apt-get install bridge-utils"
+sudo apt-get install bridge-utils || \
+echo 'Command failed installing packages on remote host $instance_eip'"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "Command failed" {exit 1}
   "lost connection" { exit 1 }
   eof {}
 }
@@ -1343,12 +1347,14 @@ function provision-instances-internal {
   ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh"
+  ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh || \
+echo 'Command failed provisioning master'"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "Command failed" {exit 1}
   "lost connection" { exit 1 }
   eof {}
 }
@@ -1366,12 +1372,14 @@ EOF
     ${EXPECT_CMD} <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node-start.sh"
+  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node-start.sh || \
+echo 'Command failed provisioning node $node_eip'"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "Command failed" {exit 1}
   "lost connection" { exit 1 }
   eof {}
 }
@@ -1476,8 +1484,8 @@ function install-configurations-internal {
     # and complains no interface to bind.
     echo "sleep 10"
     # Finally, start kubernetes cluster. Upstart will make sure all components start
-    # upon etcd start.
-    echo "sudo service etcd start"
+    # upon etcd start. Note we use restart here since we may restart services on error.
+    echo "sudo service etcd restart"
   ) > "${KUBE_TEMP}/master-start.sh"
   chmod a+x ${KUBE_TEMP}/master-start.sh
 
@@ -1550,8 +1558,8 @@ function install-configurations-internal {
       # Same reason as to the sleep in master; but here, the affected k8s component
       # is kube-proxy.
       echo "sleep 10"
-      # Finally, start kubernetes cluster.
-      echo "sudo service etcd start"
+      # Finally, start kubernetes cluster. Note we use restart here since we may restart services on error.
+      echo "sudo service etcd restart"
       # Configure docker network to use flannel overlay.
       echo "config-docker-net ${FLANNEL_NET} ${reg_mirror}"
     ) > "${KUBE_TEMP}/node${i}/node-start.sh"

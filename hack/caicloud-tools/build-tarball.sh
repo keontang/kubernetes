@@ -57,8 +57,11 @@ tar cvzf caicloud-kube-$CAICLOUD_VERSION.tar.gz caicloud-kube
 rm -rf etcd-linux.tar.gz flannel-linux.tar.gz etcd-linux flannel-linux caicloud-kube
 
 # Make tarball 'caicloud-kube-executor-$CAICLOUD_VERSION.tar.gz'.
-mkdir caicloud-kube-executor
-cp -R hack cluster build _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-executor
+mkdir -p caicloud-kube-executor
+cp -R hack cluster build caicloud-kube-executor
+# Preserve kubectl path since kubectl.sh assumes some locations.
+mkdir -p caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
+cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
 tar cvzf caicloud-kube-executor-$CAICLOUD_VERSION.tar.gz caicloud-kube-executor
 rm -rf caicloud-kube-executor
 

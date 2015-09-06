@@ -1842,7 +1842,7 @@ function command-exec-and-retry {
       eval $1
     fi
     if [[ "$?" != "0" ]]; then
-      if (( attempt > ${count} )); then
+      if (( attempt >= ${count} )); then
         echo
         echo -e "${color_red}Unable to execute command [$1]${color_norm}" >&2
         kube-up-complete N

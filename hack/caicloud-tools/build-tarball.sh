@@ -28,6 +28,7 @@ ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
 # Build kube server binaries from current code base.
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 cd ${KUBE_ROOT}
+
 hack/caicloud-tools/k8s-replace.sh
 trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
 build/run.sh hack/build-go.sh
@@ -42,7 +43,7 @@ mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-component
 wget http://internal-get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz -O flannel-linux.tar.gz
 mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
 
-# Make tarball.
+# Make tarball 'caicloud-kube-$CAICLOUD_VERSION.tar.gz'.
 mkdir caicloud-kube
 cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kube-apiserver \
@@ -54,5 +55,11 @@ cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    caicloud-kube
 tar cvzf caicloud-kube-$CAICLOUD_VERSION.tar.gz caicloud-kube
 rm -rf etcd-linux.tar.gz flannel-linux.tar.gz etcd-linux flannel-linux caicloud-kube
+
+# Make tarball 'caicloud-kube-executor-$CAICLOUD_VERSION.tar.gz'.
+mkdir caicloud-kube-executor
+cp -R hack cluster build _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-executor
+tar cvzf caicloud-kube-executor-$CAICLOUD_VERSION.tar.gz caicloud-kube-executor
+rm -rf caicloud-kube-executor
 
 cd -

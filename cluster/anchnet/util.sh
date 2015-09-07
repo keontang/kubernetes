@@ -254,7 +254,7 @@ function kube-up {
 function kube-push {
   # Find all instances prefixed with CLUSTER_NAME (caicloud convention - every instance
   # is prefixed with a unique CLUSTER_NAME).
-  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
   local count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
 
   # Print instance information
@@ -380,7 +380,7 @@ EOF
 #   PROJECT_ID
 function kube-down {
   # Find all instances prefixed with CLUSTER_NAME.
-  command-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     # Print and collect instance information
@@ -403,14 +403,14 @@ function kube-down {
     done
     echo
     # Executing commands.
-    command-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
-    command-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS} --project=${PROJECT_ID}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${EIP_RELEASE_WAIT_RETRY} ${EIP_RELEASE_WAIT_INTERVAL}
   fi
 
   # Find all vxnets prefixed with CLUSTER_NAME.
-  command-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_NAME} --project=${PROJECT_ID}"
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   # We'll also find default one - bug in anchnet.
   if [[ "${count}" != "" && "${count}" != "1" ]]; then
@@ -431,12 +431,12 @@ function kube-down {
     echo
 
     # Executing commands.
-    command-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_DELETE_WAIT_RETRY} ${VXNET_DELETE_WAIT_INTERVAL}
   fi
 
   # Find all security group prefixed with CLUSTER_NAME.
-  command-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_NAME} --project=${PROJECT_ID}"
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     echo -n "Found security group: "
@@ -453,7 +453,7 @@ function kube-down {
     echo
 
     # Executing commands.
-    command-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
   fi
 
@@ -622,8 +622,8 @@ import json,sys
 try:
   obj=json.load(sys.stdin)
   print obj'$1'
-except:
-  sys.stderr.write("Unable to parse json string, please retry\n")
+except Exception as e:
+  sys.stderr.write("Unable to parse json string: %s. Please retry\n" % e)
 '
 }
 
@@ -645,10 +645,11 @@ import json,sys
 try:
   obj=json.load(sys.stdin)
   print len(obj'$1')
-except:
-  sys.stderr.write("Unable to parse json string, please retry\n")
+except Exception as e:
+  sys.stderr.write("Unable to parse json string: %s. Please retry\n" % e)
 '
 }
+
 
 # Add a top level field in a json file. e.g.:
 # $ json_add_field key.json "privatekey" "456"
@@ -682,7 +683,7 @@ with open("'$1'", "w") as f:
 #   PROJECT_ID
 function create-project {
   if [[ -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
-    command-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
     PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
     report-project-id ${PROJECT_ID}
@@ -710,7 +711,7 @@ function create-master-instance {
   echo "++++++++++ Creating kubernetes master from anchnet, master name: ${MASTER_NAME} ..."
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
-  command-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
+  anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${MASTER_MEM} \
 -c=${MASTER_CPU_CORES} -g=${IP_GROUP} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
@@ -752,7 +753,7 @@ function create-node-instances {
   echo "++++++++++ Creating kubernetes nodes from anchnet, node name prefix: ${NODE_NAME_PREFIX} ..."
 
   # Create 'raw' node instances from anchnet, i.e. un-provisioned.
-  command-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
+  anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
 -c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${NODES_WAIT_RETRY} ${NODES_WAIT_INTERVAL}
@@ -929,7 +930,7 @@ function create-sdn-network {
   echo "++++++++++ Creating private SDN network ..."
 
   # Create a private SDN network.
-  command-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_NAME}-${VXNET_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_NAME}-${VXNET_NAME} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_CREATE_WAIT_RETRY} ${VXNET_CREATE_WAIT_INTERVAL}
 
   # Get vxnet information.
@@ -939,7 +940,7 @@ function create-sdn-network {
   # Add all instances to the vxnet.
   local all_instance_ids="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
   echo "Add all instances (both master and nodes) to vxnet ${VXNET_ID} ..."
-  command-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_JOIN_WAIT_RETRY} ${VXNET_JOIN_WAIT_INTERVAL}
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
@@ -962,7 +963,7 @@ function create-firewall {
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   #
   echo "++++++++++ Creating master security group rules ..."
-  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${MASTER_SG_NAME} \
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
 --direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_MASTER_WAIT_RETRY} ${SG_MASTER_WAIT_INTERVAL}
@@ -973,7 +974,7 @@ function create-firewall {
 
   # Now, apply all above changes.
   report-security-group-ids ${MASTER_SG_ID} M
-  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE}
 
   #
@@ -981,7 +982,7 @@ function create-firewall {
   # (tcp/30000-32767, udp/30000-32767).
   #
   echo "++++++++++ Creating node security group rules ..."
-  command-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${NODE_SG_NAME} \
+  anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${NODE_SG_NAME} \
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
 --value1=22,30000,30000 --value2=22,32767,32767 --project=${PROJECT_ID}"
@@ -993,15 +994,15 @@ function create-firewall {
 
   # Now, apply all above changes.
   report-security-group-ids ${NODE_SG_ID} N
-  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE}
 }
 
 
 # Re-apply firewall to make sure firewall is properly set up.
 function ensure-firewall {
-  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
-  command-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
 }
 
 
@@ -1237,7 +1238,8 @@ cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube
   caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
 mkdir -p ~/kube/node && \
 cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
-  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node || \
+  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node && \
+rm -rf caicloud-kube.tar.gz caicloud-kube || \
 echo 'Command failed installing tarball binaries on remote host $instance_eip'"
 expect {
   "*?assword*" {
@@ -1825,26 +1827,16 @@ EOF
 # Input:
 #   $1 command string to execute
 #   $2 number of retries, default to 20
-#   $3 return response: if true, then save output to COMMAND_EXEC_RESPONSE; otherwise,
-#      print output directly, default to true.
-#
-# Output:
-#   COMMAND_EXEC_RESPONSE response from command if $3 is true. It is a global variable,
-#      so we can't use the function concurrently.
 function command-exec-and-retry {
   local attempt=0
   local count=${2-20}
-  local return_response=${3-"true"}
+  local is_anchnet=${3-"true"}
   while true; do
-    if [[ ${return_response} == "true" ]]; then
-      COMMAND_EXEC_RESPONSE=$(eval $1)
-    else
-      eval $1
-    fi
+    eval $1
     if [[ "$?" != "0" ]]; then
       if (( attempt >= ${count} )); then
         echo
-        echo -e "${color_red}Unable to execute command [$1]${color_norm}" >&2
+        echo -e "${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
         kube-up-complete N
         exit 1
       fi
@@ -1853,6 +1845,48 @@ function command-exec-and-retry {
       break
     fi
     echo -e " ${color_yellow}Command [$1] not ok, will retry${color_norm}" >&2
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
+}
+
+
+# A helper function that executes an anchnet command, and retries on failure.
+# If the command can't succeed within given attempts, the script will exit directly.
+#
+# Input:
+#   $1 command string to execute
+#   $2 number of retries, default to 20
+#
+# Output:
+#   COMMAND_EXEC_RESPONSE response from anchnet command. It is a global variable,
+#      so we can't use the function concurrently.
+function anchnet-exec-and-retry {
+  local attempt=0
+  local count=${2-20}
+  while true; do
+    COMMAND_EXEC_RESPONSE=$(eval $1)
+    return_code="$?"
+    error_code=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['code']")
+    # Exit if command succeeds but error code is 500.
+    if [[ "$return_code" != "0" && "$error_code" == "500" ]]; then
+      echo
+      echo -e "${color_red}${color_red}Unable to execute command [$1]: 500 error from anchnet ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
+      kube-up-complete N
+      exit 1
+    fi
+    if [[ "$return_code" != "0" ]]; then
+      if (( attempt >= ${count} )); then
+        echo
+        echo -e "${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
+        kube-up-complete N
+        exit 1
+      fi
+    else
+      echo -e " ${color_green}Command [$1] ok${color_norm}" >&2
+      break
+    fi
+    echo -e " ${color_yellow}Command [$1] not ok, will retry: ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done

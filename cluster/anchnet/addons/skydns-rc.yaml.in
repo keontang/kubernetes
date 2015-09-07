@@ -48,6 +48,7 @@ spec:
         args:
         # command = "/kube2sky"
         - -domain={{ pillar['dns_domain'] }}
+        - -v=2
       - name: skydns
         image: caicloudgcr/skydns:2015-03-11-001
         resources:

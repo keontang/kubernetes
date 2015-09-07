@@ -255,7 +255,10 @@ function config-hostname {
 #   $1 hostname
 #   $2 host IP address
 function add-hosts-entry {
-  if ! grep "$1" /etc/hosts > /dev/null; then
-    echo -e "$2 $1" >> /etc/hosts
+  # Lowercase input value.
+  local new_hostname=$(echo $1 | tr '[:upper:]' '[:lower:]')
+
+  if ! grep "$new_hostname" /etc/hosts > /dev/null; then
+    echo -e "$2 $new_hostname" >> /etc/hosts
   fi
 }

@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
-
 # The script restores changes from k8s-replace.sh. This is necessary since we
 # don't want to change upstream code.
+
+KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+source "${KUBE_ROOT}/cluster/caicloud-env.sh"
 
 # Restore 'gcr.io' images.
 grep -rl "caicloudgcr/[^\", ]*" \
@@ -27,16 +28,16 @@ grep -rl "caicloudgcr/[^\", ]*" \
 
 # Restore 'golang.org' packages.
 perl -i -pe "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \
-    ${KUBE_ROOT}/build/build-image/Dockerfile
+     ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Restore 'github.com' files.
-perl -i -pe "s|http://internal-get.caicloud.io/etcd/etcd-v2.0.0-linux-amd64.tar.gz|\
-https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
-    ${KUBE_ROOT}/build/build-image/Dockerfile
+perl -i -pe "s|${ETCD_URL}|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
+     ${KUBE_ROOT}/build/build-image/Dockerfile
+perl -i -pe "s|${ETCD_VERSION}|v2.0.0|g" ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Restore supported e2e tests.
 perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
-    ${KUBE_ROOT}/test/e2e/kubectl.go
+     ${KUBE_ROOT}/test/e2e/kubectl.go
 perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
-    ${KUBE_ROOT}/test/e2e/service.go
+     ${KUBE_ROOT}/test/e2e/service.go
 perl -i -pe "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go

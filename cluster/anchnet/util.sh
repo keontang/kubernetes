@@ -1295,9 +1295,9 @@ sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty-updates main restrict
 sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty main restricted universe multiverse >> /etc/apt/sources.list' && \
 sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-security main restricted universe multiverse >> /etc/apt/sources.list' && \
 sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-updates main restricted universe multiverse >> /etc/apt/sources.list' && \
-sudo sh -c 'echo deb \[arch=amd64\] http://internal-get.caicloud.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list' && \
+sudo sh -c 'echo deb \[arch=amd64\] http://internal-get.caicloud.io/repo ubuntu-trusty main > /etc/apt/sources.list.d/docker.list' && \
 sudo apt-get update && \
-sudo apt-get install --allow-unauthenticated -y lxc-docker-$DOCKER_VERSION && \
+sudo apt-get install --allow-unauthenticated -y docker-engine=${DOCKER_VERSION}-0~trusty && \
 sudo apt-get install bridge-utils || \
 echo 'Command failed installing packages on remote host $instance_eip'"
 expect {

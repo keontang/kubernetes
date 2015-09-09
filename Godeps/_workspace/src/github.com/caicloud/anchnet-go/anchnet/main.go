@@ -302,8 +302,10 @@ func addJobCLI(cmds *cobra.Command, out io.Writer) {
 	}
 	var count, interval int
 	var status string
+	var exitOnFail bool
 	cmdWaitJob.Flags().IntVarP(&count, "count", "c", 20, "Number of retries")
 	cmdWaitJob.Flags().IntVarP(&interval, "interval", "i", 3, "Retry interval, in second")
+	cmdWaitJob.Flags().BoolVarP(&exitOnFail, "exit_on_fail", "r", true, "Exit early if job status is Failed")
 	cmdWaitJob.Flags().StringVarP(&status, "status", "s", string(anchnet.JobStatusSuccessful), "Retry interval, in second")
 
 	// Add all sub-commands.
@@ -311,6 +313,7 @@ func addJobCLI(cmds *cobra.Command, out io.Writer) {
 	cmds.AddCommand(cmdWaitJob)
 }
 
+// addUserProjectCLI adds project commands
 func addUserProjectCLI(cmds *cobra.Command, out io.Writer) {
 	var sex, mobile, loginpasswd string
 	cmdCreateUserProject := &cobra.Command{
@@ -327,6 +330,36 @@ func addUserProjectCLI(cmds *cobra.Command, out io.Writer) {
 	cmdCreateUserProject.Flags().StringVarP(&loginpasswd, "passwd", "p", "caicloud2015ABC",
 		"Password of the sub account")
 
+	cmdDescribeProjects := &cobra.Command{
+		Use:   "describeprojects projectid",
+		Short: "get information of a project",
+		Run: func(cmd *cobra.Command, args []string) {
+			execDescribeProjects(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	var why string
+	cmdTransfer := &cobra.Command{
+		Use:   "transfer userid value",
+		Short: "transfer money to a sub account",
+		Run: func(cmd *cobra.Command, args []string) {
+			execTransfer(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+	cmdTransfer.Flags().StringVarP(&why, "why", "y", "Transfer",
+		"Reason of transfering money")
+
+	cmdSearchUserProject := &cobra.Command{
+		Use:   "searchuserproject loginId",
+		Short: "search user project by name",
+		Run: func(cmd *cobra.Command, args []string) {
+			execSearchUserProject(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
 	// Add all sub-commands.
 	cmds.AddCommand(cmdCreateUserProject)
+	cmds.AddCommand(cmdDescribeProjects)
+	cmds.AddCommand(cmdTransfer)
+	cmds.AddCommand(cmdSearchUserProject)
 }

@@ -102,6 +102,8 @@ func init() {
 	actions["DescribeJobs"] = true
 
 	actions["CreateUserProject"] = true
+	actions["DescribeProjects"] = true
+	actions["Transfer"] = true
 }
 
 // Client represents an anchnet client.
@@ -130,7 +132,7 @@ type RequestCommon struct {
 // http://cloud.51idc.com/help/api/public_params.html
 type ResponseCommon struct {
 	Action  string `json:"action,omitempty"`
-	Code    int    `json:"code,omitempty"`
+	Code    int    `json:"code"` // Do not omit empty since code=0 means no error.
 	RetCode int    `json:"ret_code,omitempty"`
 	Message string `json:"message,omitempty"`
 }

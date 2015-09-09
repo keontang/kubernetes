@@ -26,14 +26,7 @@ func execCreateVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, 
 		Count:     1,
 	}
 	var response anchnet.CreateVxnetsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command CreateVxnet: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "CreateVxnet", response.Code, client.SendRequest(request, &response))
 }
 
 func execDescribeVxnets(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -46,14 +39,7 @@ func execDescribeVxnets(cmd *cobra.Command, args []string, client *anchnet.Clien
 		VxnetIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.DescribeVxnetsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DescribeVxnet: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "DescribeVxnet", response.Code, client.SendRequest(request, &response))
 }
 
 func execSearchVxnets(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -67,14 +53,7 @@ func execSearchVxnets(cmd *cobra.Command, args []string, client *anchnet.Client,
 		Verbose:    1,
 	}
 	var response anchnet.DescribeVxnetsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DescribeVxnet (for searching vxnet): %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "SearchVxnet", response.Code, client.SendRequest(request, &response))
 }
 
 func execJoinVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -88,14 +67,7 @@ func execJoinVxnet(cmd *cobra.Command, args []string, client *anchnet.Client, ou
 		InstanceIDs: strings.Split(args[1], ","),
 	}
 	var response anchnet.JoinVxnetResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command JoinVxnet: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "JobVxnet", response.Code, client.SendRequest(request, &response))
 }
 
 func execDeleteVxnets(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -108,12 +80,5 @@ func execDeleteVxnets(cmd *cobra.Command, args []string, client *anchnet.Client,
 		VxnetIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.DeleteVxnetsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DeleteVxnets: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "DeleteVxnet", response.Code, client.SendRequest(request, &response))
 }

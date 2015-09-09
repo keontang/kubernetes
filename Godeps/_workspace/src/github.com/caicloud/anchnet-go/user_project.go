@@ -25,3 +25,39 @@ type CreateUserProjectResponse struct {
 	ApiId          string `json:"api_id,omitempty"`
 	JobID          string `json:"job_id,omitempty"`
 }
+
+type DescribeProjectsRequest struct {
+	RequestCommon `json:",inline"`
+	Projects      string `json:"projects,omitempty"`
+	SearchWord    string `json:"search_word,omitempty"`
+}
+
+//
+// DescribeProjects returns the information of a project
+//
+type DescribeProjectsResponse struct {
+	ResponseCommon `json:",inline"`
+	ItemSet        []DescribeProjectsItem `json:"item_set,omitempty"`
+}
+
+type DescribeProjectsItem struct {
+	ProjectType string `json:"project_type,omitempty"`
+	ProjectId   string `json:"project_id,omitempty"`
+	ProjectName string `json:"project_name,omitempty"`
+	UserId      int    `json:"userid,omitempty"`
+	Status      string `json:"status,omitempty"`
+}
+
+//
+// Transfer transfers money to sub account
+//
+type TransferRequest struct {
+	RequestCommon `json:",inline"`
+	UserId        int    `json:"userId,omitempty"`
+	Value         string `json:"value,omitempty"`
+	Why           string `json:"why,omitempty"`
+}
+
+type TransferResponse struct {
+	ResponseCommon `json:",inline"`
+}

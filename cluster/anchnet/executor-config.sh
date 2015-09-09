@@ -33,6 +33,9 @@ PROJECT_ID=${PROJECT_ID:-""}
 # KUBE_USER uniquely identifies a caicloud user.
 KUBE_USER=${KUBE_USER:-""}
 
+# INITIAL_DEPOSIT is the money transferred to sub account upon creation
+INITIAL_DEPOSIT=${INITIAL_DEPOSIT:-"1"}
+
 # To indicate if the execution status needs to be reported back to Caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}

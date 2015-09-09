@@ -49,14 +49,7 @@ func execRunInstance(cmd *cobra.Command, args []string, client *anchnet.Client, 
 		},
 	}
 	var response anchnet.RunInstancesResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command RunInstance: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "RunInstance", response.Code, client.SendRequest(request, &response))
 }
 
 func execDescribeInstance(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -70,14 +63,7 @@ func execDescribeInstance(cmd *cobra.Command, args []string, client *anchnet.Cli
 		Verbose:     1,
 	}
 	var response anchnet.DescribeInstancesResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DescribeInstance: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "DescribeInstance", response.Code, client.SendRequest(request, &response))
 }
 
 func execSearchInstance(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -92,14 +78,7 @@ func execSearchInstance(cmd *cobra.Command, args []string, client *anchnet.Clien
 		Verbose:    1,
 	}
 	var response anchnet.DescribeInstancesResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DescribeInstance (for searching instance): %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "SearchInstance", response.Code, client.SendRequest(request, &response))
 }
 
 func execTerminateInstances(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -112,14 +91,7 @@ func execTerminateInstances(cmd *cobra.Command, args []string, client *anchnet.C
 		InstanceIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.TerminateInstancesResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command TerminateInstances: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "TerminateInstance", response.Code, client.SendRequest(request, &response))
 }
 
 func execStopInstances(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -132,12 +104,5 @@ func execStopInstances(cmd *cobra.Command, args []string, client *anchnet.Client
 		InstanceIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.StopInstancesResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command StopInstances: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "StopInstance", response.Code, client.SendRequest(request, &response))
 }

@@ -682,11 +682,24 @@ with open("'$1'", "w") as f:
 # Vars set:
 #   PROJECT_ID
 function create-project {
-  if [[ -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
-    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
-    PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
-    report-project-id ${PROJECT_ID}
+  if [[ ! -z "${KUBE_USER-}" ]]; then
+    # first try to match if there's any sub account created before.
+    command-exec-and-retry "${ANCHNET_CMD} searchuserproject ${KUBE_USER}"
+    PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_id']")
+    if [[ -z "${PROJECT_ID-}" ]]; then
+      echo "++++++ Creating new anchnet sub account for ${KUBE_USER}... ++++++"
+      command-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
+      anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
+      PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
+      # get the userId of the sub account. Note the userId here is used internally
+      # by anchnet which will be used in tranferring money
+      command-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
+      SUB_ACCOUNT_UID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['userid']")
+
+      echo "++++++ Transferring balance to sub account... ++++++"
+      command-exec-and-retry "${ANCHNET_CMD} transfer ${SUB_ACCOUNT_UID} ${INITIAL_DEPOSIT}"
+      report-project-id ${PROJECT_ID}
+    fi
   fi
 }
 

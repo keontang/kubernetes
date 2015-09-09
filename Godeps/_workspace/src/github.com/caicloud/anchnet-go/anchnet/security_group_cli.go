@@ -51,14 +51,7 @@ func execCreateSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.
 		SecurityGroupRules: rules,
 	}
 	var response anchnet.CreateSecurityGroupResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command CreateSecurityGroup: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "CreateSecurityGroup", response.Code, client.SendRequest(request, &response))
 }
 
 func execDescribeSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -72,14 +65,7 @@ func execDescribeSecurityGroup(cmd *cobra.Command, args []string, client *anchne
 		Verbose:          1,
 	}
 	var response anchnet.DescribeSecurityGroupsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DescribeSecurityGroup: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "DescribeSecurityGroup", response.Code, client.SendRequest(request, &response))
 }
 
 func execSearchSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -93,14 +79,7 @@ func execSearchSecurityGroup(cmd *cobra.Command, args []string, client *anchnet.
 		Verbose:    1,
 	}
 	var response anchnet.DescribeSecurityGroupsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DescribeSecurityGroup (for searching security group): %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "SearchSecurityGroup", response.Code, client.SendRequest(request, &response))
 }
 
 func execAddSecurityGroupRule(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -133,14 +112,7 @@ func execAddSecurityGroupRule(cmd *cobra.Command, args []string, client *anchnet
 		},
 	}
 	var response anchnet.AddSecurityGroupRulesResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command AddSecurityGroup: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "AddSecurityGroup", response.Code, client.SendRequest(request, &response))
 }
 
 func execApplySecurityGroup(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -154,14 +126,7 @@ func execApplySecurityGroup(cmd *cobra.Command, args []string, client *anchnet.C
 		InstanceIDs:     strings.Split(args[1], ","),
 	}
 	var response anchnet.ApplySecurityGroupResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command ApplySecurityGroup: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "ApplySecurityGroup", response.Code, client.SendRequest(request, &response))
 }
 
 func execDeleteSecurityGroups(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -174,12 +139,5 @@ func execDeleteSecurityGroups(cmd *cobra.Command, args []string, client *anchnet
 		SecurityGroupIDs: strings.Split(args[0], ","),
 	}
 	var response anchnet.DeleteSecurityGroupsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DeleteSecurityGroups: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "DeleteSecurityGroups", response.Code, client.SendRequest(request, &response))
 }

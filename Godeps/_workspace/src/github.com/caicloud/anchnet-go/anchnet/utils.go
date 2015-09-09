@@ -94,12 +94,26 @@ func getAnchnetClient(cmd *cobra.Command) *anchnet.Client {
 	return client
 }
 
-// sendResult sends result to out
-func sendResult(response interface{}, out io.Writer) {
-	output, err := json.Marshal(response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unexpected error marshaling output %v", err)
+// sendResult sends response to out. cmdName is the command name that we just sent to
+// anchnet; code is response.Code and err is from clinet.SendRequest(). The last three
+// parameters are needed since we use interface{} type for response.
+func sendResult(response interface{}, out io.Writer, cmdName string, code int, err error) {
+	// If anchnet error code == 0 but err != nil, we encountered unexpected exceptions.
+	if err != nil && code == 0 {
+		fmt.Fprintf(os.Stderr, "Unexpected error running command %v: %v\n", cmdName, err)
 		os.Exit(1)
 	}
+
+	output, err := json.Marshal(response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unexpected error marshaling output for command %v: %v\n", cmdName, err)
+		os.Exit(1)
+	}
+
+	// If we did receive a response, send it to client, regardless of error code from anchnet.
+	// However, we exit with non-zero if code != 0.
 	fmt.Fprintf(out, "%v", string(output))
+	if code != 0 {
+		os.Exit(1)
+	}
 }

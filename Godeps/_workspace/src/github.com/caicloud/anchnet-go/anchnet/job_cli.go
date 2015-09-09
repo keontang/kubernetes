@@ -24,14 +24,7 @@ func execDescribeJob(cmd *cobra.Command, args []string, client *anchnet.Client, 
 		JobIDs: []string{args[0]},
 	}
 	var response anchnet.DescribeJobsResponse
-
-	err := client.SendRequest(request, &response)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error running command DescribeJob: %v\n", err)
-		os.Exit(1)
-	}
-
-	sendResult(response, out)
+	sendResult(&response, out, "DescribeJob", response.Code, client.SendRequest(request, &response))
 }
 
 func execWaitJob(cmd *cobra.Command, args []string, client *anchnet.Client, out io.Writer) {
@@ -41,8 +34,9 @@ func execWaitJob(cmd *cobra.Command, args []string, client *anchnet.Client, out 
 	}
 
 	count := getFlagInt(cmd, "count")
-	interval := getFlagInt(cmd, "interval")
 	status := getFlagString(cmd, "status")
+	interval := getFlagInt(cmd, "interval")
+	exitOnFail := getFlagBool(cmd, "exit_on_fail")
 
 	for i := 0; i < count; i++ {
 		request := anchnet.DescribeJobsRequest{
@@ -50,8 +44,16 @@ func execWaitJob(cmd *cobra.Command, args []string, client *anchnet.Client, out 
 		}
 		var response anchnet.DescribeJobsResponse
 		err := client.SendRequest(request, &response)
-		if err == nil && len(response.ItemSet) == 1 && string(response.ItemSet[0].Status) == status {
-			return
+		if err == nil && len(response.ItemSet) == 1 {
+			// Return if there is no error and status matches.
+			if string(response.ItemSet[0].Status) == status {
+				return
+			}
+			// Return if there is no error, and status is failed + user wants early return.
+			if response.ItemSet[0].Status == anchnet.JobStatusFailed && exitOnFail {
+				fmt.Fprintf(os.Stderr, "Job %v failed", args[0])
+				os.Exit(1)
+			}
 		}
 		time.Sleep(time.Duration(interval) * time.Second)
 	}

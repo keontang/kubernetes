@@ -18,17 +18,22 @@
 # other binaries (etcd, flannel). After building the tarball, we should
 # upload it to internal-get.caicloud.io or qiniu.com.
 
-# The tarball version.
-CAICLOUD_VERSION="2015-09-01"
+# Do we want to upload the release to qiniu: Y or N. Default to N.
+UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"N"}
 
-# Binary version
-FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.3}
-ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
+# Do we want to upload the release to toolserver for dev: Y or N. Default to Y.
+UPLOAD_TO_TOOLSERVER=${UPLOAD_TO_TOOLSERVER:-"Y"}
+# Instance user and password if we want to upload.
+INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
+KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
-# Build kube server binaries from current code base.
+# Build kube server binaries from current code base. Use caicloud-env.sh
+# to set current release version.
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+source "${KUBE_ROOT}/cluster/caicloud-env.sh"
 cd ${KUBE_ROOT}
 
+# Work around mainland network connection.
 hack/caicloud-tools/k8s-replace.sh
 trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
 build/run.sh hack/build-go.sh
@@ -38,13 +43,16 @@ if [[ "$?" != "0" ]]; then
 fi
 
 # Fetch non-kube binaries.
-wget http://internal-get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz -O etcd-linux.tar.gz
+wget ${ETCD_URL} -O etcd-linux.tar.gz
 mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
-wget http://internal-get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz -O flannel-linux.tar.gz
+wget ${FLANNEL_URL} -O flannel-linux.tar.gz
 mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
 
-# Make tarball 'caicloud-kube-$CAICLOUD_VERSION.tar.gz'.
-mkdir caicloud-kube
+# Make output directory.
+mkdir -p ${KUBE_ROOT}/_output/caicloud
+
+# Make tarball '${CAICLOUD_UPLOAD_VERSION}'.
+mkdir -p caicloud-kube
 cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kube-apiserver \
    _output/dockerized/bin/linux/amd64/kube-controller-manager \
@@ -53,16 +61,57 @@ cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kubectl \
    _output/dockerized/bin/linux/amd64/kubelet \
    caicloud-kube
-tar cvzf caicloud-kube-$CAICLOUD_VERSION.tar.gz caicloud-kube
+tar cvzf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_UPLOAD_VERSION} caicloud-kube
 rm -rf etcd-linux.tar.gz flannel-linux.tar.gz etcd-linux flannel-linux caicloud-kube
 
-# Make tarball 'caicloud-kube-executor-$CAICLOUD_VERSION.tar.gz'.
+# Make tarball '${EXECUTOR_UPLOAD_VERSION}'.
 mkdir -p caicloud-kube-executor
 cp -R hack cluster build caicloud-kube-executor
 # Preserve kubectl path since kubectl.sh assumes some locations.
 mkdir -p caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
 cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
-tar cvzf caicloud-kube-executor-$CAICLOUD_VERSION.tar.gz caicloud-kube-executor
+tar cvzf ${KUBE_ROOT}/_output/caicloud/${EXECUTOR_UPLOAD_VERSION} caicloud-kube-executor
 rm -rf caicloud-kube-executor
 
 cd -
+
+# Decide if we upload releases to Toolserver.
+if [[ "${UPLOAD_TO_TOOLSERVER}" == "Y" ]]; then
+  expect <<EOF
+set timeout -1
+spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${KUBE_ROOT}/_output/caicloud "${INSTANCE_USER}@internal-get.caicloud.io:~"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+
+  expect <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@internal-get.caicloud.io "sudo mv caicloud/* /data/www/static/caicloud"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+fi
+
+# Decide if we upload releases to Qiniu.
+if [[ "${UPLOAD_TO_QINIU}" == "Y" ]]; then
+  if [[ "$(which qrsync)" == "" ]]; then
+    echo "Can't find qrsync cli binary in PATH - unable to upload to Qiniu."
+    exit 1
+  fi
+  # Change directory to qiniu-conf.json: Qiniu SDK has assumptions about path.
+  cd ${KUBE_ROOT}/hack/caicloud-tools
+  qrsync qiniu-conf.json
+  cd -
+fi

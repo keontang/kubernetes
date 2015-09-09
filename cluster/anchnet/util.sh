@@ -27,27 +27,23 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 #   the major steps in full mode:
 #   1. Clean up the repository and rebuild everything, including client and
 #      server kube binaries;
-#   2. Fetch non-kube binaries, e.g. etcd, flannel, to localhost. There binaries
-#      are hosted at "internal-get.caicloud.io". The official releases are hosted
-#      at github.com; however, to make full-mode faster, we download them and
-#      host them separately.
+#   2. Fetch non-kube binaries, e.g. etcd, flannel, to localhost. The binaries
+#      are officially hosted at github.com; however, to make full-mode faster,
+#      we pre-downloaded them and hosted them separately.
 #   3. Create instances from anchnet's system image, e.g. trustysrvx64c; then
 #      copy all binaries to these instances (can be very slow depending on
 #      internet connection).
 #   4. Install docker and bridge-utils. Install docker from get.docker.io is
-#      slow, so we host our own ubuntu apt mirror on "internal-get.caicloud.io".
+#      slow, so we host our own ubuntu apt mirror.
 #   5. Create other anchnet resources, configure kubernetes, etc. These are
 #      the same with other modes.
 #
 # - "tarball": In tarball mode, we fetch kube binaries and non-kube binaries
 #   as a single tarball, instead of building and copying it from localhost. The
-#   tarball size is around 40MB, so we host it on qiniu.com, which has better
-#   download speed than "internal-get.caicloud.io". (internal-get.caicloud.io
-#   is just a file server, while qiniu.com provides a whole stack of storage
-#   solution). Tarball mode is faster than full mode, but it's only useful for
-#   release, since we can only fetch pre-uploaded tarballs. Using qiniu.com will
-#   incur charges, so by default, we download tarball from caicloud; If speed
-#   matters, we can use qiniu.com by simply changing TARBALL_URL.
+#   tarball size is around 40MB, so we host it on qiniu.com, which has great
+#   download speed. Tarball mode is faster than full mode, but it's only useful
+#   for release, since we can only fetch pre-uploaded tarballs. Note, use qiniu
+#   is costly.
 #
 # - "image": In image mode, we use pre-built custom image. It is assumed that
 #   the custom image has binaries and packages installed, i.e. kube binaries,
@@ -66,6 +62,7 @@ KUBE_UP_MODE=${KUBE_UP_MODE:-"tarball"}
 # by user and executor, like number of nodes, cluster name, etc. Also, retrieve
 # executor related methods from executor-service.sh.
 function setup-cluster-env {
+  source "${KUBE_ROOT}/cluster/caicloud-env.sh"
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
   source "${KUBE_ROOT}/cluster/anchnet/executor-config.sh"
   source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
@@ -75,23 +72,9 @@ function setup-cluster-env {
 # environment variables.
 setup-cluster-env
 
-# ===== Full Mode specific parameter
-# Non-kube binaries versions
-FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.3}
-ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
-
-# ===== Full and Tarball Mode specific parameter
-# Package version.
-DOCKER_VERSION=${DOCKER_VERSION:-1.7.1}
-
-# ===== Tarball mode specific parameter.
-# DO NOT USE qiniu for now, costly.
-# TARBALL_URL=${TARBALL_URL:-"http://7xl0eo.com1.z0.glb.clouddn.com/caicloud-kube-2015-09-01.tar.gz"}
-TARBALL_URL=${TARBALL_URL:-"http://internal-get.caicloud.io/caicloud/caicloud-kube-2015-09-01.tar.gz"}
-
-# ===== Image Mode specific parameter.
-# The base image used to create master and node instance in image mode.
-# This image is created from scripts like 'image-from-devserver.sh'.
+# The base image used to create master and node instance in image mode. This
+# image is created from scripts like 'image-from-devserver.sh'. The param is
+# only used in image mode.
 INSTANCE_IMAGE=${INSTANCE_IMAGE:-"img-C0SA7DD5"}
 
 # Instance user and password.
@@ -180,12 +163,12 @@ function kube-up {
 
   # For dev, set to existing instances.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
-    MASTER_INSTANCE_ID="i-CJGM3F3N"
-    MASTER_EIP_ID="eip-WXZYOAK5"
-    MASTER_EIP="43.254.55.44"
-    NODE_INSTANCE_IDS="i-C7BTSN79"
-    NODE_EIP_IDS="eip-XWH13SKT"
-    NODE_EIPS="43.254.55.90"
+    MASTER_INSTANCE_ID="i-Q02PBO5P"
+    MASTER_EIP_ID="eip-ZB3DRXWZ"
+    MASTER_EIP="103.21.118.188"
+    NODE_INSTANCE_IDS="i-PC23KNBA"
+    NODE_EIP_IDS="eip-58V7GQ8C"
+    NODE_EIPS="103.21.118.32"
     PRIVATE_SDN_INTERFACE="eth1"
   else
     # Create an anchnet project if PROJECT_ID is empty.
@@ -683,20 +666,21 @@ with open("'$1'", "w") as f:
 #   PROJECT_ID
 function create-project {
   if [[ ! -z "${KUBE_USER-}" ]]; then
-    # first try to match if there's any sub account created before.
+    # First try to match if there's any sub account created before.
     command-exec-and-retry "${ANCHNET_CMD} searchuserproject ${KUBE_USER}"
     PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_id']")
     if [[ -z "${PROJECT_ID-}" ]]; then
-      echo "++++++ Creating new anchnet sub account for ${KUBE_USER}... ++++++"
+      echo "++++++++++ Creating new anchnet sub account for ${KUBE_USER} ..."
       command-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
       anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
       PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
-      # get the userId of the sub account. Note the userId here is used internally
-      # by anchnet which will be used in tranferring money
+      # Get the userId of the sub account. Note the userId here is used internally by
+      # anchnet which will be used in tranferring money.
       command-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
       SUB_ACCOUNT_UID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['userid']")
-
-      echo "++++++ Transferring balance to sub account... ++++++"
+      # Transfer money from main account to sub-account. We need at least $INITIAL_DEPOSIT
+      # to create resources in sub-account.
+      echo "++++++++++ Transferring balance to sub account ..."
       command-exec-and-retry "${ANCHNET_CMD} transfer ${SUB_ACCOUNT_UID} ${INITIAL_DEPOSIT}"
       report-project-id ${PROJECT_ID}
     fi
@@ -1014,8 +998,10 @@ function create-firewall {
 
 # Re-apply firewall to make sure firewall is properly set up.
 function ensure-firewall {
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
-  anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+  if [[ ! -z "${MASTER_SG_ID}" && ! -z "${NODE_SG_ID-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+  fi
 }
 
 
@@ -1138,15 +1124,14 @@ function install-all-binaries {
   (
     cd ${KUBE_ROOT}
     anchnet-build-server
-    IFS=',' read -ra instance_ip_arr <<< "${MASTER_EIP},${NODE_EIPS}"
 
     # Fetch etcd and flanneld.
     (
       cd ${KUBE_TEMP}
-      wget http://internal-get.caicloud.io/etcd/etcd-$ETCD_VERSION-linux-amd64.tar.gz -O etcd-linux.tar.gz
+      wget ${ETCD_URL} -O etcd-linux.tar.gz
       mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
       mv etcd-linux/etcd etcd-linux/etcdctl .
-      wget http://internal-get.caicloud.io/flannel/flannel-$FLANNEL_VERSION-linux-amd64.tar.gz -O flannel-linux.tar.gz
+      wget ${FLANNEL_URL} -O flannel-linux.tar.gz
       mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
       mv flannel-linux/flanneld .
       cd -
@@ -1236,7 +1221,7 @@ function install-tarball-binaries {
 #   KUBE_INSTANCE_PASSWORD
 function install-tarball-binaries-internal {
   local pids=""
-  echo "++++++++++ Start fetching and installing tarball from: ${TARBALL_URL} ..."
+  echo "++++++++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL} ..."
 
   INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
   IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
@@ -1245,7 +1230,7 @@ function install-tarball-binaries-internal {
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
-wget ${TARBALL_URL} -O caicloud-kube.tar.gz && tar xvzf caicloud-kube.tar.gz && \
+wget ${CAICLOUD_TARBALL_URL} -O caicloud-kube.tar.gz && tar xvzf caicloud-kube.tar.gz && \
 mkdir -p ~/kube/master && \
 cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
   caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
@@ -1977,7 +1962,7 @@ function prepare-e2e() {
   export MASTER_CPU_CORES=2
   export NODE_MEM=2048
   export NODE_CPU_CORES=2
-  export KUBE_UP_MODE="tarball"
+  export KUBE_UP_MODE="full"
 
   # Since we changed our config above, we reset cluster env.
   # Otherwise, we'll see default value from executor-config.sh

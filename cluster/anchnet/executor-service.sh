@@ -1,12 +1,22 @@
 #!/bin/bash
 
+# Copyright 2015 The Kubernetes Authors All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Provides utility functions for talking back to cluster deployment executor.
 
-# curl command constant.
-
 # Sends out request based on the input url.
-# Vars set:
-# CURL_CMD
 #
 # Input:
 # $1 The full url to access.
@@ -17,7 +27,7 @@
 function send-request-with-retry {
   if [[ ! -z $1 ]]; then
     local attempt=0
-    local full_command="${CURL_CMD} -sL -w %{http_code} $1 -o /dev/null"
+    local full_command="curl -sL -w %{http_code} $1 -o /dev/null"
     while true; do
       echo "Attempt ${attempt}: ${full_command}"
       local resp_code=$(${full_command})
@@ -146,7 +156,6 @@ function report-log-entry {
 }
 
 # Commands for testing only
-# CURL_CMD=curl
 # REPORT_KUBE_STATUS="Y"
 # EXECUTOR_HOST_NAME=localhost:8765
 # EXECUTION_ID=55b599d0e4c2036358000003

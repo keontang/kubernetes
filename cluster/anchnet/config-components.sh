@@ -139,24 +139,6 @@ FLANNEL_OPTS="--iface=${1}"
 EOF
 }
 
-# Create private interface opts, used by network manager to bring up private SDN
-# network interface.
-#
-# Input:
-#   $1 Interface name, e.g. eth1
-#   $2 Static private address, e.g. 10.244.0.1
-#   $3 Private address master, e.g. 255.255.0.0
-function create-private-interface-opts {
-  cat <<EOF > ~/kube/network/interfaces
-auto lo
-iface lo inet loopback
-auto ${1}
-iface ${1} inet static
-address ${2}
-netmask ${3}
-EOF
-}
-
 # Configure docker network settings to use flannel overlay network.
 #
 # Input:

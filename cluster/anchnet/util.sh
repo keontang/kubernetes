@@ -22,103 +22,18 @@ set +o errexit
 # Path of kubernetes root directory.
 KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 
-# KUBE_UP_MODE defines how do we run kube-up, there are currently three modes:
-# - "full": In full mode, everything will be built from scratch. Following is
-#   the major steps in full mode:
-#   1. Clean up the repository and rebuild everything, including client and
-#      server kube binaries;
-#   2. Fetch non-kube binaries, e.g. etcd, flannel, to localhost. The binaries
-#      are officially hosted at github.com; however, to make full-mode faster,
-#      we pre-downloaded them and hosted them separately.
-#   3. Create instances from anchnet's system image, e.g. trustysrvx64c; then
-#      copy all binaries to these instances (can be very slow depending on
-#      internet connection).
-#   4. Install docker and bridge-utils. Install docker from get.docker.io is
-#      slow, so we host our own ubuntu apt mirror.
-#   5. Create other anchnet resources, configure kubernetes, etc. These are
-#      the same with other modes.
-#
-# - "tarball": In tarball mode, we fetch kube binaries and non-kube binaries
-#   as a single tarball, instead of building and copying it from localhost. The
-#   tarball size is around 40MB, so we host it on qiniu.com, which has great
-#   download speed. Tarball mode is faster than full mode, but it's only useful
-#   for release, since we can only fetch pre-uploaded tarballs. Note, use qiniu
-#   is costly.
-#
-# - "image": In image mode, we use pre-built custom image. It is assumed that
-#   the custom image has binaries and packages installed, i.e. kube binaries,
-#   non-kube binaries, docker, bridge-utils, etc. Image mode is the fastest of
-#   the above three modes, but requires we pre-built the image and requires the
-#   image to be accessible when running kube-up. This is currently not possible
-#   in anchnet, since every account can only see its own custom image.
-#
-# - "dev": In dev mode, no machine will be created. Developer is responsible to
-#   specify the instance IDs, eip IDs, etc. This is primarily used for debugging.
-KUBE_UP_MODE=${KUBE_UP_MODE:-"tarball"}
-
 # Get cluster configuration parameters from config-default and executor-config.
 # config-default is mostly static information configured by caicloud admin, like
 # node ip range; while executor-config is mostly dynamic information configured
 # by user and executor, like number of nodes, cluster name, etc. Also, retrieve
 # executor related methods from executor-service.sh.
-function setup-cluster-env {
-  source "${KUBE_ROOT}/cluster/caicloud-env.sh"
-  source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-  source "${KUBE_ROOT}/cluster/anchnet/executor-config.sh"
-  source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
-}
-
-# Before running any function or creating any variable, we setup all cluster
-# environment variables.
-setup-cluster-env
-
-# The base image used to create master and node instance in image mode. This
-# image is created from scripts like 'image-from-devserver.sh'. The param is
-# only used in image mode.
-INSTANCE_IMAGE=${INSTANCE_IMAGE:-"img-C0SA7DD5"}
-
-# Instance user and password.
-INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
-KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
-
-# The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
-# 'eipg-00000000' is anchnet's own BGP. Usually, we just use BGP.
-IP_GROUP=${IP_GROUP:-"eipg-00000000"}
-
-# Anchnet config file to use. All user clusters will be created under one
-# anchnet account (register@caicloud.io) using sub-account, so this file
-# rarely changes.
-ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
-
-# Namespace used to create cluster wide services. The name is from upstream
-# and shouldn't be changed.
-SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE-"kube-system"}
-
-# Daocloud registry accelerator. Before implementing our own registry (or registry
-# mirror), use this accelerator to make pulling image faster. The variable is a
-# comma separated list of mirror address, we randomly choose one of them.
-#   http://47178212.m.daocloud.io -> deyuan.deng@gmail.com
-#   http://dd69bd44.m.daocloud.io -> 729581241@qq.com
-#   http://9482cd22.m.daocloud.io -> dalvikbogus@gmail.com
-#   http://4a682d3b.m.daocloud.io -> 492886102@qq.com
-DAOCLOUD_ACCELERATOR="http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
-http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"
-
-# Override base image in full and tarball mode.
-RAW_BASE_IMAGE=${RAW_BASE_IMAGE:-"trustysrvx64c"}
-if [[ "${KUBE_UP_MODE}" == "full" || "${KUBE_UP_MODE}" == "tarball" ]]; then
-  INSTANCE_IMAGE=${RAW_BASE_IMAGE}
-fi
-
-# Command alias.
-ANCHNET_CMD="anchnet --config-path=${ANCHNET_CONFIG_FILE}"
-CURL_CMD="curl"
-EXPECT_CMD="expect"
-
+source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+source "${KUBE_ROOT}/cluster/anchnet/executor-config.sh"
+source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
 
 # -----------------------------------------------------------------------------
 # Cluster specific library utility functions.
-
+# -----------------------------------------------------------------------------
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
 function verify-prereqs {
   if [[ "$(which anchnet)" == "" ]]; then
@@ -155,11 +70,28 @@ function verify-prereqs {
 
 # Step2 of cluster bootstrapping: create all machines and provision them.
 function kube-up {
+  echo "++++++++++ Running kube-up with variables ..."
+  (set -o posix; set)
+
   # Make sure we have a staging area.
   ensure-temp-dir
 
   # Make sure we have a public/private key pair used to provision instances.
   ensure-pub-key
+
+  # Check given kube-up mode is supported.
+  if [[ ${KUBE_UP_MODE} != "tarball" && ${KUBE_UP_MODE} != "image" && ${KUBE_UP_MODE} != "dev" ]]; then
+    echo "Unrecognized kube-up mode ${KUBE_UP_MODE}"
+    exit 1
+  fi
+
+  # Build tarball if it's required.
+  if [[ "${BUILD_TARBALL}" == "Y" ]]; then
+    echo "++++++++++ Building tarball ..."
+    UPLOAD_TO_QINIU="N"
+    UPLOAD_TO_TOOLSERVER="Y"
+    source ${KUBE_ROOT}/hack/caicloud-tools/build-tarball.sh
+  fi
 
   # For dev, set to existing instances.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
@@ -190,17 +122,12 @@ function kube-up {
   fi
 
   # Install binaries and packages concurrently
-  local pids=""
-  if [[ "${KUBE_UP_MODE}" = "full" ]]; then
-    install-all-binaries & pids="$pids $!"
-    install-packages & pids="$pids $!"
-  fi
-
-  if [[ "${KUBE_UP_MODE}" = "tarball" || "${KUBE_UP_MODE}" = "dev" ]]; then
+  if [[ "${KUBE_UP_MODE}" != "image" ]]; then
+    local pids=""
     install-tarball-binaries & pids="$pids $!"
     install-packages & pids="$pids $!"
+    wait $pids
   fi
-  wait $pids
 
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
@@ -258,7 +185,7 @@ function kube-push {
     name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
     if [[ $name == *"master"* ]]; then
-      ${EXPECT_CMD} <<EOF
+      expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
@@ -274,7 +201,7 @@ expect {
 }
 EOF
     else
-      ${EXPECT_CMD} <<EOF
+      expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
@@ -508,7 +435,7 @@ function deploy-addons {
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
 
   # Calling 'addons-start.sh' to start addons.
-  ${EXPECT_CMD} <<EOF
+  expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "sudo ./kube/addons-start.sh"
@@ -543,7 +470,7 @@ function prompt-instance-password {
 function ensure-pub-key {
   if [[ ! -f $HOME/.ssh/id_rsa.pub ]]; then
     echo "+++++++++ Creating public key ..."
-    ${EXPECT_CMD} <<EOF
+    expect <<EOF
 spawn ssh-keygen -t rsa -b 4096
 expect "*rsa key*"
 expect "*file in which to save the key*"
@@ -869,7 +796,7 @@ function setup-instance-ssh {
   attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to setup instance ssh for $1"
-    ${EXPECT_CMD} <<EOF
+    expect <<EOF
 set timeout $((($attempt+1)*3))
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   $HOME/.ssh/id_rsa.pub ${INSTANCE_USER}@$1:~/host_rsa.pub
@@ -1112,102 +1039,6 @@ function create-etcd-initial-cluster {
 }
 
 
-# Build binaries from current repo and push to master and nodes, used in full mode.
-#
-# Assumed vars:
-#   KUBE_ROOT
-#   MASTER_IP
-#   NODE_IPS
-#   INSTANCE_USER
-#   KUBE_INSTANCE_PASSWORD
-function install-all-binaries {
-  echo "++++++++++ Start installing all binaries ..."
-  (
-    cd ${KUBE_ROOT}
-    anchnet-build-server
-
-    # Fetch etcd and flanneld.
-    (
-      cd ${KUBE_TEMP}
-      wget ${ETCD_URL} -O etcd-linux.tar.gz
-      mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
-      mv etcd-linux/etcd etcd-linux/etcdctl .
-      wget ${FLANNEL_URL} -O flannel-linux.tar.gz
-      mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
-      mv flannel-linux/flanneld .
-      cd -
-    )
-
-    # Copy master binaries.
-    ${EXPECT_CMD} <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "mkdir -p ~/kube/master ~/kube/node"
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-    ${EXPECT_CMD} <<EOF
-set timeout -1
-spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
-  ${KUBE_TEMP}/etcd ${KUBE_TEMP}/etcdctl ${KUBE_TEMP}/flanneld \
-  ${INSTANCE_USER}@${MASTER_EIP}:~/kube/master
-expect {
-  "*?assword:" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-
-    # Copy node binaries.
-    IFS=',' read -ra node_ip_arr <<< "${NODE_EIPS}"
-
-    for node_ip in ${node_ip_arr[*]}; do
-      ${EXPECT_CMD} <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_ip} "mkdir -p ~/kube/master ~/kube/node"
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-      ${EXPECT_CMD} <<EOF
-set timeout -1
-spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubectl \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy \
-  ${KUBE_TEMP}/etcd ${KUBE_TEMP}/etcdctl ${KUBE_TEMP}/flanneld \
-  ${INSTANCE_USER}@${node_ip}:~/kube/node
-expect {
-  "*?assword:" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-    done
-
-    cd -
-  )
-}
-
-
 # Wrapper of install-tarball-binaries-internal.
 function install-tarball-binaries {
   command-exec-and-retry "install-tarball-binaries-internal" 2 "false"
@@ -1227,7 +1058,7 @@ function install-tarball-binaries-internal {
   INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
   IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
   for instance_eip in ${instance_eip_arr[*]}; do
-    ${EXPECT_CMD} <<EOF &
+    expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
@@ -1285,7 +1116,7 @@ function install-packages-internal {
   INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
   IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
   for instance_eip in ${instance_eip_arr[*]}; do
-    ${EXPECT_CMD} <<EOF &
+    expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
@@ -1345,7 +1176,7 @@ function provision-instances-internal {
   local pids=""
   echo "++++++++++ Start provisioning master ..."
   # Call master-start.sh to start master.
-  ${EXPECT_CMD} <<EOF &
+  expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh || \
@@ -1370,7 +1201,7 @@ EOF
     # connection (for docker-flannel configuration) because other nodes aren't
     # ready. If we run expect in foreground, we can't start other nodes; thus node0
     # will wait until timeout.
-    ${EXPECT_CMD} <<EOF &
+    expect <<EOF &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${node_eip} "sudo ./kube/node-start.sh || \
@@ -1949,8 +1780,7 @@ function anchnet-build-server {
 
 # -----------------------------------------------------------------------------
 # Cluster specific test helpers used from hack/e2e-test.sh
-
-
+# -----------------------------------------------------------------------------
 # Perform preparations required to run e2e tests.
 function prepare-e2e() {
   ensure-temp-dir
@@ -1958,16 +1788,13 @@ function prepare-e2e() {
   # Cluster configs for e2e test. Note we must export the variables; otherwise,
   # they won't be visible outside of the function.
   export CLUSTER_NAME="e2e-test"
+  export CAICLOUD_VERSION=""
+  export KUBE_UP_MODE="tarball"
   export NUM_MINIONS=2
   export MASTER_MEM=2048
   export MASTER_CPU_CORES=2
   export NODE_MEM=2048
   export NODE_CPU_CORES=2
-  export KUBE_UP_MODE="full"
-
-  # Since we changed our config above, we reset cluster env.
-  # Otherwise, we'll see default value from executor-config.sh
-  setup-cluster-env
 
   # As part of e2e preparation, we fix image path.
   ${KUBE_ROOT}/hack/caicloud-tools/k8s-replace.sh
@@ -1980,10 +1807,11 @@ function prepare-e2e() {
 # Assumed Vars:
 #   KUBE_ROOT
 function test-build-release {
-  # In e2e test, we will run in full mode, i.e. build release and copy binaries,
-  # so we do not need to build release here.  Note also, e2e test will test client
-  # & server version match. Server binary uses dockerized build; however, developer
-  # may use local kubectl (_output/local/bin/kubectl), so we do a local build here.
+  # In e2e test, we will run in tarball mode without specifying version; therefore
+  # release will be built during kube-up and we do not need to build release here.
+  # Note also, e2e test will test client & server version match. Server binary uses
+  # dockerized build; however, developer may use local kubectl (_output/local/bin/kubectl),
+  # so we do a local build here.
   echo "Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
   cd ${KUBE_ROOT}
   make clean
@@ -2005,6 +1833,7 @@ function test-setup {
 # Execute after running tests to perform any required clean-up. This is called
 # from hack/e2e.go
 function test-teardown {
+  # CLUSTER_NAME should already be set, but we set again to make sure.
   export CLUSTER_NAME="e2e-test"
   kube-down
 }

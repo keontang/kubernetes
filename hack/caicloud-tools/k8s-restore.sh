@@ -18,7 +18,7 @@
 # don't want to change upstream code.
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
-source "${KUBE_ROOT}/cluster/caicloud-env.sh"
+source "${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh"
 
 # Restore 'gcr.io' images.
 grep -rl "caicloudgcr/[^\", ]*" \

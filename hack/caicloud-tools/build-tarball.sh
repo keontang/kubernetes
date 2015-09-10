@@ -18,19 +18,27 @@
 # other binaries (etcd, flannel). After building the tarball, we should
 # upload it to internal-get.caicloud.io or qiniu.com.
 
+KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+
+# -----------------------------------------------------------------------------
+# Parameters for building tarball.
+# -----------------------------------------------------------------------------
 # Do we want to upload the release to qiniu: Y or N. Default to N.
 UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"N"}
 
 # Do we want to upload the release to toolserver for dev: Y or N. Default to Y.
 UPLOAD_TO_TOOLSERVER=${UPLOAD_TO_TOOLSERVER:-"Y"}
-# Instance user and password if we want to upload.
+
+# Instance user and password if we want to upload to toolserver
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
-# Build kube server binaries from current code base. Use caicloud-env.sh
-# to set current release version.
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
-source "${KUBE_ROOT}/cluster/caicloud-env.sh"
+# Use caicloud-version.sh to set release version.
+source "${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh"
+
+# -----------------------------------------------------------------------------
+# Start building tarball from current code base.
+# -----------------------------------------------------------------------------
 cd ${KUBE_ROOT}
 
 # Work around mainland network connection.
@@ -42,13 +50,15 @@ if [[ "$?" != "0" ]]; then
   exit 1
 fi
 
+echo "Building tarball ${CAICLOUD_KUBE_PKG} and ${CAICLOUD_KUBE_EXECUTOR_PKG}"
 # Fetch non-kube binaries.
 wget ${ETCD_URL} -O etcd-linux.tar.gz
 mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
 wget ${FLANNEL_URL} -O flannel-linux.tar.gz
 mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
 
-# Make output directory.
+# Reset output directory.
+rm -rf ${KUBE_ROOT}/_output/caicloud
 mkdir -p ${KUBE_ROOT}/_output/caicloud
 
 # Make tarball '${CAICLOUD_UPLOAD_VERSION}'.
@@ -61,7 +71,7 @@ cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kubectl \
    _output/dockerized/bin/linux/amd64/kubelet \
    caicloud-kube
-tar cvzf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_UPLOAD_VERSION} caicloud-kube
+tar cvzf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_PKG} caicloud-kube
 rm -rf etcd-linux.tar.gz flannel-linux.tar.gz etcd-linux flannel-linux caicloud-kube
 
 # Make tarball '${EXECUTOR_UPLOAD_VERSION}'.
@@ -70,7 +80,7 @@ cp -R hack cluster build caicloud-kube-executor
 # Preserve kubectl path since kubectl.sh assumes some locations.
 mkdir -p caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
 cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
-tar cvzf ${KUBE_ROOT}/_output/caicloud/${EXECUTOR_UPLOAD_VERSION} caicloud-kube-executor
+tar cvzf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_EXECUTOR_PKG} caicloud-kube-executor
 rm -rf caicloud-kube-executor
 
 cd -

@@ -79,6 +79,11 @@ function kube-up {
   # Make sure we have a public/private key pair used to provision instances.
   ensure-pub-key
 
+  # The following methods generate variables used to provision master and nodes:
+  #   NODE_INTERNAL_IPS - comma separated string of node internal ips
+  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
+  create-node-internal-ips
+
   # Check given kube-up mode is supported.
   if [[ ${KUBE_UP_MODE} != "tarball" && ${KUBE_UP_MODE} != "image" && ${KUBE_UP_MODE} != "dev" ]]; then
     echo "Unrecognized kube-up mode ${KUBE_UP_MODE}"
@@ -121,6 +126,10 @@ function kube-up {
     create-firewall
   fi
 
+  # Create certificates and credentials to secure cluster communication.
+  create-certs-and-credentials
+  create-etcd-initial-cluster
+
   # Install binaries and packages concurrently
   if [[ "${KUBE_UP_MODE}" != "image" ]]; then
     local pids=""
@@ -128,14 +137,6 @@ function kube-up {
     install-packages & pids="$pids $!"
     wait $pids
   fi
-
-  # Create certificates and credentials to secure cluster communication.
-  create-certs-and-credentials
-  # The following methods generate variables used to provision master and nodes:
-  #   NODE_INTERNAL_IPS - comma separated string of node internal ips
-  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
-  create-node-internal-ips
-  create-etcd-initial-cluster
 
   # Configure master/nodes instances and start kubernetes.
   provision-instances
@@ -839,6 +840,69 @@ EOF
   done
 }
 
+# Wrapper of setup-private-network-internal
+function setup-private-network {
+  command-exec-and-retry "setup-private-network-internal" 2 "false"
+}
+
+# Setup private network
+#
+# Assumed vars:
+#   MASTER_INTERNAL_IP
+#   NODE_INTERNAL_IPS
+#   MASTER_EIP
+#   NODE_EIPS
+#
+function setup-private-network-internal {
+  # Setup private networks for all instances
+  INSTANCE_IIPS="${MASTER_INTERNAL_IP},${NODE_INTERNAL_IPS}"
+  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
+  IFS=',' read -ra instance_iip_arr <<< "${INSTANCE_IIPS}"
+  IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
+
+  for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
+    local instance_iip=${instance_iip_arr[${i}]}
+    local instance_eip=${instance_eip_arr[${i}]}
+    create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${instance_iip} ${INTERNAL_IP_MASK} "${KUBE_TEMP}/network-opts${i}"
+    # restart network manager
+    local pids=""
+    expect <<EOF &
+set timeout -1
+spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${KUBE_TEMP}/network-opts${i} ${INSTANCE_USER}@${instance_eip}:/tmp/network-opts
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${instance_eip} "sudo mv /tmp/network-opts /etc/network/interfaces && \
+sudo service network-manager restart && \
+sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+    pids="$pids $!"
+  done
+
+  echo "++++++++++ Waiting for private network setup ..."
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
 
 # Create a private SDN network in anchnet, then add master and nodes to it. Once
 # done, all instances can be reached from preconfigured private IP addresses.
@@ -870,6 +934,8 @@ function create-sdn-network {
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
+
+  setup-private-network
 }
 
 
@@ -1038,6 +1104,24 @@ function create-etcd-initial-cluster {
   done
 }
 
+# Create private interface opts, used by network manager to bring up private SDN
+# network interface.
+#
+# Input:
+#   $1 Interface name, e.g. eth1
+#   $2 Static private address, e.g. 10.244.0.1
+#   $3 Private address master, e.g. 255.255.0.0
+#   $4 File to write network config to
+function create-private-interface-opts {
+  cat <<EOF > ${4}
+auto lo
+iface lo inet loopback
+auto ${1}
+iface ${1} inet static
+address ${2}
+netmask ${3}
+EOF
+}
 
 # Wrapper of install-tarball-binaries-internal.
 function install-tarball-binaries {
@@ -1053,8 +1137,59 @@ function install-tarball-binaries {
 #   KUBE_INSTANCE_PASSWORD
 function install-tarball-binaries-internal {
   local pids=""
+  local fail=0
   echo "++++++++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL} ..."
 
+  echo "++++++++++ Fetching tarball from master..."
+  # Fetch tarball from master node
+  expect <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} "\
+wget ${CAICLOUD_TARBALL_URL} -O ~/caicloud-kube.tar.gz"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  "Command failed" {exit 1}
+  "lost connection" { exit 1 }
+  eof {}
+}
+EOF
+
+  # Distribute tarball to nodes
+  INSTANCE_IIPS="${NODE_INTERNAL_IPS}"
+  IFS=',' read -ra instance_iip_arr <<< "${INSTANCE_IIPS}"
+  for instance_iip in ${instance_iip_arr[*]}; do
+    expect <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} \
+"scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ~/caicloud-kube.tar.gz ${INSTANCE_USER}@${instance_iip}:~/caicloud-kube.tar.gz"
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  "Command failed" {exit 1}
+  "lost connection" { exit 1 }
+  eof {}
+}
+EOF
+    pids="$pids $!"
+  done
+
+  echo "++++++++++ Waiting for tarball to be distributed to all nodes..."
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" != "0" ]]; then
+    return 1
+  fi
+
+  pids=""
   INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
   IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
   for instance_eip in ${instance_eip_arr[*]}; do
@@ -1062,8 +1197,7 @@ function install-tarball-binaries-internal {
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
-wget ${CAICLOUD_TARBALL_URL} -O caicloud-kube.tar.gz && tar xvzf caicloud-kube.tar.gz && \
-mkdir -p ~/kube/master && \
+tar xvzf caicloud-kube.tar.gz && mkdir -p ~/kube/master && \
 cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
   caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
 mkdir -p ~/kube/node && \
@@ -1084,8 +1218,8 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for all instances to fetch and install tarball ..."
-  local fail=0
+  echo "++++++++++ Waiting for all instances to install tarball ..."
+  fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
@@ -1287,9 +1421,6 @@ function install-configurations-internal {
     echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
     echo "create-kube-scheduler-opts"
     echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
-    # Function 'create-private-interface-opts' creates network options used to
-    # configure private sdn network interface.
-    echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_INTERNAL_IP} ${INTERNAL_IP_MASK}"
     # The following lines organize file structure a little bit. To make it
     # pleasant when running the script multiple times, we ignore errors.
     echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security 1>/dev/null 2>&1"
@@ -1303,18 +1434,9 @@ function install-configurations-internal {
     echo "sudo cp ~/kube/default/* /etc/default"
     echo "sudo cp ~/kube/init_conf/* /etc/init/"
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-    echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
     echo "sudo cp ~/kube/security/known-tokens.csv ~/kube/security/basic-auth.csv /etc/kubernetes"
     echo "sudo cp ~/kube/security/ca.crt ~/kube/security/master.crt ~/kube/security/master.key /etc/kubernetes"
     echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
-    # Restart network manager to make private sdn in effect.
-    echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
-    echo "sudo service network-manager restart"
-    # This is tricky. k8s uses /proc/net/route to find public interface; if we do
-    # not sleep here, the network-manager hasn't finished bootstrap and the routing
-    # table in /proc won't be established. So k8s (e.g. api-server) will bail out
-    # and complains no interface to bind.
-    echo "sleep 10"
     # Finally, start kubernetes cluster. Upstart will make sure all components start
     # upon etcd start. Note we use restart here since we may restart services on error.
     echo "sudo service etcd restart"
@@ -1368,8 +1490,6 @@ function install-configurations-internal {
       echo "create-kubelet-opts ${node_instance_id} ${node_internal_ip} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
       echo "create-kube-proxy-opts \"${MASTER_INTERNAL_IP}\""
       echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
-      # Create network options.
-      echo "create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${node_internal_ip} ${INTERNAL_IP_MASK}"
       # Organize files a little bit.
       echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/null 2>&1"
       echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
@@ -1381,15 +1501,8 @@ function install-configurations-internal {
       echo "sudo cp ~/kube/default/* /etc/default"
       echo "sudo cp ~/kube/init_conf/* /etc/init/"
       echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-      echo "sudo cp ~/kube/network/interfaces /etc/network/interfaces"
       echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
       echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
-      # Restart network manager to make private sdn in effect.
-      echo "sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
-      echo "sudo service network-manager restart"
-      # Same reason as to the sleep in master; but here, the affected k8s component
-      # is kube-proxy.
-      echo "sleep 10"
       # Finally, start kubernetes cluster. Note we use restart here since we may restart services on error.
       echo "sudo service etcd restart"
       # Configure docker network to use flannel overlay.

@@ -22,17 +22,28 @@
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 
-count=0
 grep -IhEro "gcr.io/google_containers/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
+     --exclude-dir=${KUBE_ROOT}/examples/guestbook \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs | sort -u |
   while read -r gcr_image ; do
     image=${gcr_image#"gcr.io/google_containers/"}
-    caicloudgcr_image="caicloudgcr/$image"
+    caicloudgcr_image="caicloudgcr/google_containers_$image"
+    echo "++++++++++ Processing $gcr_image, image: $image"
+    docker pull "$gcr_image"
+    docker tag -f "$gcr_image" "$caicloudgcr_image"
+    docker push "$caicloudgcr_image"
+  done
+
+grep -IhEro "gcr.io/google_samples/[^\", ]*" \
+     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
+     ${KUBE_ROOT}/examples/guestbook | sort -u |
+  while read -r gcr_image ; do
+    image=${gcr_image#"gcr.io/google_samples/"}
+    caicloudgcr_image="caicloudgcr/google_samples_$image"
     echo "++++++++++ Processing $gcr_image, image: $image"
     docker pull "$gcr_image"
     docker tag -f "$gcr_image" "$caicloudgcr_image"
     docker push "$caicloudgcr_image"
     count=$(($count+1))
   done
-echo "Pushed $count images in total"

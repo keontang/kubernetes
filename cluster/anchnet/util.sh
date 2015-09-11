@@ -77,22 +77,24 @@ function kube-up {
   echo "++++++++++ Running kube-up with variables ..."
   (set -o posix; set)
 
+  # Check given kube-up mode is supported.
+  if [[ ${KUBE_UP_MODE} != "tarball" && ${KUBE_UP_MODE} != "image" && ${KUBE_UP_MODE} != "dev" ]]; then
+    echo "Unrecognized kube-up mode ${KUBE_UP_MODE}"
+    exit 1
+  fi
+
   # Make sure we have a staging area.
   ensure-temp-dir
 
   # Make sure we have a public/private key pair used to provision instances.
   ensure-pub-key
 
+  # Make sure log directory exists.
+  mkdir -p ${KUBE_INSTANCE_LOGDIR}
+
   # The following methods generate variables used to provision master and nodes:
   #   NODE_INTERNAL_IPS - comma separated string of node internal ips
-  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
   create-node-internal-ips
-
-  # Check given kube-up mode is supported.
-  if [[ ${KUBE_UP_MODE} != "tarball" && ${KUBE_UP_MODE} != "image" && ${KUBE_UP_MODE} != "dev" ]]; then
-    echo "Unrecognized kube-up mode ${KUBE_UP_MODE}"
-    exit 1
-  fi
 
   # Build tarball if CAICLOUD_VERSION is empty. Since it's empty, build-tarball.sh
   # will source caicloud-version.sh and set to default caicloud version; otherwise,
@@ -104,15 +106,18 @@ function kube-up {
     source ${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh
   fi
 
-  # For dev, set to existing instances.
+  # For dev, set to existing instance IDs for master and node.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
-    MASTER_INSTANCE_ID="i-Q02PBO5P"
-    MASTER_EIP_ID="eip-ZB3DRXWZ"
-    MASTER_EIP="103.21.118.188"
-    NODE_INSTANCE_IDS="i-PC23KNBA"
-    NODE_EIP_IDS="eip-58V7GQ8C"
-    NODE_EIPS="103.21.118.32"
-    PRIVATE_SDN_INTERFACE="eth1"
+    MASTER_INSTANCE_ID="i-IWMPEH39"
+    NODE_INSTANCE_IDS="i-7C2YH52Q,i-AQFEFGJ1,i-05H5EWY1"
+    # To mimic actual kubeup process, we create vars to match create-master-instance
+    # create-node-instances, and create-sdn-network.
+    #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
+    #   NODE_INSTANCE_IDS,   NODE_EIP_IDS,   NODE_EIPS
+    #   PRIVATE_SDN_INTERFACE
+    # Also, we override following vars:
+    #   NUM_MINIONS, NODE_IIPS
+    create-dev-variables
   else
     # Create an anchnet project if PROJECT_ID is empty.
     create-project
@@ -132,9 +137,21 @@ function kube-up {
     create-firewall
   fi
 
+  # Create resource variables used for various provisioning functions.
+  #   INSTANCE_IDS, INSTANCE_EIPS, INSTANCE_IIPS
+  #   INSTANCE_IDS_ARR, INSTANCE_EIPS_ARR, INSTANCE_IIPS_ARR
+  #   NODE_INSTANCE_IDS_ARR, NODE_EIPS_ARR, NODE_IIPS_ARR
+  create-resource-variables
+
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
+
+  # Create etcd cluster parameters.
+  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
   create-etcd-initial-cluster
+
+  # Setup private SDN network.
+  setup-sdn-network
 
   # Install binaries and packages concurrently
   if [[ "${KUBE_UP_MODE}" != "image" ]]; then
@@ -454,6 +471,57 @@ expect {
   eof {}
 }
 EOF
+}
+
+
+# Get variables for development.
+#
+# Assumed vars:
+#   MASTER_INSTANCE_ID
+#   NODE_INSTANCE_IDS
+#
+# Vars set:
+#   MASTER_EIP_ID
+#   MASTER_EIP
+#   NODE_EIP_IDS
+#   NODE_EIPS
+#   PRIVATE_SDN_INTERFACE
+function create-dev-variables {
+  anchnet-exec-and-retry "${ANCHNET_CMD} describeinstance ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
+  MASTER_EIP_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val '["item_set"][0]["eip"]["eip_id"]')
+  MASTER_EIP=$(echo ${COMMAND_EXEC_RESPONSE} | json_val '["item_set"][0]["eip"]["eip_addr"]')
+  IFS=',' read -ra node_instance_ids_arr <<< "${NODE_INSTANCE_IDS}"
+  for node_instance_id in ${node_instance_ids_arr[*]}; do
+    anchnet-exec-and-retry "${ANCHNET_CMD} describeinstance ${node_instance_id} --project=${PROJECT_ID}"
+    local node_eip_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val '["item_set"][0]["eip"]["eip_id"]')
+    local node_eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val '["item_set"][0]["eip"]["eip_addr"]')
+    if [[ -z "${NODE_EIPS-}" ]]; then
+      NODE_EIP_IDS="${node_eip_id}"
+      NODE_EIPS="${node_eip}"
+    else
+      NODE_EIP_IDS="${NODE_EIP_IDS},${node_eip_id}"
+      NODE_EIPS="${NODE_EIPS},${node_eip}"
+    fi
+  done
+  export NUM_MINIONS=${#node_instance_ids_arr[@]}
+  PRIVATE_SDN_INTERFACE="eth1"
+  # Recreate NODE_INTERNAL_IPS since we've chnaged NUM_MINIONS.
+  unset NODE_INTERNAL_IPS
+  create-node-internal-ips
+}
+
+
+# Create resource variables for followup functions.
+function create-resource-variables {
+  INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
+  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
+  INSTANCE_IIPS="${MASTER_INTERNAL_IP},${NODE_INTERNAL_IPS}"
+  IFS=',' read -ra INSTANCE_IDS_ARR <<< "${INSTANCE_IDS}"
+  IFS=',' read -ra INSTANCE_EIPS_ARR <<< "${INSTANCE_EIPS}"
+  IFS=',' read -ra INSTANCE_IIPS_ARR <<< "${INSTANCE_IIPS}"
+  IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
+  IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
+  IFS=',' read -ra NODE_IIPS_ARR <<< "${NODE_INTERNAL_IPS}"
 }
 
 
@@ -846,10 +914,12 @@ EOF
   done
 }
 
+
 # Wrapper of setup-sdn-network-internal
 function setup-sdn-network {
   command-exec-and-retry "setup-sdn-network-internal" 2 "false"
 }
+
 
 # Setup private SDN network.
 #
@@ -860,18 +930,14 @@ function setup-sdn-network {
 #   NODE_EIPS
 function setup-sdn-network-internal {
   # Setup SDN networks for all instances.
-  INSTANCE_IIPS="${MASTER_INTERNAL_IP},${NODE_INTERNAL_IPS}"
-  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
-  IFS=',' read -ra instance_iip_arr <<< "${INSTANCE_IIPS}"
-  IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
-
   for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
-    local instance_iip=${instance_iip_arr[${i}]}
-    local instance_eip=${instance_eip_arr[${i}]}
+    local instance_iip=${INSTANCE_IIPS_ARR[${i}]}
+    local instance_eip=${INSTANCE_EIPS_ARR[${i}]}
+    local instance_id=${INSTANCE_IDS_ARR[${i}]}
     create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${instance_iip} ${INTERNAL_IP_MASK} "${KUBE_TEMP}/network-opts${i}"
     # Setup interface and restart network manager.
     local pids=""
-    expect <<EOF &
+    expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_TEMP}/network-opts${i} ${INSTANCE_USER}@${instance_eip}:/tmp/network-opts
@@ -898,17 +964,20 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for sdn network setup ..."
+  echo -n "++++++++++ Waiting for sdn network setup ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
   if [[ "$fail" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
     return 0
   else
+    echo -e "${color_red}Failed${color_norm}"
     return 1
   fi
 }
+
 
 # Create a private SDN network in anchnet, then add master and nodes to it. Once
 # done, all instances can be reached from preconfigured private IP addresses.
@@ -940,8 +1009,6 @@ function create-sdn-network {
 
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
-
-  setup-sdn-network
 }
 
 
@@ -998,7 +1065,7 @@ function create-firewall {
 
 # Re-apply firewall to make sure firewall is properly set up.
 function ensure-firewall {
-  if [[ ! -z "${MASTER_SG_ID}" && ! -z "${NODE_SG_ID-}" ]]; then
+  if [[ ! -z "${MASTER_SG_ID-}" && ! -z "${NODE_SG_ID-}" ]]; then
     anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
     anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
   fi
@@ -1097,15 +1164,14 @@ function cdr2mask {
 #
 # Assumed vars:
 #   MASTER_INTERNAL_IP
-#   NODE_INTERNAL_IPS
+#   NODE_IIPS_ARR
 #
 # Vars set:
 #   ETCD_INITIAL_CLUSTER - variable supplied to etcd for static cluster discovery.
 function create-etcd-initial-cluster {
   ETCD_INITIAL_CLUSTER="kubernetes-master=http://${MASTER_INTERNAL_IP}:2380"
-  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
   for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
-    node_internal_ip="${node_iip_arr[$(($i-1))]}"
+    local node_internal_ip="${NODE_IIPS_ARR[$(($i-1))]}"
     ETCD_INITIAL_CLUSTER="$ETCD_INITIAL_CLUSTER,kubernetes-node-${i}=http://${node_internal_ip}:2380"
   done
 }
@@ -1143,14 +1209,14 @@ function install-tarball-binaries {
 #   INSTANCE_USER
 #   MASTER_EIP
 #   KUBE_INSTANCE_PASSWORD
+#   MASTER_INSTANCE_ID
 function install-tarball-binaries-internal {
   local pids=""
   local fail=0
-  echo "++++++++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL} ..."
+  echo "++++++++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
-  echo "++++++++++ Fetching tarball from master..."
   # Fetch tarball for master node.
-  expect <<EOF
+  expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID}
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "\
@@ -1167,15 +1233,15 @@ expect {
 EOF
 
   # Distribute tarball from master to nodes.
-  INSTANCE_IIPS="${NODE_INTERNAL_IPS}"
-  IFS=',' read -ra instance_iip_arr <<< "${INSTANCE_IIPS}"
-  for instance_iip in ${instance_iip_arr[*]}; do
-    expect <<EOF &
+  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
+    local node_internal_ip=${NODE_IIPS_ARR[${i}]}
+    local node_instance_id=${NODE_INSTANCE_IDS_ARR[${i}]}
+    expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${node_instance_id} &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} \
 "scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ~/caicloud-kube.tar.gz ${INSTANCE_USER}@${instance_iip}:~/caicloud-kube.tar.gz"
+  ~/caicloud-kube.tar.gz ${INSTANCE_USER}@${node_internal_ip}:~/caicloud-kube.tar.gz"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1189,19 +1255,22 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for tarball to be distributed to all nodes ..."
+  echo -n "++++++++++ Waiting for tarball to be distributed to all nodes ..."
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
   if [[ "$fail" != "0" ]]; then
+    echo -e "${color_red}Failed${color_norm}"
     return 1
   fi
+  echo -e "${color_green}Done${color_norm}"
 
+  # Extract and install tarball for all instances.
   pids=""
-  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
-  IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
-  for instance_eip in ${instance_eip_arr[*]}; do
-    expect <<EOF &
+  for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
+    local instance_eip=${INSTANCE_EIPS_ARR[${i}]}
+    local instance_id=${INSTANCE_IDS_ARR[${i}]}
+    expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
@@ -1226,14 +1295,16 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for all instances to install tarball ..."
+  echo -n "++++++++++ Waiting for all instances to install tarball ..."
   fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
   if [[ "$fail" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
     return 0
   else
+    echo -e "${color_red}Failed${color_norm}"
     return 1
   fi
 }
@@ -1253,12 +1324,12 @@ function install-packages {
 #   NODE_IPS
 function install-packages-internal {
   local pids=""
-  echo "++++++++++ Start installing packages ..."
+  echo "++++++++++ Start installing packages. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
-  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
-  IFS=',' read -ra instance_eip_arr <<< "${INSTANCE_EIPS}"
-  for instance_eip in ${instance_eip_arr[*]}; do
-    expect <<EOF &
+  for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
+    local instance_eip=${INSTANCE_EIPS_ARR[${i}]}
+    local instance_id=${INSTANCE_IDS_ARR[${i}]}
+    expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
@@ -1286,14 +1357,16 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for all instances to install packages ..."
+  echo -n "++++++++++ Waiting for all instances to install packages ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
   if [[ "$fail" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
     return 0
   else
+    echo -e "${color_red}Failed${color_norm}"
     return 1
   fi
 }
@@ -1316,9 +1389,9 @@ function provision-instances-internal {
   install-configurations
 
   local pids=""
-  echo "++++++++++ Start provisioning master ..."
+  echo "++++++++++ Start provisioning master and nodes. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
   # Call master-start.sh to start master.
-  expect <<EOF &
+  expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID} &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh || \
@@ -1335,15 +1408,15 @@ expect {
 EOF
   pids="$pids $!"
 
-  echo "++++++++++ Start provisioning nodes ..."
-  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
-  for node_eip in "${node_eip_arr[@]}"; do
+  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
+    local node_eip=${NODE_EIPS_ARR[${i}]}
+    local node_instance_id=${NODE_INSTANCE_IDS_ARR[${i}]}
     # Call node-start.sh to start node. Note we must run expect in background;
     # otherwise, there will be a deadlock: node0-start.sh keeps retrying for etcd
     # connection (for docker-flannel configuration) because other nodes aren't
     # ready. If we run expect in foreground, we can't start other nodes; thus node0
     # will wait until timeout.
-    expect <<EOF &
+    expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${node_instance_id} &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${node_eip} "sudo ./kube/node-start.sh || \
@@ -1361,14 +1434,16 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for all instances to be provisioned ..."
+  echo -n "++++++++++ Waiting for all instances to be provisioned ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
   if [[ "$fail" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
     return 0
   else
+    echo -e "${color_red}Failed${color_norm}"
     return 1
   fi
 }
@@ -1404,12 +1479,8 @@ function install-configurations {
 #   POD_INFRA_CONTAINER
 function install-configurations-internal {
   local pids=""
+  echo "++++++++++ Start installing master and node configurations. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
-  IFS=',' read -ra node_iip_arr <<< "${NODE_INTERNAL_IPS}"
-  IFS=',' read -ra node_eip_arr <<< "${NODE_EIPS}"
-  IFS=',' read -ra node_instance_arr <<< "${NODE_INSTANCE_IDS}"
-
-  echo "++++++++++ Start installing master configurations ..."
   # Create master startup script.
   (
     echo "#!/bin/bash"
@@ -1420,7 +1491,7 @@ function install-configurations-internal {
     echo "config-hostname ${MASTER_INSTANCE_ID}"
     # Make sure master is able to find nodes using node hostname.
     for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
-      echo "add-hosts-entry ${node_instance_arr[$i]} ${node_iip_arr[$i]}"
+      echo "add-hosts-entry ${NODE_INSTANCE_IDS_ARR[$i]} ${NODE_IIPS_ARR[$i]}"
     done
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
@@ -1437,6 +1508,9 @@ function install-configurations-internal {
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"
     echo "sudo mkdir -p /etc/kubernetes"
+    # Since we might retry on error, we need to stop services. If no service
+    # is running, this is just no-op.
+    echo "sudo service etcd stop"
     # Copy binaries and configurations to system directories.
     echo "sudo cp ~/kube/master/* /opt/bin"
     echo "sudo cp ~/kube/default/* /etc/default"
@@ -1446,8 +1520,8 @@ function install-configurations-internal {
     echo "sudo cp ~/kube/security/ca.crt ~/kube/security/master.crt ~/kube/security/master.key /etc/kubernetes"
     echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
     # Finally, start kubernetes cluster. Upstart will make sure all components start
-    # upon etcd start. Note we use restart here since we may restart services on error.
-    echo "sudo service etcd restart"
+    # upon etcd start.
+    echo "sudo service etcd start"
   ) > "${KUBE_TEMP}/master-start.sh"
   chmod a+x ${KUBE_TEMP}/master-start.sh
 
@@ -1465,7 +1539,7 @@ function install-configurations-internal {
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
       ${KUBE_TEMP}/anchnet-config \
-      "${INSTANCE_USER}@${MASTER_EIP}":~/kube &
+      "${INSTANCE_USER}@${MASTER_EIP}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID} &
   pids="$pids $!"
 
   # Randomly choose one daocloud accelerator.
@@ -1476,10 +1550,9 @@ function install-configurations-internal {
   # Start installing nodes.
   for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
     index=$(($i-1))
-    echo "+++++++++ Start installing node-${index} configurations ..."
-    local node_internal_ip=${node_iip_arr[${index}]}
-    local node_eip=${node_eip_arr[${index}]}
-    local node_instance_id=${node_instance_arr[${index}]}
+    local node_internal_ip=${NODE_IIPS_ARR[${index}]}
+    local node_eip=${NODE_EIPS_ARR[${index}]}
+    local node_instance_id=${NODE_INSTANCE_IDS_ARR[${index}]}
     # Create node startup script. Note we assume the base image has necessary
     # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
     # master startup script.
@@ -1504,6 +1577,9 @@ function install-configurations-internal {
       # Create the system directories used to hold the final data.
       echo "sudo mkdir -p /opt/bin"
       echo "sudo mkdir -p /etc/kubernetes"
+      # Since we might retry on error, we need to stop services. If no service
+      # is running, this is just no-op.
+      echo "sudo service etcd stop"
       # Copy binaries and configurations to system directories.
       echo "sudo cp ~/kube/node/* /opt/bin"
       echo "sudo cp ~/kube/default/* /etc/default"
@@ -1511,8 +1587,8 @@ function install-configurations-internal {
       echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
       echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
       echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
-      # Finally, start kubernetes cluster. Note we use restart here since we may restart services on error.
-      echo "sudo service etcd restart"
+      # Finally, start kubernetes cluster.
+      echo "sudo service etcd start"
       # Configure docker network to use flannel overlay.
       echo "config-docker-net ${FLANNEL_NET} ${reg_mirror}"
     ) > "${KUBE_TEMP}/node${i}/node-start.sh"
@@ -1526,18 +1602,20 @@ function install-configurations-internal {
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \
         ${KUBE_TEMP}/anchnet-config \
-        "${INSTANCE_USER}@${node_eip}":~/kube &
+        "${INSTANCE_USER}@${node_eip}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${node_instance_id} &
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for all configurations to be installed ... "
+  echo -n "++++++++++ Waiting for all configurations to be installed ... "
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
   if [[ "$fail" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
     return 0
   else
+    echo -e "${color_red}Failed${color_norm}"
     return 1
   fi
 }

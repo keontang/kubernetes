@@ -15,25 +15,29 @@ To create a kubernetes cluster, make sure you've installed anchnet SDK. To insta
 go get github.com/caicloud/anchnet-go/anchnet
 ```
 
-This will install binary `anchnet` under `$GOPATH/bin`. The binary also needs a config file (e.g ~/.anchnet/config) with API keys, see [anchnet SDK](https://github.com/caicloud/anchnet-go),
-After the setup, you can create the cluster by simply run:
+This will install binary `anchnet` under `$GOPATH/bin` - make sure it's in your `PATH` variable. The binary also needs a config file (e.g ~/.anchnet/config) with API keys,
+see [anchnet SDK](https://github.com/caicloud/anchnet-go). After the setup, you can create a cluster by simply running:
 ```
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-up.sh
 ```
 
 ##### Options:
 
-Following is a curated list of options used for kube-up; there are a lot of other configurations not listed here, see `config-default.sh`, `executor-config.sh`.
+There are quite a few options used to create a cluster in anchnet, located at `config-default.sh` and `executor-config.sh`. `config-default.sh` is static information
+configured by caicloud admin, like node ip range, admission control plugin, etc. `executor-config.sh` is dynamic information configured by user and executor, like number
+of nodes, cluster name, etc. Therefore, most interesting options are in `executor-config.sh`. Following is a curated list of options used for kube-up; for a full list of
+options, consult the two files.
 
-* `CLUSTER_NAME`: The name of newly created cluster. This is used to identify cluster; all resources will be prefixed with this name. The variable is default to "k8s-default".
-  E.g. the following command will create a cluster named "caicloud-rocks", and all instances (plus other resources) will be prefixed with "caicloud-rocks".
+* `CLUSTER_NAME`: The name of newly created cluster. This is used to identify a cluster - all resources will be prefixed with this name. The variable is default to
+"k8s-default". E.g. the following command will create a cluster named "caicloud-rocks", and all instances (plus other resources like firewall) will be prefixed with
+"caicloud-rocks".
     ```
     KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks ./cluster/kube-up.sh
     ```
 
 * `PROJECT_ID`: The project to use. In anchnet, project is actually a sub-account, it helps admin to manage resources. All resouces under a project (sub-account) is isolated
   from others. An anchnet account can have multiple sub-accounts. The variable is default to empty string, which means main-account. E.g. following command creates a cluster
-  named "caicloud-rocks" under project "pro-H4ZW87K2" ("pro-H4ZW87K2" must exist):
+  named "caicloud-rocks" under project "pro-H4ZW87K2" ("pro-H4ZW87K2" must exist, see below):
     ```
     KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
     ```
@@ -49,18 +53,40 @@ Following is a curated list of options used for kube-up; there are a lot of othe
     ```
 
   * If `PROJECT_ID` is not set, it means this is the first time user wants to create a cluster and there is no anchnet sub account associated with `KUBE_USER`. In this case,
-    an anchnet sub account will be automatically created and reported back to executor service, and the cluster will be allocated to the newly created sub account.
-    E.g. following command will create a sub-account and then create a cluster:
+    an anchnet sub account will be automatically created and reported back to executor service, and the cluster will be created in the new sub account. E.g. following
+    command will create a sub-account and then create a cluster:
     ```
     KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user ./cluster/kube-up.sh
     ```
+
+* `CAICLOUD_VERSION`: The version of caicloud release to use. If `caicloud_version` is not empty, then use that version directly. Note the version must exist, see
+  `hack/caicloud-tools/caicloud-version.sh`. If it's empty, current code base will be built and pushed to file server, see `hack/caicloud-tools/build-tarball.sh`.
+  Default value is "v0.1". If `caicloud_version` is explicitly set to empty, the default value is `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
+  E.g., following command creates a cluster using version `v0.2`:
+  ```
+  KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION=v0.2 ./cluster/kube-up.sh
+  ```
+  Following command create a cluster from code base tagged with current timestamp:
+  ```
+  KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION="" ./cluster/kube-up.sh
+  ```
+
+* `KUBE_INSTANCE_LOGDIR`: Directory for holding kubeup instance specific logs. During kube-up, instances will be installed/provisioned concurrently; if we just send logs to
+  stdout, stdout will mess up. Therefore, we specify a directory to hold instance specific logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
+  Default value is "`/tmp/kubeup-$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S)`". The log directory looks like:
+  ```
+  $ ls /tmp/kubeup-2015-09-12-01-00-48
+  $ i-6TDSS52U i-ALCWC66X i-JZ9EDO70 i-THBJ0VCD i-UAAE4SUG
+  ```
+  Where 'i-6TDSS52U' is instance id. If no output is desired, the common pattern is to set `KUBE_INSTANCE_LOGDIR` and redirect stdout to `${KUBE_INSTANCE_LOGDIR}/common-logs`.
 
 * `ANCHNET_CONFIG_FILE`: The config file supplied to `anchnet` SDK CLI. Default value is `~/.anchnet/config`. Usually, you don't have to change the value, unless you want to
   create cluster under another anchnet account (NOT sub-account).
 
 ### Delete a cluster
 
-To bring down a cluster, run:
+Deleting a cluster will delete everything associated with the cluster, including instances, vxnet, external ips, firewalls, etc. (TODO: delete loadbalancer, see
+[issue](https://github.com/caicloud/caicloud-kubernetes/issues/101)). To bring down a cluster, run:
 
 ```
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-down.sh
@@ -77,13 +103,11 @@ KUBERNETES_PROVIDER=anchnet ./cluster/kube-down.sh
 
 ### Update a cluster
 
-To update a cluster, run:
+Updating a cluster will build current code base and push/restart cluster, useful for development. To update a cluster, run:
 
 ```
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-push.sh
 ```
-
-Updating a cluster will build current code base and push/restart cluster, useful for development.
 
 ##### Options:
 

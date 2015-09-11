@@ -27,9 +27,13 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 # node ip range; while executor-config is mostly dynamic information configured
 # by user and executor, like number of nodes, cluster name, etc. Also, retrieve
 # executor related methods from executor-service.sh.
-source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-source "${KUBE_ROOT}/cluster/anchnet/executor-config.sh"
-source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
+function setup-cluster-env {
+  source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+  source "${KUBE_ROOT}/cluster/anchnet/executor-config.sh"
+  source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
+}
+
+setup-cluster-env
 
 # -----------------------------------------------------------------------------
 # Cluster specific library utility functions.
@@ -90,12 +94,14 @@ function kube-up {
     exit 1
   fi
 
-  # Build tarball if it's required.
-  if [[ "${BUILD_TARBALL}" == "Y" ]]; then
+  # Build tarball if CAICLOUD_VERSION is empty. Since it's empty, build-tarball.sh
+  # will source caicloud-version.sh and set to default caicloud version; otherwise,
+  # we source caicloud-version.sh directly.
+  if [[ -z ${CAICLOUD_VERSION-} ]]; then
     echo "++++++++++ Building tarball ..."
-    UPLOAD_TO_QINIU="N"
-    UPLOAD_TO_TOOLSERVER="Y"
     source ${KUBE_ROOT}/hack/caicloud-tools/build-tarball.sh
+  else
+    source ${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh
   fi
 
   # For dev, set to existing instances.
@@ -840,21 +846,20 @@ EOF
   done
 }
 
-# Wrapper of setup-private-network-internal
-function setup-private-network {
-  command-exec-and-retry "setup-private-network-internal" 2 "false"
+# Wrapper of setup-sdn-network-internal
+function setup-sdn-network {
+  command-exec-and-retry "setup-sdn-network-internal" 2 "false"
 }
 
-# Setup private network
+# Setup private SDN network.
 #
 # Assumed vars:
 #   MASTER_INTERNAL_IP
 #   NODE_INTERNAL_IPS
 #   MASTER_EIP
 #   NODE_EIPS
-#
-function setup-private-network-internal {
-  # Setup private networks for all instances
+function setup-sdn-network-internal {
+  # Setup SDN networks for all instances.
   INSTANCE_IIPS="${MASTER_INTERNAL_IP},${NODE_INTERNAL_IPS}"
   INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
   IFS=',' read -ra instance_iip_arr <<< "${INSTANCE_IIPS}"
@@ -864,7 +869,7 @@ function setup-private-network-internal {
     local instance_iip=${instance_iip_arr[${i}]}
     local instance_eip=${instance_eip_arr[${i}]}
     create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${instance_iip} ${INTERNAL_IP_MASK} "${KUBE_TEMP}/network-opts${i}"
-    # restart network manager
+    # Setup interface and restart network manager.
     local pids=""
     expect <<EOF &
 set timeout -1
@@ -878,9 +883,10 @@ expect {
   eof {}
 }
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${instance_eip} "sudo mv /tmp/network-opts /etc/network/interfaces && \
-sudo service network-manager restart && \
-sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf"
+  ${INSTANCE_USER}@${instance_eip} "\
+sudo mv /tmp/network-opts /etc/network/interfaces && \
+sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf && \
+sudo service network-manager restart"
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -892,7 +898,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for private network setup ..."
+  echo "++++++++++ Waiting for sdn network setup ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
@@ -935,7 +941,7 @@ function create-sdn-network {
   # TODO: This is almost always true in anchnet ubuntu image. We can do better using describevxnets.
   PRIVATE_SDN_INTERFACE="eth1"
 
-  setup-private-network
+  setup-sdn-network
 }
 
 
@@ -1104,6 +1110,7 @@ function create-etcd-initial-cluster {
   done
 }
 
+
 # Create private interface opts, used by network manager to bring up private SDN
 # network interface.
 #
@@ -1123,6 +1130,7 @@ netmask ${3}
 EOF
 }
 
+
 # Wrapper of install-tarball-binaries-internal.
 function install-tarball-binaries {
   command-exec-and-retry "install-tarball-binaries-internal" 2 "false"
@@ -1141,7 +1149,7 @@ function install-tarball-binaries-internal {
   echo "++++++++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL} ..."
 
   echo "++++++++++ Fetching tarball from master..."
-  # Fetch tarball from master node
+  # Fetch tarball for master node.
   expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
@@ -1158,7 +1166,7 @@ expect {
 }
 EOF
 
-  # Distribute tarball to nodes
+  # Distribute tarball from master to nodes.
   INSTANCE_IIPS="${NODE_INTERNAL_IPS}"
   IFS=',' read -ra instance_iip_arr <<< "${INSTANCE_IIPS}"
   for instance_iip in ${instance_iip_arr[*]}; do
@@ -1181,7 +1189,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo "++++++++++ Waiting for tarball to be distributed to all nodes..."
+  echo "++++++++++ Waiting for tarball to be distributed to all nodes ..."
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
@@ -1908,6 +1916,9 @@ function prepare-e2e() {
   export MASTER_CPU_CORES=2
   export NODE_MEM=2048
   export NODE_CPU_CORES=2
+
+  # Since we changed configs above, we need to re-set cluster env.
+  setup-cluster-env
 
   # As part of e2e preparation, we fix image path.
   ${KUBE_ROOT}/hack/caicloud-tools/k8s-replace.sh

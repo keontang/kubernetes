@@ -162,7 +162,7 @@ NODE_MEM=${NODE_MEM:-1024}
 NODE_CPU_CORES=${NODE_CPU_CORES:-1}
 
 # -----------------------------------------------------------------------------
-# Derived params for kube-up (calculated based on above params, DO NOT CHANGE).
+# Derived params for kube-up (calculated based on above params: DO NOT CHANGE).
 # -----------------------------------------------------------------------------
 # Note that master_name and node_name are name of the instances in anchnet, which
 # is helpful to group instances; however, anchnet API works well with instance id,
@@ -189,16 +189,6 @@ CONTEXT="anchnet_${CLUSTER_NAME}"
 
 # Anchnet command alias.
 ANCHNET_CMD="anchnet --config-path=${ANCHNET_CONFIG_FILE}"
-
-# Based on CAICLOUD_VERSION, we can decide if building release is needed.
-if [[ -z ${CAICLOUD_VERSION-} ]]; then
-  BUILD_TARBALL="Y"
-else
-  BUILD_TARBALL="N"
-fi
-
-# Retrieve correct caicloud version.
-source "${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh"
 
 # -----------------------------------------------------------------------------
 # Params from executor for kube-down.

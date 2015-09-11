@@ -38,14 +38,20 @@
 #   in anchnet, since every account can only see its own custom image.
 #
 # - "dev": In dev mode, no machine will be created. Developer is responsible to
-#   specify the instance IDs, eip IDs, etc. This is primarily used for debugging
-#   kube-up.sh script itself to avoid repeatly creating resources.
+#   specify the master instance ID and node instance ids. This is primarily used
+#   for debugging kube-up.sh script itself to avoid repeatly creating resources.
 KUBE_UP_MODE=${KUBE_UP_MODE:-"tarball"}
 
 # Label of the cluster. This is used for constructing the prefix of resource
 # ids from anchnet. The same label needs to be specified when running kube-down
 # to release the resources acquired during kube-up.
 CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
+
+# Directory for holding kubeup instance specific logs. During kube-up, instances
+# will be installed/provisioned concurrently; if we just send logs to stdout,
+# stdout will mess up. Therefore, we specify a directory to hold instance specific
+# logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
+KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
 # The version of caicloud release to use. E.g. 2015-09-09-15-30, v1.0.2, etc.
 # If not set, kube-up will build current code base; otherwise, it will fetch
@@ -54,7 +60,7 @@ CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 # syntax will substitute CAICLOUD_VERSION only if it's undefined; however, ":-"
 # will substitute CAICLOUD_VERSION if it's undefined and empty. Since we want
 # to keep empty string, we need to use "-".
-CAICLOUD_VERSION=${CAICLOUD_VERSION-"2015-09-09-001"}
+CAICLOUD_VERSION=${CAICLOUD_VERSION-"v0.1.0"}
 
 # Project id actually stands for an anchnet sub-account. If PROJECT_ID and
 # KUBE_USER are not set, all the subsequent anchnet calls will use main
@@ -87,10 +93,6 @@ IP_GROUP=${IP_GROUP:-"eipg-00000000"}
 # anchnet account (register@caicloud.io) using sub-account, so this file
 # rarely changes.
 ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
-
-# Namespace used to create cluster wide services. The name is from upstream
-# and shouldn't be changed.
-SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE:-"kube-system"}
 
 # Daocloud registry accelerator. Before implementing our own registry (or registry
 # mirror), use this accelerator to make pulling image faster. The variable is a

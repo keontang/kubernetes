@@ -21,10 +21,14 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 source "${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh"
 
 # Restore 'gcr.io' images.
-grep -rl "caicloudgcr/[^\", ]*" \
+grep -rl "caicloudgcr/google_containers_[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
-  xargs perl -X -i -pe 's|caicloudgcr/|gcr.io/google_containers/|g'
+  xargs perl -X -i -pe 's|caicloudgcr/google_containers_|gcr.io/google_containers/|g'
+grep -rl "caicloudgcr/google_samples_[^\", ]*" \
+     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+  xargs perl -X -i -pe 's|caicloudgcr/google_samples_|gcr.io/google_samples/|g'
 
 # Restore 'golang.org' packages.
 perl -i -pe "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \

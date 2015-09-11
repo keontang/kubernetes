@@ -21,6 +21,7 @@ import (
 	// This should probably be part of some configuration fed into the build for a
 	// given binary target.
 
+<<<<<<< HEAD
 	"fmt"
 
 	// Cloud providers

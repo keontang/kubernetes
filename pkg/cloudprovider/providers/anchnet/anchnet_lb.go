@@ -45,7 +45,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 	}
 	// No external IP for the loadbalancer, shouldn't happen.
 	if len(lb_response.ItemSet[0].Eips) == 0 {
-		return nil, false, fmt.Errorf("External loadbalancer has no public IP")
+		return nil, false, fmt.Errorf("external loadbalancer has no public IP")
 	}
 	err = an.waitForLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, anchnet_client.LoadBalancerStatusActive)
 	if err != nil {
@@ -58,11 +58,12 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 
 	status = &api.LoadBalancerStatus{}
 	status.Ingress = []api.LoadBalancerIngress{{IP: ip_response.ItemSet[0].EipAddr}}
-	glog.Infof("Anchnet: get loadbalancer %v, ingress ip %v\n", name, ip_response.ItemSet[0].EipAddr)
+	glog.Infof("Anchnet: got loadbalancer %v, ingress ip %v\n", name, ip_response.ItemSet[0].EipAddr)
 	return status, true, nil
 }
 
-// CreateTCPLoadBalancer creates a new tcp load balancer. Returns the status of the balancer.
+// EnsureTCPLoadBalancer creates a new tcp load balancer, or updates an existing one. Returns
+// the status of the balancer.
 // 'region' is returned from Zone interface and is not used here, since anchnet only supports
 // one zone. If it starts supporting multiple zones, we just need to update the request.
 // 'externalIP' is not used, we use external IP given by anchnent.
@@ -73,8 +74,8 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 // 4. add backends for each listener;
 // 5. create a security group for loadbalancer, number of rules = number of service ports;
 // 6. apply above changes.
-func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP, ports []*api.ServicePort, hosts []string, affinityType api.ServiceAffinity) (*api.LoadBalancerStatus, error) {
-	glog.Infof("Anchnet: received create loadbalancer request with name %v\n", name)
+func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net.IP, ports []*api.ServicePort, hosts []string, affinityType api.ServiceAffinity) (*api.LoadBalancerStatus, error) {
+	glog.Infof("Anchnet: EnsureTCPLoadBalancer(%v, %v, %v, %v, %v)", name, region, loadBalancerIP, ports, hosts)
 
 	// Anchnet doesn't support UDP (k8s doesn't support neither).
 	for i := range ports {
@@ -90,6 +91,20 @@ func (an *Anchnet) CreateTCPLoadBalancer(name, region string, externalIP net.IP,
 		// response a request, we still need to hit the same kube-proxy (the node). Other kube-proxy
 		// do not have the knowledge.
 		return nil, fmt.Errorf("unsupported load balancer affinity: %v", affinityType)
+	}
+
+	// Delete existing loadbalancer if it exists.
+	_, exists, err := an.GetTCPLoadBalancer(name, region)
+	if err != nil {
+		return nil, fmt.Errorf("error checking if anchnet load balancer %v already exists: %v", name, err)
+	}
+
+	if exists {
+		glog.Infof("Anchnet: EnsureTCPLoadBalancer found existing loadbalancer %v; deleting now", name)
+		err := an.EnsureTCPLoadBalancerDeleted(name, region)
+		if err != nil {
+			return nil, fmt.Errorf("error deleting existing GCE load balancer: %v", err)
+		}
 	}
 
 	// Create a public IP address resource. The externalIP field is thus ignored.

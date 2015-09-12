@@ -29,7 +29,7 @@ UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"N"}
 # Do we want to upload the release to toolserver for dev: Y or N. Default to Y.
 UPLOAD_TO_TOOLSERVER=${UPLOAD_TO_TOOLSERVER:-"Y"}
 
-# Instance user and password if we want to upload to toolserver
+# Instance user and password if we want to upload to toolserver.
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 

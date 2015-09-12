@@ -29,18 +29,18 @@ of nodes, cluster name, etc. Therefore, most interesting options are in `executo
 options, consult the two files.
 
 * `CLUSTER_NAME`: The name of newly created cluster. This is used to identify a cluster - all resources will be prefixed with this name. The variable is default to
-"k8s-default". E.g. the following command will create a cluster named "caicloud-rocks", and all instances (plus other resources like firewall) will be prefixed with
-"caicloud-rocks".
-    ```
-    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks ./cluster/kube-up.sh
-    ```
+  "k8s-default". E.g. the following command will create a cluster named "caicloud-rocks", and all instances (plus other resources like firewall) will be prefixed with
+  "caicloud-rocks".
+  ```
+  KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks ./cluster/kube-up.sh
+  ```
 
 * `PROJECT_ID`: The project to use. In anchnet, project is actually a sub-account, it helps admin to manage resources. All resouces under a project (sub-account) is isolated
   from others. An anchnet account can have multiple sub-accounts. The variable is default to empty string, which means main-account. E.g. following command creates a cluster
   named "caicloud-rocks" under project "pro-H4ZW87K2" ("pro-H4ZW87K2" must exist, see below):
-    ```
-    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
-    ```
+  ```
+  KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
+  ```
 
 * `KUBE_USER`: The kubernetes user name. This variable is default to empty string. If `KUBE_USER` is set, the `kubeconfig` file, which has all the information of how to access
   the cluster, will be created at `$HOME/.kube/config_${KUBE_USER}`. If not set, default location (`$HOME/.kube/config`) will be used. In production, we should always set
@@ -59,17 +59,16 @@ options, consult the two files.
     KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user ./cluster/kube-up.sh
     ```
 
-* `CAICLOUD_VERSION`: The version of caicloud release to use. If `caicloud_version` is not empty, then use that version directly. Note the version must exist, see
-  `hack/caicloud-tools/caicloud-version.sh`. If it's empty, current code base will be built and pushed to file server, see `hack/caicloud-tools/build-tarball.sh`.
-  Default value is "v0.1". If `caicloud_version` is explicitly set to empty, the default value is `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
-  E.g., following command creates a cluster using version `v0.2`:
+* `CAICLOUD_VERSION`: The version of caicloud release to use.  Default value is current release version. The version must exist, see `CAICLOUD_TARBALL_URL` variable in
+  `hack/caicloud-tools/caicloud-version.sh`. E.g., following command creates a cluster using caicloud kubernetes version `v0.2.0`.
   ```
   KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION=v0.2 ./cluster/kube-up.sh
   ```
-  Following command create a cluster from code base tagged with current timestamp:
+  During development, it's helpful to create a cluster using new tarball, this can be achieved by setting `CAICLOUD_VERSION` to empty string explicitly, e.g.
   ```
   KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION="" ./cluster/kube-up.sh
   ```
+  The tarball version will be `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`, e.g. 2015-09-12-10-01
 
 * `KUBE_INSTANCE_LOGDIR`: Directory for holding kubeup instance specific logs. During kube-up, instances will be installed/provisioned concurrently; if we just send logs to
   stdout, stdout will mess up. Therefore, we specify a directory to hold instance specific logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
@@ -112,3 +111,9 @@ KUBERNETES_PROVIDER=anchnet ./cluster/kube-push.sh
 ##### Options:
 
 Same options as deleting a cluster.
+
+## Changelog
+
+### Version 0.1.0
+
+Initial release of caicloud kubernetes, based on upstream tag [52ef059](https://github.com/caicloud/caicloud-kubernetes/commit/52ef0599d8c976993b3d8ac5c1e783bdb5cb2c83)

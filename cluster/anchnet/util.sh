@@ -1333,6 +1333,17 @@ function install-packages-internal {
     local instance_id=${INSTANCE_IDS_ARR[${i}]}
     expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
+spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${KUBE_ROOT}/hack/caicloud/nsenter ${INSTANCE_USER}@${instance_eip}:~/nsenter
+expect {
+  "*?assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  "Command failed" {exit 1}
+  "lost connection" { exit 1 }
+  eof {}
+}
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
 sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty main restricted universe multiverse > /etc/apt/sources.list' && \
@@ -1342,9 +1353,10 @@ sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty main restricted u
 sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-security main restricted universe multiverse >> /etc/apt/sources.list' && \
 sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-updates main restricted universe multiverse >> /etc/apt/sources.list' && \
 sudo sh -c 'echo deb \[arch=amd64\] http://internal-get.caicloud.io/repo ubuntu-trusty main > /etc/apt/sources.list.d/docker.list' && \
+sudo mv ~/nsenter /usr/local/bin && \
 sudo apt-get update && \
 sudo apt-get install --allow-unauthenticated -y docker-engine=${DOCKER_VERSION}-0~trusty && \
-sudo apt-get install bridge-utils || \
+sudo apt-get install bridge-utils socat || \
 echo 'Command failed installing packages on remote host $instance_eip'"
 expect {
   "*?assword*" {

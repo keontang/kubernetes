@@ -101,9 +101,9 @@ function kube-up {
   # we source caicloud-version.sh directly.
   if [[ -z ${CAICLOUD_VERSION-} ]]; then
     echo "++++++++++ Building tarball ..."
-    source ${KUBE_ROOT}/hack/caicloud-tools/build-tarball.sh
+    source ${KUBE_ROOT}/hack/caicloud/build-tarball.sh
   else
-    source ${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh
+    source ${KUBE_ROOT}/hack/caicloud/caicloud-version.sh
   fi
 
   # For dev, set to existing instance IDs for master and node.
@@ -1956,8 +1956,8 @@ function anchnet-build-release {
   fi
   (
     cd ${KUBE_ROOT}
-    hack/caicloud-tools/k8s-replace.sh
-    trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
+    hack/caicloud/k8s-replace.sh
+    trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
     build/release.sh
     cd -
   )
@@ -1971,8 +1971,8 @@ function anchnet-build-server {
   fi
   (
     cd ${KUBE_ROOT}
-    hack/caicloud-tools/k8s-replace.sh
-    trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
+    hack/caicloud/k8s-replace.sh
+    trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
     build/run.sh hack/build-go.sh
     cd -
   )
@@ -2001,8 +2001,8 @@ function prepare-e2e() {
   setup-cluster-env
 
   # As part of e2e preparation, we fix image path.
-  ${KUBE_ROOT}/hack/caicloud-tools/k8s-replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
+  ${KUBE_ROOT}/hack/caicloud/k8s-replace.sh
+  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
 }
 
 

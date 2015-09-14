@@ -917,7 +917,7 @@ EOF
 
 # Wrapper of setup-sdn-network-internal
 function setup-sdn-network {
-  command-exec-and-retry "setup-sdn-network-internal" 2 "false"
+  command-exec-and-retry "setup-sdn-network-internal" 3 "false"
 }
 
 
@@ -946,6 +946,7 @@ expect {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
   eof {}
 }
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
@@ -958,6 +959,7 @@ expect {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
     exp_continue
   }
+  "lost connection" { exit 1 }
   eof {}
 }
 EOF

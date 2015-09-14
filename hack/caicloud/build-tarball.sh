@@ -14,15 +14,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The script builds tarball containing caicloud kubernetes binaries and
-# other binaries (etcd, flannel). After building the tarball, we should
-# upload it to internal-get.caicloud.io or qiniu.com.
+# The script builds two tarballs, one containing caicloud kubernetes binaries
+# and other binaries (etcd, flannel); the other one contains kube-up, kube-dwon
+# scripts. After building the tarballs, we can choose to upload it to toolserver
+# or qiniu.com.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+function usage {
+  echo -e "Usage:"
+  echo -e "  ./build-tarball.sh version"
+  echo -e ""
+  echo -e "Parameter:"
+  echo -e " version\tTarball release version, must in the form of vA.B.C, where A, B, C are digits, e.g. v1.0.1"
+  echo -e ""
+  echo -e "Environment variable:"
+  echo -e " UPLOAD_TO_TOOLSERVER\tSet to Y if the script needs to push new tarballs to toolserver, default to Y"
+  echo -e " UPLOAD_TO_QINIU\tSet to Y if the script needs to push new tarballs to qiniu, default to N"
+}
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 
 # -----------------------------------------------------------------------------
 # Parameters for building tarball.
 # -----------------------------------------------------------------------------
+if [[ "$#" != "1" ]]; then
+  echo -e "Error: Version must be provided."
+  echo -e ""
+  usage
+  exit 1
+fi
+if [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo -e "Error: Version format error, see usage."
+  echo -e ""
+  usage
+  exit 1
+fi
+
 # Do we want to upload the release to qiniu: Y or N. Default to N.
 UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"N"}
 
@@ -33,8 +63,11 @@ UPLOAD_TO_TOOLSERVER=${UPLOAD_TO_TOOLSERVER:-"Y"}
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
+# Caicloud kubernetes release version.
+CAICLOUD_VERSION=${1}
+
 # Use caicloud-version.sh to set release version.
-source "${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh"
+source "${KUBE_ROOT}/hack/caicloud/caicloud-version.sh"
 
 # -----------------------------------------------------------------------------
 # Start building tarball from current code base.
@@ -42,8 +75,8 @@ source "${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh"
 cd ${KUBE_ROOT}
 
 # Work around mainland network connection.
-hack/caicloud-tools/k8s-replace.sh
-trap '${KUBE_ROOT}/hack/caicloud-tools/k8s-restore.sh' EXIT
+hack/caicloud/k8s-replace.sh
+trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
 build/run.sh hack/build-go.sh
 if [[ "$?" != "0" ]]; then
   echo "Error building server binaries"
@@ -121,7 +154,7 @@ if [[ "${UPLOAD_TO_QINIU}" == "Y" ]]; then
     exit 1
   fi
   # Change directory to qiniu-conf.json: Qiniu SDK has assumptions about path.
-  cd ${KUBE_ROOT}/hack/caicloud-tools
+  cd ${KUBE_ROOT}/hack/caicloud
   qrsync qiniu-conf.json
   cd -
 fi

@@ -19,7 +19,7 @@ set -o nounset
 set -o pipefail
 
 # Build release for anchnet. This is required due to GFW, as mentioned
-# in hack/caicloud-tools/k8s-replace.sh
+# in hack/caicloud/k8s-replace.sh
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../../..
 KUBERNETES_PROVIDER="anchnet"

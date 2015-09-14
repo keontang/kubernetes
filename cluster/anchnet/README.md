@@ -1,14 +1,14 @@
-## Anchnet cloudprovider
+# Anchnet cloudprovider
 
-Anchnet cloudprovider is internally supported by caicloud.io. It conforms to kubernetes cloudprovider plugin convention, and can be considered natively supported by kubernetes.
+Anchnet cloudprovider is internally supported by [caicloud.io](https://caicloud.io). It implements kubernetes cloudprovider plugin, and can be considered natively supported by kubernetes.
 
-### Background on anchnet cloudprovider
+## Background on anchnet cloudprovider
 
 [Anchnet](http://cloud.51idc.com/) is one of caicloud's IDC/IaaS parteners. It has most common features seen in other cloudproviders, e.g. Cloud Instances, External IPs, Load
 balancers, etc, see [help center](http://cloud.51idc.com/help/cloud/index.html). [API doc](http://cloud.51idc.com/help/api/index.html) lists all public APIs (there are some
 internal ones also). SDK is developed by caicloud team at https://github.com/caicloud/anchnet-go.
 
-### Create a cluster using anchnet
+## Create a cluster using anchnet
 
 To create a kubernetes cluster, make sure you've installed anchnet SDK. To install:
 ```
@@ -21,11 +21,11 @@ see [anchnet SDK](https://github.com/caicloud/anchnet-go). After the setup, you 
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-up.sh
 ```
 
-##### Options:
+#### Options:
 
 There are quite a few options used to create a cluster in anchnet, located at `config-default.sh` and `executor-config.sh`. `config-default.sh` is static information
 configured by caicloud admin, like node ip range, admission control plugin, etc. `executor-config.sh` is dynamic information configured by user and executor, like number
-of nodes, cluster name, etc. Therefore, most interesting options are in `executor-config.sh`. Following is a curated list of options used for kube-up; for a full list of
+of nodes, cluster name, etc. Therefore, most interesting options are in `executor-config.sh`. Following is a curated list of options used in kube-up. For a full list of
 options, consult the two files.
 
 * `CLUSTER_NAME`: The name of newly created cluster. This is used to identify a cluster - all resources will be prefixed with this name. The variable is default to
@@ -59,10 +59,11 @@ options, consult the two files.
     KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user ./cluster/kube-up.sh
     ```
 
-* `CAICLOUD_VERSION`: The version of caicloud release to use.  Default value is current release version. The version must exist, see `CAICLOUD_TARBALL_URL` variable in
-  `hack/caicloud-tools/caicloud-version.sh`. E.g., following command creates a cluster using caicloud kubernetes version `v0.2.0`.
+* `CAICLOUD_VERSION`: The version of caicloud release to use.  Default value is current release version (or a previous version if executor-config.sh is not updated). The
+  version must given exist, see `CAICLOUD_TARBALL_URL` variable in
+  `hack/caicloud/caicloud-version.sh`. E.g., following command creates a cluster using caicloud kubernetes version `v0.2.0`.
   ```
-  KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION=v0.2 ./cluster/kube-up.sh
+  KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION=v0.2.0 ./cluster/kube-up.sh
   ```
   During development, it's helpful to create a cluster using new tarball, this can be achieved by setting `CAICLOUD_VERSION` to empty string explicitly, e.g.
   ```
@@ -77,12 +78,13 @@ options, consult the two files.
   $ ls /tmp/kubeup-2015-09-12-01-00-48
   $ i-6TDSS52U i-ALCWC66X i-JZ9EDO70 i-THBJ0VCD i-UAAE4SUG
   ```
-  Where 'i-6TDSS52U' is instance id. If no output is desired, the common pattern is to set `KUBE_INSTANCE_LOGDIR` and redirect stdout to `${KUBE_INSTANCE_LOGDIR}/common-logs`.
+  where 'i-6TDSS52U' is instance id. Note the variable only catches logs for concurrent instance provisioning; all other logs, like creating instances from anchnet, will be
+  send to stdout. One common pattern is to set `KUBE_INSTANCE_LOGDIR` and redirect stdout to `${KUBE_INSTANCE_LOGDIR}/common-logs`.
 
 * `ANCHNET_CONFIG_FILE`: The config file supplied to `anchnet` SDK CLI. Default value is `~/.anchnet/config`. Usually, you don't have to change the value, unless you want to
   create cluster under another anchnet account (NOT sub-account).
 
-### Delete a cluster
+## Delete a cluster
 
 Deleting a cluster will delete everything associated with the cluster, including instances, vxnet, external ips, firewalls, etc. (TODO: delete loadbalancer, see
 [issue](https://github.com/caicloud/caicloud-kubernetes/issues/101)). To bring down a cluster, run:
@@ -91,7 +93,7 @@ Deleting a cluster will delete everything associated with the cluster, including
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-down.sh
 ```
 
-##### Options:
+#### Options:
 
 * `CLUSTER_NAME`: Delete cluster with given name.
 
@@ -100,7 +102,7 @@ KUBERNETES_PROVIDER=anchnet ./cluster/kube-down.sh
   KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-down.sh
   ```
 
-### Update a cluster
+## Update a cluster
 
 Updating a cluster will build current code base and push/restart cluster, useful for development. To update a cluster, run:
 
@@ -108,12 +110,40 @@ Updating a cluster will build current code base and push/restart cluster, useful
 KUBERNETES_PROVIDER=anchnet ./cluster/kube-push.sh
 ```
 
-##### Options:
+#### Options:
 
 Same options as deleting a cluster.
 
-## Changelog
+## Test
 
-### Version 0.1.0
+### Unit Test
 
-Initial release of caicloud kubernetes, based on upstream tag [52ef059](https://github.com/caicloud/caicloud-kubernetes/commit/52ef0599d8c976993b3d8ac5c1e783bdb5cb2c83)
+Running unit test is the same as upstream, i.e.
+```
+./hack/test-go.sh
+```
+
+### Integration Test
+
+Running integration test is the same as upstream, i.e.
+```
+./hack/test-integration.sh
+```
+
+### e2e test
+
+Run the following command to start anchnet e2e test:
+```
+KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=anchnet ./hack/caicloud/caicloud-e2e-test.sh
+```
+
+The script `caicloud-e2e-test.sh` is used for caicloud e2e test. The original e2e test script is located at [hack/e2e-test.sh](https://github.com/caicloud/caicloud-kubernetes/blob/master/hack/e2e-test.sh).
+All e2e tests are located at `test/e2e`. Test cases can be disabled using `--test_args="--ginkgo.skip=${CAICLOUD_TEST_SKIP_REGEX}"` flag. If a test case is not needed,
+we can add it to `CAICLOUD_TEST_SKIP_REGEX`. E.g.
+
+```
+CAICLOUD_TEST_SKIP_REGEX="kube-ui|Cluster\slevel\slogging" KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=anchnet ./hack/caicloud/caicloud-e2e-test.sh
+```
+
+will disable [elasticsearch](https://github.com/caicloud/caicloud-kubernetes/blob/master/test/e2e/es_cluster_logging.go#L34) & [kube-ui](https://github.com/caicloud/caicloud-kubernetes/blob/master/test/e2e/kube-ui.go#L30)
+tests. On the other hand, `--test_args="--ginkgo.focus=${REGEX}"` can be use to only run tests that match the regex.

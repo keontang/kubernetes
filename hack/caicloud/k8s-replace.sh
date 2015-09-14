@@ -14,34 +14,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The script restores changes from k8s-replace.sh. This is necessary since we
-# don't want to change upstream code.
+# The script fixes a couple of hiccups for developing kubernetes behind GFW.
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
-source "${KUBE_ROOT}/hack/caicloud-tools/caicloud-version.sh"
+source "${KUBE_ROOT}/hack/caicloud/caicloud-version.sh"
 
-# Restore 'gcr.io' images.
-grep -rl "caicloudgcr/google_containers_[^\", ]*" \
+# 'gcr.io' is blocked - replace all gcr.io images to ones we uploaded to docker
+# hub caicloudgcr account.
+grep -rl "gcr.io/google_containers/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
-  xargs perl -X -i -pe 's|caicloudgcr/google_containers_|gcr.io/google_containers/|g'
-grep -rl "caicloudgcr/google_samples_[^\", ]*" \
+  xargs perl -X -i -pe 's|gcr.io/google_containers/|caicloudgcr/google_containers_|g'
+grep -rl "gcr.io/google_samples/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
-  xargs perl -X -i -pe 's|caicloudgcr/google_samples_|gcr.io/google_samples/|g'
+  xargs perl -X -i -pe 's|gcr.io/google_samples/|caicloudgcr/google_samples_|g'
 
-# Restore 'golang.org' packages.
-perl -i -pe "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \
+# 'golang.org' is blocked - remove it since we do not need it for building.
+perl -i -pe "s|go get golang.org/x/tools/cmd/cover github.com/tools/godep|go get github.com/tools/godep|g" \
      ${KUBE_ROOT}/build/build-image/Dockerfile
 
-# Restore 'github.com' files.
-perl -i -pe "s|${ETCD_URL}|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
+# Accessing 'github.com' is slow, replace it with our hosted files.
+perl -i -pe "s|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|${ETCD_URL}|g" \
      ${KUBE_ROOT}/build/build-image/Dockerfile
-perl -i -pe "s|${ETCD_VERSION}|v2.0.0|g" ${KUBE_ROOT}/build/build-image/Dockerfile
+perl -i -pe "s|v2.0.0|${ETCD_VERSION}|g" ${KUBE_ROOT}/build/build-image/Dockerfile
 
-# Restore supported e2e tests.
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
+# Our cloudprovider supports following e2e tests.
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "anchnet")|g' \
      ${KUBE_ROOT}/test/e2e/kubectl.go
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "anchnet")|g' \
      ${KUBE_ROOT}/test/e2e/service.go
-perl -i -pe "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go
+perl -i -pe "s|google.com|baidu.com|g" ${KUBE_ROOT}/test/e2e/networking.go

@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file. This projec
 ### Version 0.2.0 [TBD]
 #### Changed
 - Rename `hack/caicloud-tools` to `hack/caicloud`, since it's not just tools now.
+- Rename `CAICLOUD_VERSION` to `CAICLOUD_KUBE_VERSION` to make it more explicit.
+- Add new variable `BUILD_RELEASE` to replace the semantic of empty `CAICLOUD_VERSION`.
 
 ### Version 0.1.0 [2015-09-12]
 #### Changed

@@ -96,14 +96,13 @@ function kube-up {
   #   NODE_INTERNAL_IPS - comma separated string of node internal ips
   create-node-internal-ips
 
-  # Build tarball if CAICLOUD_VERSION is empty. Since it's empty, build-tarball.sh
-  # will source caicloud-version.sh and set to default caicloud version; otherwise,
-  # we source caicloud-version.sh directly.
-  if [[ -z ${CAICLOUD_VERSION-} ]]; then
+  # Build tarball if CAICLOUD_KUBE_VERSION is empty; version is based on date/time, e.g.
+  # 2015-09-12-10-01
+  if [[ "${BUILD_RELEASE}" = "Y" ]]; then
     echo "++++++++++ Building tarball ..."
-    source ${KUBE_ROOT}/hack/caicloud/build-tarball.sh
-  else
-    source ${KUBE_ROOT}/hack/caicloud/caicloud-version.sh
+    cd ${KUBE_ROOT}
+    ./hack/caicloud/build-tarball.sh "${FINAL_VERSION}"
+    cd -
   fi
 
   # For dev, set to existing instance IDs for master and node.
@@ -712,7 +711,7 @@ function create-master-instance {
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
--p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${MASTER_MEM} \
+-p=${KUBE_INSTANCE_PASSWORD} -i=${FINAL_IMAGE} -m=${MASTER_MEM} \
 -c=${MASTER_CPU_CORES} -g=${IP_GROUP} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
 
@@ -754,7 +753,7 @@ function create-node-instances {
 
   # Create 'raw' node instances from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
--p=${KUBE_INSTANCE_PASSWORD} -i=${INSTANCE_IMAGE} -m=${NODE_MEM} \
+-p=${KUBE_INSTANCE_PASSWORD} -i=${FINAL_IMAGE} -m=${NODE_MEM} \
 -c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${NODES_WAIT_RETRY} ${NODES_WAIT_INTERVAL}
 
@@ -2001,7 +2000,7 @@ function prepare-e2e() {
   # Cluster configs for e2e test. Note we must export the variables; otherwise,
   # they won't be visible outside of the function.
   export CLUSTER_NAME="e2e-test"
-  export CAICLOUD_VERSION=""
+  export BUILD_RELEASE="Y"
   export KUBE_UP_MODE="tarball"
   export NUM_MINIONS=2
   export MASTER_MEM=2048

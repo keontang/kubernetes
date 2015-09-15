@@ -40,10 +40,10 @@ const (
 	RetryIntervalOnError = 2 * time.Second
 
 	// Number of retries when waitting on resources to become desired status.
-	RetryCountOnWait = 60
+	RetryCountOnWait = 120
 	// Initial interval between two retries for the above situation. Following
 	// retry interval will be doubled.
-	RetryIntervalOnWait = 2 * time.Second
+	RetryIntervalOnWait = 3 * time.Second
 
 	// TTL for API call cache.
 	cacheTTL = 10 * time.Minute

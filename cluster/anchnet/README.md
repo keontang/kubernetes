@@ -59,17 +59,21 @@ options, consult the two files.
     KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user ./cluster/kube-up.sh
     ```
 
-* `CAICLOUD_VERSION`: The version of caicloud release to use.  Default value is current release version (or a previous version if executor-config.sh is not updated). The
-  version must given exist, see `CAICLOUD_TARBALL_URL` variable in
-  `hack/caicloud/caicloud-version.sh`. E.g., following command creates a cluster using caicloud kubernetes version `v0.2.0`.
+* `CAICLOUD_KUBE_VERSION`: The version of caicloud release to use if building release is not required. E.g. 2015-09-09-15-30, v1.0.2, etc. Default value is current release
+  version (or a previous version if executor-config.sh is not updated). The version must exist in `CAICLOUD_HOST_URL`. E.g., following command creates a cluster using caicloud
+  kubernetes version `v0.2.0`.
   ```
-  KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION=v0.2.0 ./cluster/kube-up.sh
+  KUBERNETES_PROVIDER=anchnet CAICLOUD_KUBE_VERSION=v0.2.0 ./cluster/kube-up.sh
   ```
-  During development, it's helpful to create a cluster using new tarball, this can be achieved by setting `CAICLOUD_VERSION` to empty string explicitly, e.g.
+
+* `BUILD_VERSION`: The version of newly built release during kube-up. Default value is current date/time, i.e. `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
+
+* `BUILD_RELEASE`: Decide if building release is needed. If the parameter is true, then use `BUILD_VERSION` as release version; otherwise, use `CAICLOUD_KUBE_VERSION`. Using
+  two different versions avoid overriding existing release. E.g. following command creates a cluster from current code base. The version is in the form of
+  `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
   ```
-  KUBERNETES_PROVIDER=anchnet CLUSTER_VERSION="" ./cluster/kube-up.sh
+  KUBERNETES_PROVIDER=anchnet BUILD_RELEASE=Y ./cluster/kube-up.sh
   ```
-  The tarball version will be `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`, e.g. 2015-09-12-10-01
 
 * `KUBE_INSTANCE_LOGDIR`: Directory for holding kubeup instance specific logs. During kube-up, instances will be installed/provisioned concurrently; if we just send logs to
   stdout, stdout will mess up. Therefore, we specify a directory to hold instance specific logs. All other logs will be sent to stdout, e.g. create instances from anchnet.

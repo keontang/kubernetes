@@ -14,17 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -o errexit
-set -o nounset
-set -o pipefail
+# Third-party binary versions, used to create tarball, etc.
+ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
+FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.3}
 
-# Build release for anchnet. This is required due to GFW, as mentioned
-# in hack/caicloud/k8s-replace.sh
+# URL of the server hosting binaries.
+RELEASE_HOST_URL="http://7xli2p.dl1.z0.glb.clouddn.com"
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../../..
-KUBERNETES_PROVIDER="anchnet"
+ETCD_PACKAGE="etcd-${ETCD_VERSION}-linux-amd64.tar.gz"
+FLANNEL_PACKAGE="flannel-${FLANNEL_VERSION}-linux-amd64.tar.gz"
 
-source "${KUBE_ROOT}/cluster/kube-env.sh"
-source "${KUBE_ROOT}/cluster/${KUBERNETES_PROVIDER}/util.sh"
-
-anchnet-build-release
+ETCD_URL="${RELEASE_HOST_URL}/${ETCD_PACKAGE}"
+FLANNEL_URL="${RELEASE_HOST_URL}/${FLANNEL_PACKAGE}"

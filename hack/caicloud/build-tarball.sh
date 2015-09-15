@@ -28,11 +28,16 @@ function usage {
   echo -e "  ./build-tarball.sh version"
   echo -e ""
   echo -e "Parameter:"
-  echo -e " version\tTarball release version, must in the form of vA.B.C, where A, B, C are digits, e.g. v1.0.1"
+  echo -e " version\tTarball release version, must in the form of vA.B.C, where A, B, C are digits,"
+  echo -e "        \te.g. v1.0.1; or in the form of YYYY-mm-DD-HH-MM, where YYY is year, mm is month,"
+  echo -e "        \tDD is day, HH is hour and MM is minute, e.g. 2015-09-10-18-00. The later one is"
+  echo -e "        \tused for testing."
   echo -e ""
   echo -e "Environment variable:"
   echo -e " UPLOAD_TO_TOOLSERVER\tSet to Y if the script needs to push new tarballs to toolserver, default to Y"
   echo -e " UPLOAD_TO_QINIU\tSet to Y if the script needs to push new tarballs to qiniu, default to N"
+  echo -e " ETCD_VERSION\tetcd version to use. etcd will be packed into release tarball, default value is ${ETCD_VERSION}"
+  echo -e " FLANNEL_VERSION\tflannel version to use. flannel will be packed into release tarball, default value is ${FLANNEL_VERSION}"
 }
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
@@ -40,19 +45,6 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 # -----------------------------------------------------------------------------
 # Parameters for building tarball.
 # -----------------------------------------------------------------------------
-if [[ "$#" != "1" ]]; then
-  echo -e "Error: Version must be provided."
-  echo -e ""
-  usage
-  exit 1
-fi
-if [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo -e "Error: Version format error, see usage."
-  echo -e ""
-  usage
-  exit 1
-fi
-
 # Do we want to upload the release to qiniu: Y or N. Default to N.
 UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"N"}
 
@@ -63,11 +55,29 @@ UPLOAD_TO_TOOLSERVER=${UPLOAD_TO_TOOLSERVER:-"Y"}
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
+# Get all other configs and commone utilities.
+source ${KUBE_ROOT}/hack/caicloud/common.sh
+
+# Make sure user supplies correct version format.
+if [[ "$#" != "1" ]]; then
+  echo -e "Error: Version must be provided."
+  echo -e ""
+  usage
+  exit 1
+fi
+if [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && ! $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+  echo -e "Error: Version format error, see usage."
+  echo -e ""
+  usage
+  exit 1
+fi
+
 # Caicloud kubernetes release version.
 CAICLOUD_VERSION=${1}
 
-# Use caicloud-version.sh to set release version.
-source "${KUBE_ROOT}/hack/caicloud/caicloud-version.sh"
+# DO NOT CHANGE. Derived variables for tarball building.
+CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_VERSION}.tar.gz"
+CAICLOUD_KUBE_EXECUTOR_PKG="caicloud-kube-executor-${CAICLOUD_VERSION}.tar.gz"
 
 # -----------------------------------------------------------------------------
 # Start building tarball from current code base.
@@ -84,15 +94,20 @@ if [[ "$?" != "0" ]]; then
 fi
 
 echo "Building tarball ${CAICLOUD_KUBE_PKG} and ${CAICLOUD_KUBE_EXECUTOR_PKG}"
+
 # Fetch non-kube binaries.
-wget ${ETCD_URL} -O etcd-linux.tar.gz
-mkdir -p etcd-linux && tar xzf etcd-linux.tar.gz -C etcd-linux --strip-components=1
-wget ${FLANNEL_URL} -O flannel-linux.tar.gz
-mkdir -p flannel-linux && tar xzf flannel-linux.tar.gz -C flannel-linux --strip-components=1
+if [[ ! -f ${KUBE_ROOT}/hack/caicloud/cache/${ETCD_PACKAGE} ]]; then
+  mkdir -p ${KUBE_ROOT}/hack/caicloud/cache && wget ${ETCD_URL} -P ${KUBE_ROOT}/hack/caicloud/cache
+fi
+mkdir -p etcd-linux && tar xzf ${KUBE_ROOT}/hack/caicloud/cache/${ETCD_PACKAGE} -C etcd-linux --strip-components=1
+
+if [[ ! -f ${KUBE_ROOT}/hack/caicloud/cache/${FLANNEL_PACKAGE} ]]; then
+  mkdir -p ${KUBE_ROOT}/hack/caicloud/cache && wget ${FLANNEL_URL} -P ${KUBE_ROOT}/hack/caicloud/cache
+fi
+mkdir -p flannel-linux && tar xzf ${KUBE_ROOT}/hack/caicloud/cache/${FLANNEL_PACKAGE} -C flannel-linux --strip-components=1
 
 # Reset output directory.
-rm -rf ${KUBE_ROOT}/_output/caicloud
-mkdir -p ${KUBE_ROOT}/_output/caicloud
+rm -rf ${KUBE_ROOT}/_output/caicloud && mkdir -p ${KUBE_ROOT}/_output/caicloud
 
 # Make tarball '${CAICLOUD_UPLOAD_VERSION}'.
 mkdir -p caicloud-kube
@@ -104,8 +119,8 @@ cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kubectl \
    _output/dockerized/bin/linux/amd64/kubelet \
    caicloud-kube
-tar cvzf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_PKG} caicloud-kube
-rm -rf etcd-linux.tar.gz flannel-linux.tar.gz etcd-linux flannel-linux caicloud-kube
+tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_PKG} caicloud-kube
+rm -rf etcd-linux flannel-linux caicloud-kube
 
 # Make tarball '${EXECUTOR_UPLOAD_VERSION}'.
 mkdir -p caicloud-kube-executor
@@ -113,7 +128,7 @@ cp -R hack cluster build caicloud-kube-executor
 # Preserve kubectl path since kubectl.sh assumes some locations.
 mkdir -p caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
 cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
-tar cvzf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_EXECUTOR_PKG} caicloud-kube-executor
+tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_EXECUTOR_PKG} caicloud-kube-executor
 rm -rf caicloud-kube-executor
 
 cd -

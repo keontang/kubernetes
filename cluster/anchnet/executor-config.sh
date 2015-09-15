@@ -21,31 +21,50 @@
 # -----------------------------------------------------------------------------
 # Params from executor for kube-up.
 # -----------------------------------------------------------------------------
-# KUBE_UP_MODE defines how we run kube-up, there are currently three modes:
+# KUBE_UP_MODE defines how to run kube-up, there are currently three modes:
+#
 # - "tarball": In tarball mode, kube binaries and non-kube binaries are built
 #   as a single tarball. There are two different behaviors in tarball mode:
-#   - If CAICLOUD_VERSION is set, then we simply fetch from remote host defined
-#     in caicloud-version.sh.
-#   - If CAICLOUD_VERSION is not set, we build current code base and push to
-#     remote host, using script build-tarball.sh.
-#   Remaining steps are the same for two behaviors.
+#   - If BUILD_RELEASE is N, we build current code base and push to remote host,
+#     using script build-tarball.sh.
+#   - If BUILD_RELEASE is Y, then we simply fetch from remote host.
 #
 # - "image": In image mode, we use pre-built custom image. It is assumed that
-#   the custom image has binaries and packages installed, i.e. kube binaries,
-#   non-kube binaries, docker, bridge-utils, etc. Image mode is the fastest of
-#   the above three modes, but requires we pre-built the image and requires the
-#   image to be accessible when running kube-up. This is currently not possible
-#   in anchnet, since every account can only see its own custom image.
+#   the custom image has all binaries and packages installed, i.e. kube binaries,
+#   non-kube binaries, docker, bridge-utils, etc. Image mode is the fastest mode,
+#   but requires we pre-built the image and requires the image is accessible for
+#   all sub account. This is currently not possible in anchnet, since every sub
+#   account can only see its own custom image.
 #
 # - "dev": In dev mode, no machine will be created. Developer is responsible to
-#   specify the master instance ID and node instance ids. This is primarily used
+#   specify the master instance ID and node instance IDs. This is primarily used
 #   for debugging kube-up.sh script itself to avoid repeatly creating resources.
 KUBE_UP_MODE=${KUBE_UP_MODE:-"tarball"}
 
-# Label of the cluster. This is used for constructing the prefix of resource
-# ids from anchnet. The same label needs to be specified when running kube-down
-# to release the resources acquired during kube-up.
+# Name of the cluster. This is used for constructing the prefix of resource IDs
+# in anchnet. The same name needs to be specified when running kube-down to
+# release the resources acquired during kube-up.
 CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
+
+# Decide if building release is needed. If the parameter is true, then use
+# BUILD_VERSION as release version; otherwise, use CAICLOUD_KUBE_VERSION. Using
+# two different versions avoid overriding existing release.
+BUILD_RELEASE=${BUILD_RELEASE:-"N"}
+
+# The version of newly built release during kube-up.
+BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M`"}
+
+# The version of caicloud release to use if building release is not required.
+# E.g. 2015-09-09-15-30, v1.0.2, etc.
+CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.1.0"}
+
+# KUBE_USER uniquely identifies a caicloud user. This is the user that owns the
+# cluster, and will be used to create kubeconfig file.
+KUBE_USER=${KUBE_USER:-""}
+
+# Project ID actually stands for anchnet sub-account. If PROJECT_ID and KUBE_USER
+# are not set, all the subsequent anchnet calls will use main account in anchnet.
+PROJECT_ID=${PROJECT_ID:-""}
 
 # Directory for holding kubeup instance specific logs. During kube-up, instances
 # will be installed/provisioned concurrently; if we just send logs to stdout,
@@ -53,36 +72,31 @@ CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 # logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
 KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
-# The version of caicloud release to use. E.g. 2015-09-09-15-30, v1.0.2, etc.
-# If not set, kube-up will build current code base; otherwise, it will fetch
-# release defined in caicloud-version.sh. By default, we set to an existing
-# version for easier dev. Note, we use "-" here instead of ":-". The single "-"
-# syntax will substitute CAICLOUD_VERSION only if it's undefined; however, ":-"
-# will substitute CAICLOUD_VERSION if it's undefined and empty. Since we want
-# to keep empty string, we need to use "-".
-CAICLOUD_VERSION=${CAICLOUD_VERSION-"v0.1.0"}
+# URL path of the server hosting caicloud kubernetes release.
+CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://internal-get.caicloud.io/caicloud"}
 
-# Project id actually stands for an anchnet sub-account. If PROJECT_ID and
-# KUBE_USER are not set, all the subsequent anchnet calls will use main
-# account in anchnet.
-PROJECT_ID=${PROJECT_ID:-""}
-
-# KUBE_USER uniquely identifies a caicloud user.
-KUBE_USER=${KUBE_USER:-""}
+# Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
+# there is no easy to enforce docker version in caicloud kubernetes release,
+# so we define it here separately.
+DOCKER_VERSION=${DOCKER_VERSION:-"1.7.1"}
 
 # The base image used to create master and node instance in image mode. The
 # param is only used in image mode. This image is created from scripts like
 # 'image-from-devserver.sh'.
 IMAGEMODE_IMAGE=${IMAGEMODE_IMAGE:-"img-C0SA7DD5"}
 
-# The base image used to create master and node instance in other modes.
+# The base image used to create master and node instance in non-image modes.
 RAW_BASE_IMAGE=${RAW_BASE_IMAGE:-"trustysrvx64c"}
 
-# Instance user and password.
+# Instance user and password, for all cluster machines.
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
-# INITIAL_DEPOSIT is the money transferred to sub account upon creation.
+# To indicate if the execution status needs to be reported back to caicloud
+# executor via curl. Set it to be Y if reporting is needed.
+REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
+
+# INITIAL_DEPOSIT is the money transferred to sub account upon its creation.
 INITIAL_DEPOSIT=${INITIAL_DEPOSIT:-"1"}
 
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
@@ -103,10 +117,6 @@ ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 #   http://4a682d3b.m.daocloud.io -> 492886102@qq.com
 DAOCLOUD_ACCELERATOR=${DAOCLOUD_ACCELERATOR:-"http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
 http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"}
-
-# To indicate if the execution status needs to be reported back to caicloud
-# executor via curl. Set it to be Y if reporting is needed.
-REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
 
 # Number of retries and interval (in second) for waiting master creation job.
 # Adjust the value based on the number of master instances created.
@@ -166,18 +176,18 @@ NODE_CPU_CORES=${NODE_CPU_CORES:-1}
 # -----------------------------------------------------------------------------
 # Derived params for kube-up (calculated based on above params: DO NOT CHANGE).
 # -----------------------------------------------------------------------------
-# Note that master_name and node_name are name of the instances in anchnet, which
-# is helpful to group instances; however, anchnet API works well with instance id,
-# so we provide instance id to kubernetes as nodename and hostname, which makes it
-# easy to query anchnet in kubernetes.
-MASTER_NAME="${CLUSTER_NAME}-master"
-NODE_NAME_PREFIX="${CLUSTER_NAME}-node"
-
 # Decide which image to use.
 if [[ "${KUBE_UP_MODE}" == "image" ]]; then
-  INSTANCE_IMAGE=${IMAGEMODE_IMAGE}
+  FINAL_IMAGE=${IMAGEMODE_IMAGE}
 else
-  INSTANCE_IMAGE=${RAW_BASE_IMAGE}
+  FINAL_IMAGE=${RAW_BASE_IMAGE}
+fi
+
+# Decide which version to use.
+if [[ "${BUILD_RELEASE}" = "Y" ]]; then
+  FINAL_VERSION=${BUILD_VERSION}
+else
+  FINAL_VERSION=${CAICLOUD_KUBE_VERSION}
 fi
 
 # If KUBE_USER is specified, set the path to save per user k8s config file;
@@ -186,11 +196,24 @@ if [[ ! -z ${KUBE_USER-} ]]; then
   KUBECONFIG="$HOME/.kube/config_${KUBE_USER}"
 fi
 
+# Note that master_name and node_name are name of the instances in anchnet, which
+# is helpful to group instances; however, anchnet API works well with instance id,
+# so we provide instance id to kubernetes as nodename and hostname, which makes it
+# easy to query anchnet in kubernetes.
+MASTER_NAME="${CLUSTER_NAME}-master"
+NODE_NAME_PREFIX="${CLUSTER_NAME}-node"
+
 # Context to use in kubeconfig.
 CONTEXT="anchnet_${CLUSTER_NAME}"
 
 # Anchnet command alias.
 ANCHNET_CMD="anchnet --config-path=${ANCHNET_CONFIG_FILE}"
+
+# Caicloud tarball package name.
+CAICLOUD_KUBE_PKG="caicloud-kube-${FINAL_VERSION}.tar.gz"
+
+# Final URL of caicloud tarball URL.
+CAICLOUD_TARBALL_URL="${CAICLOUD_HOST_URL}/${CAICLOUD_KUBE_PKG}"
 
 # -----------------------------------------------------------------------------
 # Params from executor for kube-down.

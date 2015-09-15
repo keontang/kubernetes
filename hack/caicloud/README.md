@@ -8,12 +8,12 @@ plan to add more cloudproviders. Kubernetes is the building block of caicloud.io
 ## How to do a release
 
 To build release, run `./build-tarball.sh`. The script will build caicloud kubernetes binaries (kubelet, apiserver, etc) and scripts release (kube-up.sh, etc). For
-example, following command will build tarballs tagged with version v1.0.1.
+example, following command will build tarballs tagged with version v1.0.1, and push to tool server.
 ```
 ./hack/caicloud/build-tarball.sh v1.0.1
 ```
 
 If running without param, the script will print usage information for how to build tarballs, i.e.
 ```
-./scripts/build-image.sh
+./scripts/build-tarball.sh
 ```

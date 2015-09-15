@@ -17,7 +17,7 @@
 # The script fixes a couple of hiccups for developing kubernetes behind GFW.
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
-source "${KUBE_ROOT}/hack/caicloud/caicloud-version.sh"
+source "${KUBE_ROOT}/hack/caicloud/common.sh"
 
 # 'gcr.io' is blocked - replace all gcr.io images to ones we uploaded to docker
 # hub caicloudgcr account.

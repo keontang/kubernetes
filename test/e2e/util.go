@@ -2988,6 +2988,8 @@ func getSigner(provider string) (ssh.Signer, error) {
 		}
 		// Otherwise revert to home dir
 		keyfile = "kube_aws_rsa"
+	case "anchnet":
+		keyfile = "id_rsa"
 	default:
 		return nil, fmt.Errorf("getSigner(...) not implemented for %s", provider)
 	}

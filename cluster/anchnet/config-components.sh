@@ -102,6 +102,8 @@ function create-kubelet-opts {
 KUBELET_OPTS="--logtostderr=true \
 --address=${2} \
 --port=10250 \
+--system-container=/system \
+--cgroup-root=/ \
 --hostname_override=${hostname} \
 --api-servers=https://${3}:${MASTER_SECURE_PORT} \
 --cluster-dns=${4} \

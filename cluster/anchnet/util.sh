@@ -145,10 +145,6 @@ function kube-up {
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
 
-  # Create etcd cluster parameters.
-  #   ETCD_INITIAL_CLUSTER - flag etcd_init_cluster passsed to etcd instance
-  create-etcd-initial-cluster
-
   # Setup private SDN network.
   setup-sdn-network
 
@@ -1154,23 +1150,6 @@ function cdr2mask {
 }
 
 
-# Create static etcd cluster.
-#
-# Assumed vars:
-#   MASTER_INTERNAL_IP
-#   NODE_IIPS_ARR
-#
-# Vars set:
-#   ETCD_INITIAL_CLUSTER - variable supplied to etcd for static cluster discovery.
-function create-etcd-initial-cluster {
-  ETCD_INITIAL_CLUSTER="kubernetes-master=http://${MASTER_INTERNAL_IP}:2380"
-  for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
-    local node_internal_ip="${NODE_IIPS_ARR[$(($i-1))]}"
-    ETCD_INITIAL_CLUSTER="$ETCD_INITIAL_CLUSTER,kubernetes-node-${i}=http://${node_internal_ip}:2380"
-  done
-}
-
-
 # Create private interface opts, used by network manager to bring up private SDN
 # network interface.
 #
@@ -1477,7 +1456,6 @@ function install-configurations {
 #   MASTER_INSTANCE_ID
 #   NODE_EIPS
 #   NODE_INTERNAL_IPS
-#   ETCD_INITIAL_CLUSTER
 #   SERVICE_CLUSTER_IP_RANGE
 #   PRIVATE_SDN_INTERFACE
 #   DNS_SERVER_IP
@@ -1501,11 +1479,11 @@ function install-configurations-internal {
     done
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/default.
-    echo "create-etcd-opts kubernetes-master \"${MASTER_INTERNAL_IP}\" \"${ETCD_INITIAL_CLUSTER}\""
-    echo "create-kube-apiserver-opts \"${SERVICE_CLUSTER_IP_RANGE}\" \"${ADMISSION_CONTROL}\" ${CLUSTER_NAME}"
+    echo "create-etcd-opts kubernetes-master"
+    echo "create-kube-apiserver-opts ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${CLUSTER_NAME}"
     echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
     echo "create-kube-scheduler-opts"
-    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
+    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} 127.0.0.1"
     # The following lines organize file structure a little bit. To make it
     # pleasant when running the script multiple times, we ignore errors.
     echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security 1>/dev/null 2>&1"
@@ -1528,6 +1506,8 @@ function install-configurations-internal {
     # Finally, start kubernetes cluster. Upstart will make sure all components start
     # upon etcd start.
     echo "sudo service etcd start"
+    # After starting etcd, configure flannel options.
+    echo "config-etcd-flanneld ${FLANNEL_NET}"
   ) > "${KUBE_TEMP}/master-start.sh"
   chmod a+x ${KUBE_TEMP}/master-start.sh
 
@@ -1573,10 +1553,9 @@ function install-configurations-internal {
       # Create component options. Note in 'create-kubelet-opts', we use
       # ${node_instance_id} as hostname override for each node - see
       # 'pkg/cloudprovider/anchnet/anchnet_instances.go' for how this works.
-      echo "create-etcd-opts kubernetes-node-${i} ${node_internal_ip} \"${ETCD_INITIAL_CLUSTER}\""
       echo "create-kubelet-opts ${node_instance_id} ${node_internal_ip} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
-      echo "create-kube-proxy-opts \"${MASTER_INTERNAL_IP}\""
-      echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE}"
+      echo "create-kube-proxy-opts ${MASTER_INTERNAL_IP}"
+      echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_INTERNAL_IP}"
       # Organize files a little bit.
       echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/null 2>&1"
       echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
@@ -1585,7 +1564,7 @@ function install-configurations-internal {
       echo "sudo mkdir -p /etc/kubernetes"
       # Since we might retry on error, we need to stop services. If no service
       # is running, this is just no-op.
-      echo "sudo service etcd stop"
+      echo "sudo service flanneld stop"
       # Copy binaries and configurations to system directories.
       echo "sudo cp ~/kube/node/* /opt/bin"
       echo "sudo cp ~/kube/default/* /etc/default"
@@ -1593,10 +1572,11 @@ function install-configurations-internal {
       echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
       echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
       echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
-      # Finally, start kubernetes cluster.
-      echo "sudo service etcd start"
-      # Configure docker network to use flannel overlay.
-      echo "config-docker-net ${FLANNEL_NET} ${reg_mirror}"
+      # Finally, start kubernetes cluster. Upstart will make sure all components start
+      # upon flannel start.
+      echo "sudo service flanneld start"
+      # After starting flannel, configure docker network to use flannel overlay.
+      echo "restart-docker ${reg_mirror}"
     ) > "${KUBE_TEMP}/node${i}/node-start.sh"
     chmod a+x ${KUBE_TEMP}/node${i}/node-start.sh
 

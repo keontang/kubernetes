@@ -20,21 +20,18 @@
 #   MASTER_SECURE_ADDRESS
 #   MASTER_SECURE_PORT
 
-# Create etcd options used to start etcd on master/nodes.
-# https://github.com/coreos/etcd/blob/master/Documentation/clustering.md
+# Create etcd options used to start etcd on master, see following documentation:
+#   https://github.com/coreos/etcd/blob/master/Documentation/clustering.md
+# Note since we have only one master right now, the options here do not contain
+# clustering options, like initial-advertise-peer-urls, listen-peer-urls, etc.
 #
 # Input:
 #   $1 Instance name appearing to etcd. E.g. kubernetes-master, kubernetes-node0, etc.
-#   $2 IP address used to listen to peer connection, typically instance internal address.
-#   $3 Static cluster configuration setup.
 function create-etcd-opts {
   cat <<EOF > ~/kube/default/etcd
 ETCD_OPTS="-name ${1} \
--initial-advertise-peer-urls http://${2}:2380 \
--listen-peer-urls http://${2}:2380 \
--initial-cluster-token etcd-cluster-1 \
--initial-cluster ${3} \
--initial-cluster-state new"
+--listen-client-urls http://0.0.0.0:4001 \
+--advertise-client-urls http://127.0.0.1:4001"
 EOF
 }
 
@@ -116,7 +113,7 @@ KUBELET_OPTS="--logtostderr=true \
 EOF
 }
 
-# Create kube-proxy options
+# Create kube-proxy options.
 #
 # Input:
 #   $1 API server address, typically master internal IP address
@@ -133,19 +130,19 @@ EOF
 # Input:
 #   $1 Interface used by flanneld to send internal traffic. Because we use anchnet
 #      private SDN network, this should be set to the instance's SDN private IP.
+#   $2 etcd service endpoint IP address. For master, this is 127.0.0.1; for node,
+#      this is master internal IP address.
 function create-flanneld-opts {
   cat <<EOF > ~/kube/default/flanneld
-FLANNEL_OPTS="--iface=${1}"
+FLANNEL_OPTS="--iface=${1} --etcd-endpoints=http://${2}:4001"
 EOF
 }
 
-# Configure docker network settings to use flannel overlay network.
+# Config flanneld options in etcd. The method is called from master.
 #
 # Input:
 #   $1 Flannel overlay network CIDR
-#   $2 Registry mirror address
-function config-docker-net {
-  # Set flannel configuration to etcd.
+function config-etcd-flanneld {
   attempt=0
   while true; do
     echo "Attempt $(($attempt+1)) to set flannel configuration in etcd"
@@ -164,7 +161,13 @@ function config-docker-net {
       sleep 3
     fi
   done
+}
 
+# Configure docker network settings to use flannel overlay network.
+#
+# Input:
+#   $1 Registry mirror address
+function restart-docker {
   # Wait for /run/flannel/subnet.env to be ready.
   attempt=0
   while true; do
@@ -194,7 +197,7 @@ function config-docker-net {
 
   source /run/flannel/subnet.env
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
-       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$2 \
+       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$1 \
        --insecure-registry=internal-registry.caicloud.io\" > /etc/default/docker
   sudo service docker start
 }

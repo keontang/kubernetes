@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file. This projec
 - Rename `CAICLOUD_VERSION` to `CAICLOUD_KUBE_VERSION` to make it more explicit.
 - Add new variable `BUILD_RELEASE` to replace the semantic of empty `CAICLOUD_VERSION`.
 - Add kube-up, kube-down timestamp.
+- Deprecate etcd on node.
 
 ### Version 0.1.0 [2015-09-12]
 #### Changed

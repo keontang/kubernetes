@@ -41,32 +41,32 @@ setup-cluster-env
 # Step1 of cluster bootstrapping: verify cluster prerequisites.
 function verify-prereqs {
   if [[ "$(which anchnet)" == "" ]]; then
-    echo "Can't find anchnet cli binary in PATH, please fix and retry."
-    echo "See https://github.com/caicloud/anchnet-go/tree/master/anchnet"
+    echo "[`TZ=Asia/Shanghai date`] Can't find anchnet cli binary in PATH, please fix and retry."
+    echo "[`TZ=Asia/Shanghai date`] See https://github.com/caicloud/anchnet-go/tree/master/anchnet"
     exit 1
   fi
   if [[ "$(which curl)" == "" ]]; then
-    echo "Can't find curl in PATH, please fix and retry."
-    echo "For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
+    echo "[`TZ=Asia/Shanghai date`] Can't find curl in PATH, please fix and retry."
+    echo "[`TZ=Asia/Shanghai date`] For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
     exit 1
   fi
   if [[ "$(which expect)" == "" ]]; then
-    echo "Can't find expect binary in PATH, please fix and retry."
-    echo "For ubuntu/debian, if you have root access, run: sudo apt-get install expect."
+    echo "[`TZ=Asia/Shanghai date`] Can't find expect binary in PATH, please fix and retry."
+    echo "[`TZ=Asia/Shanghai date`] For ubuntu/debian, if you have root access, run: sudo apt-get install expect."
     exit 1
   fi
   if [[ "$(which kubectl)" == "" ]]; then
     cd ${KUBE_ROOT}
     hack/build-go.sh
     if [[ "$?" != "0" ]]; then
-      echo "Can't find kubectl binary in PATH, please fix and retry."
+      echo "[`TZ=Asia/Shanghai date`] Can't find kubectl binary in PATH, please fix and retry."
       exit 1
     fi
     cd -
   fi
   if [[ ! -f "${ANCHNET_CONFIG_FILE}" ]]; then
-    echo "Can't find anchnet config file ${ANCHNET_CONFIG_FILE}, please fix and retry."
-    echo "Anchnet config file contains credentials used to access anchnet API."
+    echo "[`TZ=Asia/Shanghai date`] Can't find anchnet config file ${ANCHNET_CONFIG_FILE}, please fix and retry."
+    echo "[`TZ=Asia/Shanghai date`] Anchnet config file contains credentials used to access anchnet API."
     exit 1
   fi
 }
@@ -74,12 +74,12 @@ function verify-prereqs {
 
 # Step2 of cluster bootstrapping: create all machines and provision them.
 function kube-up {
-  echo "++++++++++ Running kube-up with variables ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Running kube-up with variables ..."
   (set -o posix; set)
 
   # Check given kube-up mode is supported.
   if [[ ${KUBE_UP_MODE} != "tarball" && ${KUBE_UP_MODE} != "image" && ${KUBE_UP_MODE} != "dev" ]]; then
-    echo "Unrecognized kube-up mode ${KUBE_UP_MODE}"
+    echo "[`TZ=Asia/Shanghai date`] Unrecognized kube-up mode ${KUBE_UP_MODE}"
     exit 1
   fi
 
@@ -99,7 +99,7 @@ function kube-up {
   # Build tarball if CAICLOUD_KUBE_VERSION is empty; version is based on date/time, e.g.
   # 2015-09-12-10-01
   if [[ "${BUILD_RELEASE}" = "Y" ]]; then
-    echo "++++++++++ Building tarball ..."
+    echo "[`TZ=Asia/Shanghai date`] +++++ Building tarball ..."
     cd ${KUBE_ROOT}
     ./hack/caicloud/build-tarball.sh "${FINAL_VERSION}"
     cd -
@@ -191,11 +191,10 @@ function kube-push {
   local count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
 
   # Print instance information
-  echo -n "Found instances: "
   for i in `seq 0 $(($count-1))`; do
     name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
-    echo -n "${name},${id}; "
+    echo -n "[`TZ=Asia/Shanghai date`] Found instances: ${name},${id}"
   done
   echo
 
@@ -203,7 +202,7 @@ function kube-push {
   anchnet-build-server
 
   # Push new binaries to master and nodes.
-  echo "++++++++++ Pushing binaries to master and nodes ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Pushing binaries to master and nodes ..."
   for i in `seq 0 $(($count-1))`; do
     name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
@@ -248,7 +247,7 @@ EOF
 
   # Stop running cluster.
   IFS=',' read -ra instance_ip_arr <<< "${KUBE_PUSH_ALL_EIPS}"
-  echo "++++++++++ Stop services ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Stop services ..."
   for instance_ip in ${instance_ip_arr[*]}; do
     expect <<EOF
 set timeout -1
@@ -300,9 +299,9 @@ EOF
     fi
   done
 
-  echo "++++++++++ Waiting for all instances to be provisioned ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Wait for all instances to be provisioned ..."
   wait $pids
-  echo "All instances have been provisioned ..."
+  echo "[`TZ=Asia/Shanghai date`] All instances have been provisioned ..."
 }
 
 
@@ -317,12 +316,11 @@ function kube-down {
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
     # Print and collect instance information
-    echo -n "Found instances: "
     for i in `seq 0 $(($count-1))`; do
       instance_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
       instance_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
       eip_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_id']")
-      echo -n "${instance_name},${instance_id},${eip_id}; "
+      echo "[`TZ=Asia/Shanghai date`] Found instances: ${instance_name},${instance_id},${eip_id}"
       if [[ -z "${ALL_INSTANCES-}" ]]; then
         ALL_INSTANCES="${instance_id}"
       else
@@ -334,7 +332,6 @@ function kube-down {
         ALL_EIPS="${ALL_EIPS},${eip_id}"
       fi
     done
-    echo
     # Executing commands.
     anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
@@ -347,21 +344,19 @@ function kube-down {
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   # We'll also find default one - bug in anchnet.
   if [[ "${count}" != "" && "${count}" != "1" ]]; then
-    echo -n "Found vxnets: "
     for i in `seq 0 $(($count-1))`; do
       vxnet_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_name']")
       vxnet_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_id']")
       if [[ "${vxnet_id}" = "vxnet-0" ]]; then
         continue
       fi
-      echo -n "${vxnet_name},${vxnet_id}; "
+      echo "[`TZ=Asia/Shanghai date`] Found vxnets: ${vxnet_name},${vxnet_id}"
       if [[ -z "${ALL_VXNETS-}" ]]; then
         ALL_VXNETS="${vxnet_id}"
       else
         ALL_VXNETS="${ALL_VXNETS},${vxnet_id}"
       fi
     done
-    echo
 
     # Executing commands.
     anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
@@ -372,18 +367,16 @@ function kube-down {
   anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_NAME} --project=${PROJECT_ID}"
   count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${count}" != "" ]]; then
-    echo -n "Found security group: "
     for i in `seq 0 $(($count-1))`; do
       security_group_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_name']")
       security_group_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_id']")
-      echo -n "${security_group_name},${security_group_id}; "
+      echo "[`TZ=Asia/Shanghai date`] Found security group: ${security_group_name},${security_group_id}"
       if [[ -z "${ALL_SECURITY_GROUPS-}" ]]; then
         ALL_SECURITY_GROUPS="${security_group_id}"
       else
         ALL_SECURITY_GROUPS="${ALL_SECURITY_GROUPS},${security_group_id}"
       fi
     done
-    echo
 
     # Executing commands.
     anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
@@ -405,15 +398,13 @@ function kube-down {
 function detect-master {
   local attempt=0
   while true; do
-    echo "Attempt $(($attempt+1)) to detect kube master"
-    echo "$MASTER_NAME"
+    echo "[`TZ=Asia/Shanghai date`] Attempt $(($attempt+1)) to detect kube master"
+    echo "[`TZ=Asia/Shanghai date`] $MASTER_NAME"
     local eip=$(${ANCHNET_CMD} searchinstance $MASTER_NAME --project=${PROJECT_ID} | json_val '["item_set"][0]["eip"]["eip_addr"]')
-    local exit_code="$?"
-    echo ${eip}
-    if [[ "${exit_code}" != "0" || ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    if [[ "${?}" != "0" || ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
       if (( attempt > 20 )); then
         echo
-        echo -e "${color_red}failed to detect kube master (sorry!)${color_norm}" >&2
+        echo -e "[`TZ=Asia/Shanghai date`] ${color_red}failed to detect kube master (sorry!)${color_norm}" >&2
         exit 1
       fi
     else
@@ -425,7 +416,7 @@ function detect-master {
   done
 
   KUBE_MASTER=${MASTER_NAME}
-  echo "Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)"
+  echo "[`TZ=Asia/Shanghai date`] Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)"
 }
 
 
@@ -534,7 +525,7 @@ function prompt-instance-password {
   read -s -p "Password (again): " another
   echo
   if [[ "${KUBE_INSTANCE_PASSWORD}" != "${another}" ]]; then
-    echo "Passwords do not match"
+    echo "[`TZ=Asia/Shanghai date`] Passwords do not match"
     exit 1
   fi
 }
@@ -543,7 +534,7 @@ function prompt-instance-password {
 # Create ~/.ssh/id_rsa.pub if it doesn't exist.
 function ensure-pub-key {
   if [[ ! -f $HOME/.ssh/id_rsa.pub ]]; then
-    echo "+++++++++ Creating public key ..."
+    echo "[`TZ=Asia/Shanghai date`] +++++++++ Create public key ..."
     expect <<EOF
 spawn ssh-keygen -t rsa -b 4096
 expect "*rsa key*"
@@ -602,12 +593,13 @@ function ensure-temp-dir {
 #   stderr: any parsing error
 function json_val {
   python -c '
-import json,sys
+import json,sys,datetime,pytz
 try:
-  obj=json.load(sys.stdin)
+  obj = json.load(sys.stdin)
   print obj'$1'
 except Exception as e:
-  sys.stderr.write("Unable to parse json string: %s. Please retry\n" % e)
+  timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).strftime("%a %b %d %H:%M:%S %Z %Y")
+  sys.stderr.write("[%s] Unable to parse json string: %s. Please retry\n" % (timestamp, e))
 '
 }
 
@@ -625,12 +617,13 @@ except Exception as e:
 #   stderr: any parsing error
 function json_len {
   python -c '
-import json,sys
+import json,sys,datetime,pytz
 try:
-  obj=json.load(sys.stdin)
+  obj = json.load(sys.stdin)
   print len(obj'$1')
 except Exception as e:
-  sys.stderr.write("Unable to parse json string: %s. Please retry\n" % e)
+  timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).strftime("%a %b %d %H:%M:%S %Z %Y")
+  sys.stderr.write("[%s] Unable to parse json string: %s. Please retry\n" % (timestamp, e))
 '
 }
 
@@ -672,7 +665,7 @@ function create-project {
     PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_id']")
     # If PROJECT_ID is still empty, then create sub account
     if [[ -z "${PROJECT_ID-}" ]]; then
-      echo "++++++++++ Creating new anchnet sub account for ${KUBE_USER} ..."
+      echo "[`TZ=Asia/Shanghai date`] +++++ Create new anchnet sub account for ${KUBE_USER} ..."
       anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
       anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
       PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
@@ -682,7 +675,7 @@ function create-project {
       SUB_ACCOUNT_UID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['userid']")
       # Transfer money from main account to sub-account. We need at least $INITIAL_DEPOSIT
       # to create resources in sub-account.
-      echo "++++++++++ Transferring balance to sub account ..."
+      echo "[`TZ=Asia/Shanghai date`] +++++ Transferring balance to sub account ..."
       anchnet-exec-and-retry "${ANCHNET_CMD} transfer ${SUB_ACCOUNT_UID} ${INITIAL_DEPOSIT}"
     fi
     report-project-id ${PROJECT_ID}
@@ -707,7 +700,7 @@ function create-project {
 #   MASTER_EIP_ID
 #   MASTER_EIP
 function create-master-instance {
-  echo "++++++++++ Creating kubernetes master from anchnet, master name: ${MASTER_NAME} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Create kubernetes master from anchnet, master name: ${MASTER_NAME} ..."
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
@@ -728,7 +721,7 @@ function create-master-instance {
   # Enable ssh without password.
   setup-instance-ssh "${MASTER_EIP}"
 
-  echo -e " ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, \
+  echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, \
 eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
   report-instance-ids ${MASTER_INSTANCE_ID} M
   report-eip-ids ${MASTER_EIP_ID}
@@ -749,7 +742,7 @@ eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 #   NODE_EIP_IDS - comma separated string of instance external IP IDs
 #   NODE_EIPS - comma separated string of instance external IPs
 function create-node-instances {
-  echo "++++++++++ Creating kubernetes nodes from anchnet, node name prefix: ${NODE_NAME_PREFIX} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Create kubernetes nodes from anchnet, node name prefix: ${NODE_NAME_PREFIX} ..."
 
   # Create 'raw' node instances from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
@@ -772,7 +765,7 @@ function create-node-instances {
     # Enable ssh without password.
     setup-instance-ssh "${node_eip}"
 
-    echo -e " ${color_green}[created node-${i} with instance ID ${node_instance_id}, \
+    echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[created node-${i} with instance ID ${node_instance_id}, \
 eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
 
     # Set output vars. Note we use ${NODE_EIPS-} to check if NODE_EIPS is unset,
@@ -788,7 +781,7 @@ eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
     fi
   done
 
-  echo -e " ${color_green}[Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, \
+  echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, \
 eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}]${color_norm}"
   report-instance-ids ${NODE_INSTANCE_IDS} N
   report-eip-ids ${NODE_EIP_IDS}
@@ -803,17 +796,17 @@ eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}]${color_norm}"
 function check-instance-status {
   local attempt=0
   while true; do
-    echo "Attempt $(($attempt+1)) to check for instance running"
+    echo "[`TZ=Asia/Shanghai date`] Attempt $(($attempt+1)) to check for instance running"
     local status=$(${ANCHNET_CMD} describeinstance $1 --project=${PROJECT_ID} | json_val '["item_set"][0]["status"]')
     if [[ ${status} != "running" ]]; then
       if (( attempt > 20 )); then
         echo
-        echo -e "${color_red}instance $1 failed to start (sorry!)${color_norm}" >&2
+        echo -e "[`TZ=Asia/Shanghai date`] ${color_red}instance $1 failed to start (sorry!)${color_norm}" >&2
         kube-up-complete N
         exit 1
       fi
     else
-      echo -e " ${color_green}[instance $1 becomes running status]${color_norm}"
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[instance $1 becomes running status]${color_norm}"
       break
     fi
     attempt=$(($attempt+1))
@@ -834,19 +827,19 @@ function check-instance-status {
 function get-ip-address-from-eipid {
   local attempt=0
   while true; do
-    echo "Attempt $(($attempt+1)) to get eip"
+    echo "[`TZ=Asia/Shanghai date`] Attempt $(($attempt+1)) to get eip"
     local eip=$(${ANCHNET_CMD} describeeips $1 --project=${PROJECT_ID} | json_val '["item_set"][0]["eip_addr"]')
     # Test the return value roughly matches ipv4 format.
     if [[ ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
       if (( attempt > 20 )); then
         echo
-        echo -e "${color_red}failed to get eip address (sorry!)${color_norm}" >&2
+        echo -e "[`TZ=Asia/Shanghai date`] ${color_red}failed to get eip address (sorry!)${color_norm}" >&2
         kube-up-complete N
         exit 1
       fi
     else
       EIP_ADDRESS=${eip}
-      echo -e " ${color_green}[get eip address ${EIP_ADDRESS} for $1]${color_norm}"
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[get eip address ${EIP_ADDRESS} for $1]${color_norm}"
       break
     fi
     attempt=$(($attempt+1))
@@ -869,7 +862,7 @@ function get-ip-address-from-eipid {
 function setup-instance-ssh {
   attempt=0
   while true; do
-    echo "Attempt $(($attempt+1)) to setup instance ssh for $1"
+    echo "[`TZ=Asia/Shanghai date`] Attempt $(($attempt+1)) to setup instance ssh for $1"
     expect <<EOF
 set timeout $((($attempt+1)*3))
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
@@ -899,16 +892,16 @@ EOF
       # We give more attempts for setting up ssh to allow slow instance startup.
       if (( attempt > 40 )); then
         echo
-        echo -e "${color_red}Unable to setup instance ssh for $1 (sorry!)${color_norm}" >&2
+        echo -e "[`TZ=Asia/Shanghai date`] ${color_red}Unable to setup instance ssh for $1 (sorry!)${color_norm}" >&2
         kube-up-complete N
         exit 1
       fi
     else
-      echo -e " ${color_green}[ssh to instance working]${color_norm}"
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[ssh to instance working]${color_norm}"
       break
     fi
     # No need to sleep here, we increment timout in expect.
-    echo -e " ${color_yellow}[ssh to instance not working yet]${color_norm}"
+    echo -e "[`TZ=Asia/Shanghai date`] ${color_yellow}[ssh to instance not working yet]${color_norm}"
     attempt=$(($attempt+1))
   done
 }
@@ -965,7 +958,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for sdn network setup ..."
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for sdn network setup ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
@@ -992,7 +985,7 @@ EOF
 # Vars set:
 #   PRIVATE_SDN_INTERFACE - The interface created by the SDN network
 function create-sdn-network {
-  echo "++++++++++ Creating private SDN network ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Create private SDN network ..."
 
   # Create a private SDN network.
   anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_NAME}-${VXNET_NAME} --project=${PROJECT_ID}"
@@ -1004,7 +997,7 @@ function create-sdn-network {
 
   # Add all instances to the vxnet.
   local all_instance_ids="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
-  echo "Add all instances (both master and nodes) to vxnet ${VXNET_ID} ..."
+  echo "[`TZ=Asia/Shanghai date`] Add all instances (both master and nodes) to vxnet ${VXNET_ID} ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_ID} ${all_instance_ids} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_JOIN_WAIT_RETRY} ${VXNET_JOIN_WAIT_INTERVAL}
 
@@ -1027,7 +1020,7 @@ function create-firewall {
   #
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   #
-  echo "++++++++++ Creating master security group rules ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Create master security group rules ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
 --direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
@@ -1046,7 +1039,7 @@ function create-firewall {
   # Node security group contains firewall for ssh (tcp/22) and nodeport range
   # (tcp/30000-32767, udp/30000-32767).
   #
-  echo "++++++++++ Creating node security group rules ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Create node security group rules ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${NODE_SG_NAME} \
 --rulename=node-ssh,nodeport-range-tcp,nodeport-range-udp --priority=1,2,3 \
 --action=accept,accept,accept --protocol=tcp,tcp,udp --direction=0,0,0 \
@@ -1120,7 +1113,7 @@ function create-node-internal-ips {
   fi
 
   if (( NUM_MINIONS > (total_count - used_count) )); then
-    echo "Number of nodes is larger than allowed node internal IP address"
+    echo "[`TZ=Asia/Shanghai date`] Number of nodes is larger than allowed node internal IP address"
     kube-up-complete N
     exit 1
   fi
@@ -1214,7 +1207,7 @@ function install-tarball-binaries {
 function install-tarball-binaries-internal {
   local pids=""
   local fail=0
-  echo "++++++++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
   # Fetch tarball for master node.
   expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID}
@@ -1256,7 +1249,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for tarball to be distributed to all nodes ..."
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for tarball to be distributed to all nodes ..."
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
   done
@@ -1296,7 +1289,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for all instances to install tarball ..."
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for all instances to install tarball ..."
   fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
@@ -1325,7 +1318,7 @@ function install-packages {
 #   NODE_IPS
 function install-packages-internal {
   local pids=""
-  echo "++++++++++ Start installing packages. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start installing packages. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
   for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
     local instance_eip=${INSTANCE_EIPS_ARR[${i}]}
@@ -1370,7 +1363,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for all instances to install packages ..."
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for all instances to install packages ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
@@ -1402,7 +1395,7 @@ function provision-instances-internal {
   install-configurations
 
   local pids=""
-  echo "++++++++++ Start provisioning master and nodes. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start provisioning master and nodes. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
   # Call master-start.sh to start master.
   expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID} &
 set timeout -1
@@ -1447,7 +1440,7 @@ EOF
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for all instances to be provisioned ..."
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for all instances to be provisioned ..."
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
@@ -1492,7 +1485,7 @@ function install-configurations {
 #   POD_INFRA_CONTAINER
 function install-configurations-internal {
   local pids=""
-  echo "++++++++++ Start installing master and node configurations. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start installing master and node configurations. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
   # Create master startup script.
   (
@@ -1558,7 +1551,7 @@ function install-configurations-internal {
   # Randomly choose one daocloud accelerator.
   IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATOR}"
   reg_mirror=${reg_mirror_arr[$(( ${RANDOM} % 4 ))]}
-  echo "Use daocloud registry mirror ${reg_mirror}"
+  echo "[`TZ=Asia/Shanghai date`] Use daocloud registry mirror ${reg_mirror}"
 
   # Start installing nodes.
   for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
@@ -1619,7 +1612,7 @@ function install-configurations-internal {
     pids="$pids $!"
   done
 
-  echo -n "++++++++++ Waiting for all configurations to be installed ... "
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for all configurations to be installed ... "
   local fail=0
   for pid in ${pids}; do
     wait $pid || let "fail+=1"
@@ -1684,7 +1677,7 @@ function install-configurations-internal {
 #   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/kubectl.crt
 #   ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/kubectl.key
 function create-certs-and-credentials {
-  echo "++++++++++ Creating certificats, credentials and secrets ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Create certificats, credentials and secrets ..."
 
   # 'octects' will be an arrary of segregated IP, e.g. 192.168.3.0/24 => 192 168 3 0
   # 'service_ip' is the first IP address in SERVICE_CLUSTER_IP_RANGE; it is the service
@@ -1711,7 +1704,7 @@ function create-certs-and-credentials {
     ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
     ./easyrsa build-client-full kubectl nopass > /dev/null 2>&1
   ) || {
-    echo "${color_red}=== Failed to generate certificates: Aborting ===${color_norm}"
+    echo "[`TZ=Asia/Shanghai date`] ${color_red}=== Failed to generate certificates: Aborting ===${color_norm}"
     exit 2
   }
   CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
@@ -1878,15 +1871,15 @@ function command-exec-and-retry {
     if [[ "$?" != "0" ]]; then
       if (( attempt >= ${count} )); then
         echo
-        echo -e "${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
+        echo -e "[`TZ=Asia/Shanghai date`] ${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
         kube-up-complete N
         exit 1
       fi
     else
-      echo -e " ${color_green}Command [$1] ok${color_norm}" >&2
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_green}Command [$1] ok${color_norm}" >&2
       break
     fi
-    echo -e " ${color_yellow}Command [$1] not ok, will retry${color_norm}" >&2
+    echo -e "[`TZ=Asia/Shanghai date`] ${color_yellow}Command [$1] not ok, will retry${color_norm}" >&2
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
@@ -1913,22 +1906,22 @@ function anchnet-exec-and-retry {
     # Exit if command succeeds but error code is 500.
     if [[ "$return_code" != "0" && "$error_code" == "500" ]]; then
       echo
-      echo -e "${color_red}${color_red}Unable to execute command [$1]: 500 error from anchnet ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_red}${color_red}Unable to execute command [$1]: 500 error from anchnet ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
       kube-up-complete N
       exit 1
     fi
     if [[ "$return_code" != "0" ]]; then
       if (( attempt >= ${count} )); then
         echo
-        echo -e "${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
+        echo -e "[`TZ=Asia/Shanghai date`] ${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
         kube-up-complete N
         exit 1
       fi
     else
-      echo -e " ${color_green}Command [$1] ok${color_norm}" >&2
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_green}Command [$1] ok${color_norm}" >&2
       break
     fi
-    echo -e " ${color_yellow}Command [$1] not ok, will retry: ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
+    echo -e "[`TZ=Asia/Shanghai date`] ${color_yellow}Command [$1] not ok, will retry: ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
@@ -1943,11 +1936,9 @@ function anchnet-exec-and-retry {
 #   $2 number of retry, default to 60
 #   $3 retry interval, in second, default to 3
 function anchnet-wait-job {
-  echo -n "Wait until job finishes: ${1} ... "
-
   local job_id=$(echo ${1} | json_val '["job_id"]')
+  echo -n "[`TZ=Asia/Shanghai date`] Wait until job finishes: ${1} ... "
   ${ANCHNET_CMD} waitjob ${job_id} -c=${2-60} -i=${3-3}
-
   if [[ "$?" == "0" ]]; then
     echo -e "${color_green}Done${color_norm}"
   else
@@ -2027,7 +2018,7 @@ function test-build-release {
   # Note also, e2e test will test client & server version match. Server binary uses
   # dockerized build; however, developer may use local kubectl (_output/local/bin/kubectl),
   # so we do a local build here.
-  echo "Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
+  echo "[`TZ=Asia/Shanghai date`] Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
   cd ${KUBE_ROOT}
   make clean
   hack/build-go.sh
@@ -2041,7 +2032,7 @@ function test-build-release {
 # Assumed vars:
 #   Variables from config.sh
 function test-setup {
-  echo "Anchnet e2e doesn't need special test for setup (after kube-up)"
+  echo "[`TZ=Asia/Shanghai date`] Anchnet e2e doesn't need special test for setup (after kube-up)"
 }
 
 

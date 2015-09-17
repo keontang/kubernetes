@@ -25,9 +25,9 @@
 #
 # - "tarball": In tarball mode, kube binaries and non-kube binaries are built
 #   as a single tarball. There are two different behaviors in tarball mode:
-#   - If BUILD_RELEASE is N, we build current code base and push to remote host,
+#   - If BUILD_TARBALL is N, we build current code base and push to remote host,
 #     using script build-tarball.sh.
-#   - If BUILD_RELEASE is Y, then we simply fetch from remote host.
+#   - If BUILD_TARBALL is Y, then we simply fetch from remote host.
 #
 # - "image": In image mode, we use pre-built custom image. It is assumed that
 #   the custom image has all binaries and packages installed, i.e. kube binaries,
@@ -49,7 +49,7 @@ CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 # Decide if building release is needed. If the parameter is true, then use
 # BUILD_VERSION as release version; otherwise, use CAICLOUD_KUBE_VERSION. Using
 # two different versions avoid overriding existing release.
-BUILD_RELEASE=${BUILD_RELEASE:-"N"}
+BUILD_TARBALL=${BUILD_TARBALL:-"N"}
 
 # The version of newly built release during kube-up.
 BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M`"}
@@ -184,7 +184,10 @@ else
 fi
 
 # Decide which version to use.
-if [[ "${BUILD_RELEASE}" = "Y" ]]; then
+if [[ "${BUILD_TARBALL}" = "Y" ]]; then
+  # build-tarball.sh will upload tarball to our own fileserver, so we must
+  # override it.
+  CAICLOUD_HOST_URL="http://internal-get.caicloud.io/caicloud"
   FINAL_VERSION=${BUILD_VERSION}
 else
   FINAL_VERSION=${CAICLOUD_KUBE_VERSION}

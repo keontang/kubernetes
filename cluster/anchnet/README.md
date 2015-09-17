@@ -66,13 +66,15 @@ options, consult the two files.
   KUBERNETES_PROVIDER=anchnet CAICLOUD_KUBE_VERSION=v0.2.0 ./cluster/kube-up.sh
   ```
 
+* `CAICLOUD_HOST_URL`: The host from which kube-up fetches release. Default to `http://internal-get.caicloud.io/caicloud`.
+
 * `BUILD_VERSION`: The version of newly built release during kube-up. Default value is current date/time, i.e. `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
 
-* `BUILD_RELEASE`: Decide if building release is needed. If the parameter is true, then use `BUILD_VERSION` as release version; otherwise, use `CAICLOUD_KUBE_VERSION`. Using
-  two different versions avoid overriding existing release. E.g. following command creates a cluster from current code base. The version is in the form of
+* `BUILD_TARBALL`: Decide if building tarball is needed. If the parameter is true, then use `BUILD_VERSION` as release version; otherwise, use `CAICLOUD_KUBE_VERSION`. Using
+  two different versions avoid overriding existing tarball version. E.g. following command creates a cluster from current code base. The version must be the form of
   `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
   ```
-  KUBERNETES_PROVIDER=anchnet BUILD_RELEASE=Y ./cluster/kube-up.sh
+  KUBERNETES_PROVIDER=anchnet BUILD_TARBALL=Y ./cluster/kube-up.sh
   ```
 
 * `KUBE_INSTANCE_LOGDIR`: Directory for holding kubeup instance specific logs. During kube-up, instances will be installed/provisioned concurrently; if we just send logs to

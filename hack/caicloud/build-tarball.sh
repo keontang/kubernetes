@@ -25,13 +25,13 @@ set -o pipefail
 
 function usage {
   echo -e "Usage:"
-  echo -e "  ./build-tarball.sh version"
+  echo -e "  ./build-tarball.sh [version]"
   echo -e ""
   echo -e "Parameter:"
-  echo -e " version\tTarball release version, must in the form of vA.B.C, where A, B, C are digits,"
-  echo -e "        \te.g. v1.0.1; or in the form of YYYY-mm-DD-HH-MM, where YYY is year, mm is month,"
-  echo -e "        \tDD is day, HH is hour and MM is minute, e.g. 2015-09-10-18-00. The later one is"
-  echo -e "        \tused for testing."
+  echo -e " version\tTarball release version. If provided, the tag must be the form of vA.B.C, where"
+  echo -e "        \tA, B, C are digits, e.g. v1.0.1. If not provided, current date/time will be used,"
+  echo -e "        \ti.e. YYYY-mm-DD-HH-MM-SS, where YYY is year, mm is month, DD is day, HH is hour,"
+  echo -e "        \tMM is minute and SS is second, e.g. 2015-09-10-18-15-30."
   echo -e ""
   echo -e "Environment variable:"
   echo -e " UPLOAD_TO_TOOLSERVER\tSet to Y if the script needs to push new tarballs to toolserver, default to Y"
@@ -55,25 +55,27 @@ UPLOAD_TO_TOOLSERVER=${UPLOAD_TO_TOOLSERVER:-"Y"}
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
-# Get all other configs and commone utilities.
+# Get configs and commone utilities.
 source ${KUBE_ROOT}/hack/caicloud/common.sh
 
-# Make sure user supplies correct version format.
-if [[ "$#" != "1" ]]; then
-  echo -e "Error: Version must be provided."
-  echo -e ""
-  usage
-  exit 1
+# Find caicloud kubernetes release version.
+if [[ "$#" == "1" ]]; then
+  if [[ "$1" == "help" ]]; then
+    echo -e ""
+    usage
+    exit 0
+  elif [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && ! $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+    # We also allow passing date/time directly, this is usually used internally.
+    echo -e "Error: Version format error, see usage."
+    echo -e ""
+    usage
+    exit 1
+  else
+    CAICLOUD_VERSION=${1}
+  fi
+else
+  CAICLOUD_VERSION="`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"
 fi
-if [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && ! $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
-  echo -e "Error: Version format error, see usage."
-  echo -e ""
-  usage
-  exit 1
-fi
-
-# Caicloud kubernetes release version.
-CAICLOUD_VERSION=${1}
 
 # DO NOT CHANGE. Derived variables for tarball building.
 CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_VERSION}.tar.gz"

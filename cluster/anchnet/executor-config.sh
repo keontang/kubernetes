@@ -52,7 +52,7 @@ CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 BUILD_TARBALL=${BUILD_TARBALL:-"N"}
 
 # The version of newly built release during kube-up.
-BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M`"}
+BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
 # The version of caicloud release to use if building release is not required.
 # E.g. 2015-09-09-15-30, v1.0.2, etc.

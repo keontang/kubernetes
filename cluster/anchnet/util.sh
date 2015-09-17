@@ -96,12 +96,11 @@ function kube-up {
   #   NODE_INTERNAL_IPS - comma separated string of node internal ips
   create-node-internal-ips
 
-  # Build tarball if CAICLOUD_KUBE_VERSION is empty; version is based on date/time, e.g.
-  # 2015-09-12-10-01
+  # Build tarball if BUILD_TARBALL=Y; version is based on date/time.
   if [[ "${BUILD_TARBALL}" = "Y" ]]; then
     echo "[`TZ=Asia/Shanghai date`] +++++ Building tarball ..."
     cd ${KUBE_ROOT}
-    ./hack/caicloud/build-tarball.sh "${FINAL_VERSION}"
+    ./hack/caicloud/build-tarball.sh ${FINAL_VERSION}
     cd -
   fi
 

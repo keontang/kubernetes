@@ -98,7 +98,7 @@ function kube-up {
 
   # Build tarball if CAICLOUD_KUBE_VERSION is empty; version is based on date/time, e.g.
   # 2015-09-12-10-01
-  if [[ "${BUILD_RELEASE}" = "Y" ]]; then
+  if [[ "${BUILD_TARBALL}" = "Y" ]]; then
     echo "[`TZ=Asia/Shanghai date`] +++++ Building tarball ..."
     cd ${KUBE_ROOT}
     ./hack/caicloud/build-tarball.sh "${FINAL_VERSION}"
@@ -673,8 +673,11 @@ function create-project {
       # to create resources in sub-account.
       echo "[`TZ=Asia/Shanghai date`] +++++ Transferring balance to sub account ..."
       anchnet-exec-and-retry "${ANCHNET_CMD} transfer ${SUB_ACCOUNT_UID} ${INITIAL_DEPOSIT}"
+      report-project-id ${PROJECT_ID}
+    else
+      echo "[`TZ=Asia/Shanghai date`] +++++ Reuse existing project ID ${PROJECT_ID} for ${KUBE_USER} ..."
+      report-project-id ${PROJECT_ID}
     fi
-    report-project-id ${PROJECT_ID}
   fi
 }
 
@@ -1971,7 +1974,7 @@ function prepare-e2e() {
   # Cluster configs for e2e test. Note we must export the variables; otherwise,
   # they won't be visible outside of the function.
   export CLUSTER_NAME="e2e-test"
-  export BUILD_RELEASE="Y"
+  export BUILD_TARBALL="Y"
   export KUBE_UP_MODE="tarball"
   export NUM_MINIONS=2
   export MASTER_MEM=2048

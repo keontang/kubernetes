@@ -36,7 +36,7 @@ var _ cloudprovider.TCPLoadBalancer = (*Anchnet)(nil)
 // GetTCPLoadBalancer returns whether the specified load balancer exists,
 // and if so, what its status is.
 func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBalancerStatus, exists bool, err error) {
-	lb_response, exists, err := an.searchLoadBalancer(name)
+	matching_lb, exists, err := an.searchLoadBalancer(name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -44,14 +44,14 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 		return nil, false, nil
 	}
 	// No external IP for the loadbalancer, shouldn't happen.
-	if len(lb_response.ItemSet[0].Eips) == 0 {
+	if len(matching_lb.Eips) == 0 {
 		return nil, false, fmt.Errorf("external loadbalancer has no public IP")
 	}
-	err = an.waitForLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, anchnet_client.LoadBalancerStatusActive)
+	err = an.waitForLoadBalancer(matching_lb.LoadbalancerID, anchnet_client.LoadBalancerStatusActive)
 	if err != nil {
 		return nil, false, err
 	}
-	ip_response, err := an.describeEip(lb_response.ItemSet[0].Eips[0].EipID)
+	ip_response, err := an.describeEip(matching_lb.Eips[0].EipID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -93,39 +93,51 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 		return nil, fmt.Errorf("unsupported load balancer affinity: %v", affinityType)
 	}
 
-	// Delete existing loadbalancer if it exists.
-	_, exists, err := an.GetTCPLoadBalancer(name, region)
+	// anchnet does not support user-specified ip addr for LB. We just
+	// print some log and ignore the public ip.
+	if loadBalancerIP != nil {
+		glog.Warning("public IP cannot be specified for Anchnet ELB")
+	}
+
+	// Delete existing loadbalancer if it exists. Note we are preserving the eip when recreating the
+	// load balancer so that the eip of a service stays the same. The justification of recreating lb
+	// rather than sync security group, listeners and backends would be that it will probably take
+	// longer to sync all of the above.
+	var eip_ids []string
+	matching_lb, exists, err := an.searchLoadBalancer(name)
 	if err != nil {
 		return nil, fmt.Errorf("error checking if anchnet load balancer %v already exists: %v", name, err)
 	}
-
 	if exists {
 		glog.Infof("Anchnet: EnsureTCPLoadBalancer found existing loadbalancer %v; deleting now", name)
-		err := an.EnsureTCPLoadBalancerDeleted(name, region)
+		eip_ids = append(eip_ids, matching_lb.Eips[0].EipID)
+		err := an.EnsureTCPLoadBalancerDeletedHelper(name, region, true)
 		if err != nil {
-			return nil, fmt.Errorf("error deleting existing GCE load balancer: %v", err)
+			return nil, fmt.Errorf("error deleting existing anchnet load balancer: %v", err)
 		}
-	}
-
-	// Create a public IP address resource. The externalIP field is thus ignored.
-	ip_response, err := an.allocateEIP()
-	if err != nil {
-		return nil, err
-	}
-	err = an.WaitJobStatus(ip_response.JobID, anchnet_client.JobStatusSuccessful)
-	if err != nil {
-		return nil, err
+	} else {
+		glog.Infof("Anchnet: EnsureTCPLoadBalancer no loadbalancer %v found", name)
+		// Create a public IP address resource. The externalIP field is thus ignored.
+		ip_response, err := an.allocateEIP()
+		if err != nil {
+			return nil, err
+		}
+		err = an.WaitJobStatus(ip_response.JobID, anchnet_client.JobStatusSuccessful)
+		if err != nil {
+			return nil, err
+		}
+		eip_ids = append(eip_ids, ip_response.EipIDs[0])
 	}
 
 	// Create a loadbalancer using the above external IP.
-	lb_response, err := an.createLoadBalancer(name, ip_response.EipIDs[0])
+	lb_response, err := an.createLoadBalancer(name, eip_ids[0])
 	if err != nil {
-		an.releaseEIP(ip_response.EipIDs[0])
+		an.releaseEIP(eip_ids[0])
 		return nil, err
 	}
 	err = an.WaitJobStatus(lb_response.JobID, anchnet_client.JobStatusSuccessful)
 	if err != nil {
-		an.releaseEIP(ip_response.EipIDs[0])
+		an.releaseEIP(eip_ids[0])
 		return nil, err
 	}
 
@@ -133,7 +145,7 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 	// loadbalancer to apply the changes do require.
 	err = an.waitForLoadBalancer(lb_response.LoadbalancerID, anchnet_client.LoadBalancerStatusActive)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 		return nil, err
 	}
 
@@ -146,12 +158,12 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 	for _, port := range ports {
 		listener_response, err := an.addLoadBalancerListeners(lb_response.LoadbalancerID, port.Port)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 			return nil, err
 		}
 		err = an.WaitJobStatus(listener_response.JobID, anchnet_client.JobStatusSuccessful)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 			return nil, err
 		}
 
@@ -166,12 +178,12 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 		}
 		add_response, err := an.addLoadBalancerBackends(listener_response.ListenerIDs[0], backends)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 			return nil, err
 		}
 		err = an.WaitJobStatus(add_response.JobID, anchnet_client.JobStatusSuccessful)
 		if err != nil {
-			an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+			an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 			return nil, err
 		}
 	}
@@ -179,31 +191,31 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 	// Create a security group and apply it to loadbalancer.
 	sg_response, err := an.createLBSecurityGroup(name, ports, lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 		return nil, err
 	}
 	err = an.WaitJobStatus(sg_response.JobID, anchnet_client.JobStatusSuccessful)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 		return nil, err
 	}
 
 	// Calling update loadbalancer will apply the above changes.
 	update_response, err := an.updateLoadBalancer(lb_response.LoadbalancerID)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 		return nil, err
 	}
 	err = an.WaitJobStatus(update_response.JobID, anchnet_client.JobStatusSuccessful)
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 		return nil, err
 	}
 
 	// Get loadbalancer ip address and return it to k8s.
-	response, err := an.describeEip(ip_response.EipIDs[0])
+	response, err := an.describeEip(eip_ids[0])
 	if err != nil {
-		an.deleteLoadBalancer(lb_response.LoadbalancerID, ip_response.EipIDs)
+		an.deleteLoadBalancer(lb_response.LoadbalancerID, eip_ids)
 		return nil, err
 	}
 	status := &api.LoadBalancerStatus{}
@@ -228,8 +240,12 @@ func (an *Anchnet) UpdateTCPLoadBalancer(name, region string, hosts []string) er
 // 2. loadbalancer itself (including listeners);
 // 3. security group for loadbalancer;
 func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
+	return an.EnsureTCPLoadBalancerDeletedHelper(name, region, false)
+}
+
+func (an *Anchnet) EnsureTCPLoadBalancerDeletedHelper(name, region string, preserve_ip bool) error {
 	// Delete external ip and load balancer.
-	lb_response, exists, err := an.searchLoadBalancer(name)
+	matching_lb, exists, err := an.searchLoadBalancer(name)
 	if err != nil {
 		return err
 	}
@@ -237,11 +253,16 @@ func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
 		glog.Infof("Load balancer %v already deleted", name)
 		return nil
 	}
+
+	// empty array will be passed to deleteLoadBalancer if we want to preserve eip.
 	var eip_ids []string
-	for _, eip := range lb_response.ItemSet[0].Eips {
-		eip_ids = append(eip_ids, eip.EipID)
+	if !preserve_ip {
+		for _, eip := range matching_lb.Eips {
+			eip_ids = append(eip_ids, eip.EipID)
+		}
 	}
-	lb_delete_response, err := an.deleteLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, eip_ids)
+	lb_delete_response, err := an.deleteLoadBalancer(matching_lb.LoadbalancerID, eip_ids)
+
 	if err != nil {
 		return err
 	}
@@ -251,7 +272,7 @@ func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
 	}
 
 	// Wait for load balancer to become 'deleted' status.
-	err = an.waitForLoadBalancer(lb_response.ItemSet[0].LoadbalancerID, anchnet_client.LoadBalancerStatusDeleted)
+	err = an.waitForLoadBalancer(matching_lb.LoadbalancerID, anchnet_client.LoadBalancerStatusDeleted)
 	if err != nil {
 		return err
 	}
@@ -404,7 +425,7 @@ func (an *Anchnet) deleteLoadBalancer(lbID string, eips []string) (*anchnet_clie
 }
 
 // searchLoadBalancer tries to find loadbalancer by name.
-func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.DescribeLoadBalancersResponse, bool, error) {
+func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.DescribeLoadBalancersItem, bool, error) {
 	for i := 0; i < RetryCountOnError; i++ {
 		request := anchnet_client.DescribeLoadBalancersRequest{
 			SearchWord: search_word,
@@ -412,12 +433,14 @@ func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.Descr
 		var response anchnet_client.DescribeLoadBalancersResponse
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
-			if len(response.ItemSet) == 0 {
-				return nil, false, nil
-			} else {
-				glog.Infof("Got loadbalancer with name: %v", search_word)
-				return &response, true, nil
+			// Since anchnet will return ALL of the LBs matches the name including the ones we have deleted,
+			// we will have to go through the list to see if there is actually an active LB.
+			for _, item := range response.ItemSet {
+				if item.Status == anchnet_client.LoadBalancerStatusActive {
+					return &item, true, nil
+				}
 			}
+			return nil, false, nil
 		} else {
 			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, search_word, err)
 		}

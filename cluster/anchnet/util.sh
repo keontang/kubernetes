@@ -716,8 +716,8 @@ function create-master-instance {
   get-ip-address-from-eipid "${MASTER_EIP_ID}"
   MASTER_EIP=${EIP_ADDRESS}
 
-  # Enable ssh without password.
-  setup-instance-ssh "${MASTER_EIP}"
+  # Enable ssh without password and enable sudoer for ${INSTANCE_USER}.
+  setup-instance "${MASTER_EIP}"
 
   echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, \
 eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
@@ -760,8 +760,8 @@ function create-node-instances {
     get-ip-address-from-eipid "${node_eip_id}"
     local node_eip=${EIP_ADDRESS}
 
-    # Enable ssh without password.
-    setup-instance-ssh "${node_eip}"
+    # Enable ssh without password and enable sudoer for ${INSTANCE_USER}.
+    setup-instance "${node_eip}"
 
     echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[created node-${i} with instance ID ${node_instance_id}, \
 eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
@@ -845,11 +845,13 @@ function get-ip-address-from-eipid {
   done
 }
 
-
 # SSH to the machine and put the host's pub key to instance's authorized_key,
 # so future ssh commands do not require password to login. Note however,
 # if ubuntu is used, we still need to use 'expect' to enter password, because
 # root login is disabled by default in ubuntu.
+# Also setup sudoer for ${INSTANCE} user on $1 so that we do not need to feed
+# in password when executing commands. We do this mainly for e2e tests since
+# e2e will run sudo commands on nodes.
 #
 # Input:
 #   $1 Instance external IP address
@@ -857,7 +859,7 @@ function get-ip-address-from-eipid {
 # Assumed vars:
 #   INSTANCE_USER
 #   KUBE_INSTANCE_PASSWORD
-function setup-instance-ssh {
+function setup-instance {
   attempt=0
   while true; do
     echo "[`TZ=Asia/Shanghai date`] Attempt $(($attempt+1)) to setup instance ssh for $1"
@@ -874,8 +876,10 @@ expect {
   timeout { exit 1 }
   eof {}
 }
-spawn ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@$1 "umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub"
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@$1 "\
+umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub && \
+sudo sh -c 'echo \"${INSTANCE_USER} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)'"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"

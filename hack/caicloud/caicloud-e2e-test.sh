@@ -14,9 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This will be used during e2e as ssh user to execute command inside nodes.
-export KUBE_SSH_USER=${KUBE_SSH_USER:-"ubuntu"}
-
 # Add skipped test regex here.
 CAICLOUD_TEST_SKIP_REGEX=${CAICLOUD_TEST_SKIP_REGEX:-"kube-ui|Skipped|Example"}
 

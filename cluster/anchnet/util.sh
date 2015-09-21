@@ -1975,11 +1975,14 @@ function prepare-e2e() {
   export CLUSTER_NAME="e2e-test"
   export BUILD_TARBALL="Y"
   export KUBE_UP_MODE="tarball"
-  export NUM_MINIONS=2
+  export NUM_MINIONS=3
   export MASTER_MEM=2048
   export MASTER_CPU_CORES=2
   export NODE_MEM=2048
   export NODE_CPU_CORES=2
+  # This will be used during e2e as ssh user to execute command inside nodes.
+  export KUBE_SSH_USER=${KUBE_SSH_USER:-"ubuntu"}
+  export KUBECONFIG="$HOME/.kube/config_e2e"
 
   # Since we changed configs above, we need to re-set cluster env.
   setup-cluster-env

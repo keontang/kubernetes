@@ -23,10 +23,8 @@ KUBERNETES_PROVIDER=anchnet ./cluster/kube-up.sh
 
 #### Options:
 
-There are quite a few options used to create a cluster in anchnet, located at `config-default.sh` and `executor-config.sh`. `config-default.sh` is static information
-configured by caicloud admin, like node ip range, admission control plugin, etc. `executor-config.sh` is dynamic information configured by user and executor, like number
-of nodes, cluster name, etc. Therefore, most interesting options are in `executor-config.sh`. Following is a curated list of options used in kube-up. For a full list of
-options, consult the two files.
+There are quite a few options used to create a cluster in anchnet, located at `config-default.sh`. Following is a curated list of options used in kube-up. For a full list of
+options, consult the file.
 
 * `CLUSTER_NAME`: The name of newly created cluster. This is used to identify a cluster - all resources will be prefixed with this name. The variable is default to
   "k8s-default". E.g. the following command will create a cluster named "caicloud-rocks", and all instances (plus other resources like firewall) will be prefixed with
@@ -60,7 +58,7 @@ options, consult the two files.
     ```
 
 * `CAICLOUD_KUBE_VERSION`: The version of caicloud release to use if building release is not required. E.g. 2015-09-09-15-30, v1.0.2, etc. Default value is current release
-  version (or a previous version if executor-config.sh is not updated). The version must exist in `CAICLOUD_HOST_URL`. E.g., following command creates a cluster using caicloud
+  version (or a previous version if `config-default.sh` is not updated). The version must exist in `CAICLOUD_HOST_URL`. E.g., following command creates a cluster using caicloud
   kubernetes version `v0.2.0`.
   ```
   KUBERNETES_PROVIDER=anchnet CAICLOUD_KUBE_VERSION=v0.2.0 ./cluster/kube-up.sh
@@ -89,6 +87,10 @@ options, consult the two files.
 
 * `ANCHNET_CONFIG_FILE`: The config file supplied to `anchnet` SDK CLI. Default value is `~/.anchnet/config`. Usually, you don't have to change the value, unless you want to
   create cluster under another anchnet account (NOT sub-account).
+
+* `ENABLE_CLUSTER_DNS`: Decide if cluster dns addon needs to be created, default to true. DNS addon is essential and should always be true.
+
+* `ENABLE_CLUSTER_LOGGING`: Decide if cluster logging needs to be created, default to true.
 
 ## Delete a cluster
 

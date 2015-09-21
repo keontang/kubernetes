@@ -109,6 +109,7 @@ KUBELET_OPTS="--logtostderr=true \
 --cluster-dns=${4} \
 --cluster-domain=${5} \
 --pod-infra-container-image=${6} \
+--config=/etc/kubernetes/manifest \
 --kubeconfig=/etc/kubernetes/kubelet-kubeconfig \
 --cloud-config=/etc/kubernetes/anchnet-config \
 --cloud-provider=anchnet"

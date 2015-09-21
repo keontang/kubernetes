@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file. This projec
 - Add new variable `BUILD_TARBALL` to replace the semantic of empty `CAICLOUD_VERSION`.
 - Add kube-up, kube-down timestamp.
 - Deprecate etcd on node.
+- Reorg addon directory (add subdirectory), e.g. cluster/anchnet/addons/dns
+- Remove executor-config.sh and move its configs to config-default.sh
+- Support `ENABLE_CLUSTER_DNS`, `ENABLE_CLUSTER_LOGGING` params
 
 ### Version 0.1.0 [2015-09-12]
 #### Changed

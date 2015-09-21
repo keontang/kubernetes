@@ -22,18 +22,15 @@ set +o errexit
 # Path of kubernetes root directory.
 KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 
-# Get cluster configuration parameters from config-default and executor-config.
-# config-default is mostly static information configured by caicloud admin, like
-# node ip range; while executor-config is mostly dynamic information configured
-# by user and executor, like number of nodes, cluster name, etc. Also, retrieve
+# Get cluster configuration parameters from config-default, and retrieve
 # executor related methods from executor-service.sh.
 function setup-cluster-env {
   source "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-  source "${KUBE_ROOT}/cluster/anchnet/executor-config.sh"
   source "${KUBE_ROOT}/cluster/anchnet/executor-service.sh"
 }
 
 setup-cluster-env
+
 
 # -----------------------------------------------------------------------------
 # Cluster specific library utility functions.
@@ -427,18 +424,29 @@ function deploy-addons {
   # it knows all the tokens (including addons). All other addons related setup will
   # need to be performed here.
 
-  # These two files are copied from cluster/addons/dns, with gcr.io changed to dockerhub.
-  local -r skydns_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/skydns-rc.yaml.in"
-  local -r skydns_svc_file="${KUBE_ROOT}/cluster/anchnet/addons/skydns-svc.yaml.in"
-
-  # Replace placeholder with our configuration.
+  # The two DNS yaml files are copied from cluster/addons/dns, with gcr.io changed to
+  # dockerhub. Before enabling it, we replace placeholder with our configuration.
+  local -r skydns_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/dns/skydns-rc.yaml.in"
+  local -r skydns_svc_file="${KUBE_ROOT}/cluster/anchnet/addons/dns/skydns-svc.yaml.in"
   sed -e "s/{{ pillar\['dns_replicas'\] }}/${DNS_REPLICAS}/g;s/{{ pillar\['dns_domain'\] }}/${DNS_DOMAIN}/g" ${skydns_rc_file} > ${KUBE_TEMP}/skydns-rc.yaml
   sed -e "s/{{ pillar\['dns_server'\] }}/${DNS_SERVER_IP}/g" ${skydns_svc_file} > ${KUBE_TEMP}/skydns-svc.yaml
+
+  # Replace placeholder with our configuration for elasticsearch rc.
+  local -r elasticsearch_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/logging/elasticsearch-rc.yaml.in"
+  sed -e "s/{{ pillar\['elasticsearch_replicas'\] }}/${ELASTICSEARCH_REPLICAS}/g" ${elasticsearch_rc_file} > ${KUBE_TEMP}/elasticsearch-rc.yaml
+
+  # Replace placeholder with our configuration for kibana rc.
+  local -r kibana_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/logging/kibana-rc.yaml.in"
+  sed -e "s/{{ pillar\['kibana_replicas'\] }}/${KIBANA_REPLICAS}/g" ${kibana_rc_file} > ${KUBE_TEMP}/kibana-rc.yaml
 
   # Copy addon configurationss and startup script to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh \
-      ${KUBE_ROOT}/cluster/anchnet/namespace/namespace.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/namespace.yaml \
+      ${KUBE_TEMP}/elasticsearch-rc.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/logging/elasticsearch-svc.yaml \
+      ${KUBE_TEMP}/kibana-rc.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/logging/kibana-svc.yaml \
       ${KUBE_TEMP}/skydns-rc.yaml \
       ${KUBE_TEMP}/skydns-svc.yaml \
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
@@ -446,8 +454,11 @@ function deploy-addons {
   # Calling 'addons-start.sh' to start addons.
   expect <<EOF
 set timeout -1
+
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "sudo ./kube/addons-start.sh"
+  ${INSTANCE_USER}@${MASTER_EIP} "\
+sudo ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} ./kube/addons-start.sh"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -867,6 +878,7 @@ function setup-instance {
 set timeout $((($attempt+1)*3))
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   $HOME/.ssh/id_rsa.pub ${INSTANCE_USER}@$1:~/host_rsa.pub
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -876,10 +888,12 @@ expect {
   timeout { exit 1 }
   eof {}
 }
+
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@$1 "\
 umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub && \
 sudo sh -c 'echo \"${INSTANCE_USER} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)'"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -936,8 +950,9 @@ function setup-sdn-network-internal {
     local pids=""
     expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
-spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+spawn scp -vvv -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_TEMP}/network-opts${i} ${INSTANCE_USER}@${instance_eip}:~/network-opts
+
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1205,6 +1220,7 @@ set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "\
 wget ${CAICLOUD_TARBALL_URL} -O ~/caicloud-kube.tar.gz"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1226,6 +1242,7 @@ spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLeve
   ${INSTANCE_USER}@${MASTER_EIP} \
 "scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ~/caicloud-kube.tar.gz ${INSTANCE_USER}@${node_internal_ip}:~/caicloud-kube.tar.gz"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1256,6 +1273,7 @@ EOF
     local instance_id=${INSTANCE_IDS_ARR[${i}]}
     expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
+
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
 tar xvzf caicloud-kube.tar.gz && mkdir -p ~/kube/master && \
@@ -1266,6 +1284,7 @@ cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube
   caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node && \
 rm -rf caicloud-kube.tar.gz caicloud-kube || \
 echo 'Command failed installing tarball binaries on remote host $instance_eip'"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1326,6 +1345,7 @@ function install-packages-internal {
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/hack/caicloud/nsenter ${INSTANCE_USER}@${instance_eip}:~/nsenter
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1407,6 +1427,7 @@ set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh || \
 echo 'Command failed provisioning master'"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1432,6 +1453,7 @@ set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${node_eip} "sudo ./kube/node-start.sh || \
 echo 'Command failed provisioning node $node_eip'"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1518,6 +1540,7 @@ function install-configurations-internal {
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"
     echo "sudo mkdir -p /etc/kubernetes"
+    echo "sudo mkdir -p /etc/kubernetes/manifest"
     # Since we might retry on error, we need to stop services. If no service
     # is running, this is just no-op.
     echo "sudo service etcd stop"
@@ -1571,7 +1594,7 @@ function install-configurations-internal {
     mkdir -p ${KUBE_TEMP}/node${i}
     (
       echo "#!/bin/bash"
-      echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
+      echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security ~/kube/manifest"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
       echo ""
@@ -1585,9 +1608,11 @@ function install-configurations-internal {
       # Organize files a little bit.
       echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/null 2>&1"
       echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
+      echo "mv ~/kube/fluentd-es.yaml ~/kube/manifest/fluentd-es.yaml 1>/dev/null 2>&1"
       # Create the system directories used to hold the final data.
       echo "sudo mkdir -p /opt/bin"
       echo "sudo mkdir -p /etc/kubernetes"
+      echo "sudo mkdir -p /etc/kubernetes/manifest"
       # Since we might retry on error, we need to stop services. If no service
       # is running, this is just no-op.
       echo "sudo service flanneld stop"
@@ -1598,6 +1623,7 @@ function install-configurations-internal {
       echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
       echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
       echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
+      echo "sudo cp ~/kube/manifest/fluentd-es.yaml /etc/kubernetes/manifest"
       # Finally, start kubernetes cluster. Upstart will make sure all components start
       # upon flannel start.
       echo "sudo service flanneld start"
@@ -1610,6 +1636,7 @@ function install-configurations-internal {
     # base image we use have the binaries in place.
     scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
         ${KUBE_ROOT}/cluster/anchnet/node/* \
+        ${KUBE_ROOT}/cluster/anchnet/manifest/fluentd-es.yaml \
         ${KUBE_TEMP}/node${i}/node-start.sh \
         ${KUBE_TEMP}/kubelet-kubeconfig \
         ${KUBE_TEMP}/kube-proxy-kubeconfig \

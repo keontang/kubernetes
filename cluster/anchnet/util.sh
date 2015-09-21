@@ -907,7 +907,10 @@ EOF
 
 # Wrapper of setup-sdn-network-internal
 function setup-sdn-network {
-  command-exec-and-retry "setup-sdn-network-internal" 3 "false"
+  # Use multiple retries since seting up sdn network is essentially for followup installations,
+  # and we ses occational errors:
+  # https://github.com/caicloud/caicloud-kubernetes/issues/175
+  command-exec-and-retry "setup-sdn-network-internal" 5 "false"
 }
 
 
@@ -930,7 +933,7 @@ function setup-sdn-network-internal {
     expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
 spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${KUBE_TEMP}/network-opts${i} ${INSTANCE_USER}@${instance_eip}:/tmp/network-opts
+  ${KUBE_TEMP}/network-opts${i} ${INSTANCE_USER}@${instance_eip}:~/network-opts
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -939,11 +942,13 @@ expect {
   "lost connection" { exit 1 }
   eof {}
 }
+
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
-sudo mv /tmp/network-opts /etc/network/interfaces && \
+sudo mv ~/network-opts /etc/network/interfaces && \
 sudo sed -i 's/^managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf && \
 sudo service network-manager restart"
+
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"

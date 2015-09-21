@@ -23,11 +23,11 @@ source "${KUBE_ROOT}/hack/caicloud/common.sh"
 # hub caicloudgcr account.
 grep -rl "gcr.io/google_containers/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
   xargs perl -X -i -pe 's|gcr.io/google_containers/|caicloudgcr/google_containers_|g'
 grep -rl "gcr.io/google_samples/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
   xargs perl -X -i -pe 's|gcr.io/google_samples/|caicloudgcr/google_samples_|g'
 
 # 'golang.org' is blocked - remove it since we do not need it for building.

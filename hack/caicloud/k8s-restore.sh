@@ -23,11 +23,11 @@ source "${KUBE_ROOT}/hack/caicloud/common.sh"
 # Restore 'gcr.io' images.
 grep -rl "caicloudgcr/google_containers_[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
   xargs perl -X -i -pe 's|caicloudgcr/google_containers_|gcr.io/google_containers/|g'
 grep -rl "caicloudgcr/google_samples_[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
   xargs perl -X -i -pe 's|caicloudgcr/google_samples_|gcr.io/google_samples/|g'
 
 # Restore 'golang.org' packages.

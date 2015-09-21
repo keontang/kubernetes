@@ -118,6 +118,10 @@ ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 DAOCLOUD_ACCELERATOR=${DAOCLOUD_ACCELERATOR:-"http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
 http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"}
 
+# Ubuntu/Debian apt mirrors. In case of installation errors from any of the mirrors,
+# we switch to a backup.
+APT_MIRRORS="http://mirrors.163.com/ubuntu/,http://ftp.sjtu.edu.cn/ubuntu/"
+
 # Number of retries and interval (in second) for waiting master creation job.
 # Adjust the value based on the number of master instances created.
 MASTER_WAIT_RETRY=${MASTER_WAIT_RETRY:-120}

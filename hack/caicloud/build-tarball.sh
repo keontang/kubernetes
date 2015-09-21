@@ -31,7 +31,8 @@ function usage {
   echo -e " version\tTarball release version. If provided, the tag must be the form of vA.B.C, where"
   echo -e "        \tA, B, C are digits, e.g. v1.0.1. If not provided, current date/time will be used,"
   echo -e "        \ti.e. YYYY-mm-DD-HH-MM-SS, where YYY is year, mm is month, DD is day, HH is hour,"
-  echo -e "        \tMM is minute and SS is second, e.g. 2015-09-10-18-15-30."
+  echo -e "        \tMM is minute and SS is second, e.g. 2015-09-10-18-15-30. The second case is used"
+  echo -e "        \tfor development."
   echo -e ""
   echo -e "Environment variable:"
   echo -e " UPLOAD_TO_TOOLSERVER\tSet to Y if the script needs to push new tarballs to toolserver, default to Y"
@@ -174,4 +175,10 @@ if [[ "${UPLOAD_TO_QINIU}" == "Y" ]]; then
   cd ${KUBE_ROOT}/hack/caicloud
   qrsync qiniu-conf.json
   cd -
+fi
+
+# A reminder for creating Github release.
+if [[ "$#" == "1" && $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Finish building release ${CAICLOUD_VERSION}; if this is a formal release, please remember"
+  echo "to create a release tag at Github (https://github.com/caicloud/caicloud-kubernetes/releases)"
 fi

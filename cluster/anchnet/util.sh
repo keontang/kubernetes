@@ -1287,19 +1287,28 @@ EOF
 
 # Wrapper of install-packages-internal.
 function install-packages {
+  APT_MIRROR_INDEX=0
   command-exec-and-retry "install-packages-internal" 2 "false"
 }
 
 
 # Install necessary packages for running kubernetes. For installing distro
-# packages, we use mirrors from 163.com.
+# packages, we choose one of the mirrors from APT_MIRRORS. Each retry will
+# use different mirror.
 #
 # Assumed vars:
+#   APT_MIRRORS
 #   MASTER_EIP
 #   NODE_IPS
 function install-packages-internal {
   local pids=""
   echo "[`TZ=Asia/Shanghai date`] +++++ Start installing packages. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+
+  # Choose one apt mirror.
+  IFS=',' read -ra apt_mirror_arr <<< "${APT_MIRRORS}"
+  apt_mirror=${apt_mirror_arr[$(( ${APT_MIRROR_INDEX} % ${#apt_mirror_arr[*]} ))]}
+  APT_MIRROR_INDEX=$(($APT_MIRROR_INDEX+1))
+  echo "[`TZ=Asia/Shanghai date`] Use apt mirror ${apt_mirror}"
 
   for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
     local instance_eip=${INSTANCE_EIPS_ARR[${i}]}
@@ -1317,20 +1326,26 @@ expect {
   "lost connection" { exit 1 }
   eof {}
 }
+
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${instance_eip} "\
-sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty main restricted universe multiverse > /etc/apt/sources.list' && \
-sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty-security main restricted universe multiverse >> /etc/apt/sources.list' && \
-sudo sh -c 'echo deb http://mirrors.163.com/ubuntu/ trusty-updates main restricted universe multiverse >> /etc/apt/sources.list' && \
-sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty main restricted universe multiverse >> /etc/apt/sources.list' && \
-sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-security main restricted universe multiverse >> /etc/apt/sources.list' && \
-sudo sh -c 'echo deb-src http://mirrors.163.com/ubuntu/ trusty-updates main restricted universe multiverse >> /etc/apt/sources.list' && \
-sudo sh -c 'echo deb \[arch=amd64\] http://internal-get.caicloud.io/repo ubuntu-trusty main > /etc/apt/sources.list.d/docker.list' && \
+sudo sh -c 'cat > /etc/apt/sources.list' << EOL
+deb ${apt_mirror} trusty main restricted universe multiverse
+deb ${apt_mirror} trusty-security main restricted universe multiverse
+deb ${apt_mirror} trusty-updates main restricted universe multiverse
+deb-src ${apt_mirror} trusty main restricted universe multiverse
+deb-src ${apt_mirror} trusty-security main restricted universe multiverse
+deb-src ${apt_mirror} trusty-updates main restricted universe multiverse
+EOL
+sudo sh -c 'cat > /etc/apt/sources.list.d/docker.list' << EOL
+deb \[arch=amd64\] http://internal-get.caicloud.io/repo ubuntu-trusty main
+EOL
 sudo mv ~/nsenter /usr/local/bin && \
 sudo apt-get update && \
 sudo apt-get install --allow-unauthenticated -y docker-engine=${DOCKER_VERSION}-0~trusty && \
 sudo apt-get install bridge-utils socat || \
 echo 'Command failed installing packages on remote host $instance_eip'"
+
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -1532,7 +1547,7 @@ function install-configurations-internal {
 
   # Randomly choose one daocloud accelerator.
   IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATOR}"
-  reg_mirror=${reg_mirror_arr[$(( ${RANDOM} % 4 ))]}
+  reg_mirror=${reg_mirror_arr[$(( ${RANDOM} % ${#reg_mirror_arr[*]} ))]}
   echo "[`TZ=Asia/Shanghai date`] Use daocloud registry mirror ${reg_mirror}"
 
   # Start installing nodes.

@@ -181,12 +181,15 @@ ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING:-true}
 ELASTICSEARCH_REPLICAS=${ELASTICSEARCH_REPLICAS:-2}
 KIBANA_REPLICAS=${KIBANA_REPLICAS:-1}
 
+# Optional: Install Kubernetes UI
+ENABLE_CLUSTER_UI=${KUBE_ENABLE_CLUSTER_UI:-true}
+KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 
 # -----------------------------------------------------------------------------
 # Params from user for kube-up.
 # -----------------------------------------------------------------------------
 # Define number of nodes (minions). There will be only one master.
-NUM_MINIONS=${NUM_MINIONS:-1}
+NUM_MINIONS=${NUM_MINIONS:-2}
 
 # The memory size of master node (in MB).
 MASTER_MEM=${MASTER_MEM:-1024}

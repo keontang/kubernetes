@@ -90,7 +90,9 @@ options, consult the file.
 
 * `ENABLE_CLUSTER_DNS`: Decide if cluster dns addon needs to be created, default to true. DNS addon is essential and should always be true.
 
-* `ENABLE_CLUSTER_LOGGING`: Decide if cluster logging needs to be created, default to true.
+* `ENABLE_CLUSTER_LOGGING`: Decide if cluster logging addon needs to be created, default to true.
+
+* `ENABLE_CLUSTER_UI`: Decide if cluster ui addon needs to be created, default to true.
 
 ## Delete a cluster
 

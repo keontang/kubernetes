@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file. This projec
 - Reorg addon directory (add subdirectory), e.g. cluster/anchnet/addons/dns
 - Remove executor-config.sh and move its configs to config-default.sh
 - Support `ENABLE_CLUSTER_DNS`, `ENABLE_CLUSTER_LOGGING` params
+- Support logging and kube-ui addon
 
 ### Version 0.1.0 [2015-09-12]
 #### Changed

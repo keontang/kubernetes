@@ -439,6 +439,10 @@ function deploy-addons {
   local -r kibana_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/logging/kibana-rc.yaml.in"
   sed -e "s/{{ pillar\['kibana_replicas'\] }}/${KIBANA_REPLICAS}/g" ${kibana_rc_file} > ${KUBE_TEMP}/kibana-rc.yaml
 
+  # Replace placeholder with our configuration for kube-ui rc.
+  local -r kube_ui_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/kube-ui/kube-ui-rc.yaml.in"
+  sed -e "s/{{ pillar\['kube-ui_replicas'\] }}/${KUBE_UI_REPLICAS}/g" ${kube_ui_rc_file} > ${KUBE_TEMP}/kube-ui-rc.yaml
+
   # Copy addon configurationss and startup script to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh \
@@ -447,6 +451,8 @@ function deploy-addons {
       ${KUBE_ROOT}/cluster/anchnet/addons/logging/elasticsearch-svc.yaml \
       ${KUBE_TEMP}/kibana-rc.yaml \
       ${KUBE_ROOT}/cluster/anchnet/addons/logging/kibana-svc.yaml \
+      ${KUBE_TEMP}/kube-ui-rc.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/kube-ui/kube-ui-svc.yaml \
       ${KUBE_TEMP}/skydns-rc.yaml \
       ${KUBE_TEMP}/skydns-svc.yaml \
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
@@ -457,7 +463,7 @@ set timeout -1
 
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "\
-sudo ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} ./kube/addons-start.sh"
+sudo ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} ./kube/addons-start.sh"
 
 expect {
   "*?assword*" {

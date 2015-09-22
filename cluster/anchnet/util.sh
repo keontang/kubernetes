@@ -1579,7 +1579,7 @@ function install-configurations-internal {
       # Create component options. Note in 'create-kubelet-opts', we use
       # ${node_instance_id} as hostname override for each node - see
       # 'pkg/cloudprovider/anchnet/anchnet_instances.go' for how this works.
-      echo "create-kubelet-opts ${node_instance_id} ${node_internal_ip} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
+      echo "create-kubelet-opts ${node_instance_id} ${KUBELET_IP_ADDRESS} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
       echo "create-kube-proxy-opts ${MASTER_INTERNAL_IP}"
       echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_INTERNAL_IP}"
       # Organize files a little bit.

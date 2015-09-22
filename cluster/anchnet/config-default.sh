@@ -79,3 +79,6 @@ SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE:-"kube-system"}
 
 # Optional: Enable setting flags for kube-apiserver to turn on behavior in active-dev
 #RUNTIME_CONFIG=""
+
+# The IP address for the Kubelet to serve on
+KUBELET_IP_ADDRESS=0.0.0.0

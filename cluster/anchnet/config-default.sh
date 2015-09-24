@@ -118,7 +118,7 @@ ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 #   http://dd69bd44.m.daocloud.io -> 729581241@qq.com
 #   http://9482cd22.m.daocloud.io -> dalvikbogus@gmail.com
 #   http://4a682d3b.m.daocloud.io -> 492886102@qq.com
-DAOCLOUD_ACCELERATOR=${DAOCLOUD_ACCELERATOR:-"\
+DAOCLOUD_ACCELERATORS=${DAOCLOUD_ACCELERATORS:-"\
 http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
 http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"}
 
@@ -289,8 +289,8 @@ KUBELET_IP_ADDRESS=0.0.0.0
 # Define the internal IPs for instances in private SDN network.
 INTERNAL_IP_RANGE=10.244.0.0/16
 INTERNAL_IP_MASK=255.255.0.0
-MASTER_INTERNAL_IP=10.244.0.1
-NODE_INTERNAL_IP_RANGE=10.244.1.0/16
+MASTER_IIP=10.244.0.1
+NODE_IIP_RANGE=10.244.1.0/16
 
 # MASTER_INSECURE_* is used to serve insecure connection. It is either
 # localhost, blocked by firewall, or use with nginx, etc. MASTER_SECURE_*

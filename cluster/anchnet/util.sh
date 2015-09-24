@@ -53,13 +53,11 @@ function verify-prereqs {
     exit 1
   fi
   if [[ "$(which kubectl)" == "" ]]; then
-    cd ${KUBE_ROOT}
-    hack/build-go.sh
-    if [[ "$?" != "0" ]]; then
+    anchnet-build-local
+    if [[ "$(which kubectl)" == "" ]]; then
       echo "[`TZ=Asia/Shanghai date`] Can't find kubectl binary in PATH, please fix and retry."
       exit 1
     fi
-    cd -
   fi
   if [[ ! -f "${ANCHNET_CONFIG_FILE}" ]]; then
     echo "[`TZ=Asia/Shanghai date`] Can't find anchnet config file ${ANCHNET_CONFIG_FILE}, please fix and retry."
@@ -69,10 +67,14 @@ function verify-prereqs {
 }
 
 
-# Step2 of cluster bootstrapping: create all machines and provision them.
+# Step2 of cluster bootstrapping: create all resources and provision them.
 function kube-up {
+  # Print all environment and local variables at this point.
   echo "[`TZ=Asia/Shanghai date`] +++++ Running kube-up with variables ..."
   (set -o posix; set)
+
+  # Useful for other functions to condition on the variable, e.g. install configurations.
+  KUBE_UP=true
 
   # Check given kube-up mode is supported.
   if [[ ${KUBE_UP_MODE} != "tarball" && ${KUBE_UP_MODE} != "image" && ${KUBE_UP_MODE} != "dev" ]]; then
@@ -86,25 +88,21 @@ function kube-up {
   # Make sure we have a public/private key pair used to provision instances.
   ensure-pub-key
 
-  # Make sure log directory exists.
-  mkdir -p ${KUBE_INSTANCE_LOGDIR}
-
-  # The following methods generate variables used to provision master and nodes:
-  #   NODE_INTERNAL_IPS - comma separated string of node internal ips
-  create-node-internal-ips
+  # The following method generates node internal IPs, i.e.
+  #   NODE_IIPS - comma separated string of node internal ips
+  create-node-internal-ips-variable
 
   # Build tarball if BUILD_TARBALL=Y; version is based on date/time.
   if [[ "${BUILD_TARBALL}" = "Y" ]]; then
     echo "[`TZ=Asia/Shanghai date`] +++++ Building tarball ..."
-    cd ${KUBE_ROOT}
-    ./hack/caicloud/build-tarball.sh ${FINAL_VERSION}
-    cd -
+    anchnet-build-tarball
   fi
 
-  # For dev, set to existing instance IDs for master and node.
+  # For dev, set to existing instance IDs for master and nodes. Other variables will
+  # be calculated based on the IDs.
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
-    MASTER_INSTANCE_ID="i-IWMPEH39"
-    NODE_INSTANCE_IDS="i-7C2YH52Q,i-AQFEFGJ1,i-05H5EWY1"
+    MASTER_INSTANCE_ID="i-DIZSMD5T"
+    NODE_INSTANCE_IDS="i-PIUYDLJA,i-6MAGSEWG"
     # To mimic actual kubeup process, we create vars to match create-master-instance
     # create-node-instances, and create-sdn-network.
     #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
@@ -124,13 +122,16 @@ function kube-up {
     create-node-instances
     # Create a private SDN; then add master, nodes to it. The IP address of the
     # machines in this network are not set yet, but will be set during provision
-    # based on two variables: MASTER_INTERNAL_IP and NODE_INTERNAL_IPS. This method
+    # based on two variables: MASTER_IIP and NODE_IIPS. This method
     # will create one var:
     #   PRIVATE_SDN_INTERFACE - the interface created on each machine for the sdn network.
     create-sdn-network
     # Create firewall rules for all instances.
     create-firewall
   fi
+
+  # Following functions will write to log directory, make sure it exists.
+  ensure-log-dir
 
   # Create resource variables used for various provisioning functions.
   #   INSTANCE_IDS, INSTANCE_EIPS, INSTANCE_IIPS
@@ -178,59 +179,34 @@ function kube-up {
 
 # Update a kubernetes cluster with latest source.
 function kube-push {
-  #
-  # Find all instances prefixed with CLUSTER_NAME (caicloud convention - every instance
-  # is prefixed with a unique CLUSTER_NAME).
-  #
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
-  local count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
+  # Find all instances and eips.
+  find-instance-and-eip-resouces
+  if [[ "$?" != "0" ]]; then
+    echo "[`TZ=Asia/Shanghai date`] +++++ Unable to find instances ..."
+    exit 1
+  fi
 
-  #
-  # Print instance information and populate MASTER_EIP, NODE_EIPS.
-  #
-  echo "[`TZ=Asia/Shanghai date`] +++++ Searching for all instances ..."
-  for i in `seq 0 $(($count-1))`; do
-    name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-    id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
-    eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
-    echo "[`TZ=Asia/Shanghai date`] Found instances: ${name},${id}"
-    if [[ $name == *"master"* ]]; then
-      MASTER_EIP=${eip}
-      MASTER_INSTANCE_ID=${id}
-    else
-      if [[ -z "${NODE_EIPS-}" ]]; then
-        NODE_EIPS="${eip}"
-        NODE_INSTANCE_IDS="${id}"
-      else
-        NODE_EIPS="${NODE_EIPS},${eip}"
-        NODE_INSTANCE_IDS="${NODE_INSTANCE_IDS},${id}"
-      fi
-    fi
-  done
-
-  IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
-  IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
-  export NUM_MINIONS=${#NODE_EIPS_ARR[@]}
-
-  #
-  # Build server binaries.
-  #
+  # Prepare for restarting cluster. PRIVATE_SDN_INTERFACE is a hack, just like
+  # in kube-up - there is no easy to find which interface serves private SDN.
+  KUBE_INSTANCE_LOGDIR="/tmp/kubepush-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"
+  PRIVATE_SDN_INTERFACE="eth1"
+  KUBE_UP=false
   ensure-temp-dir
-  cd ${KUBE_ROOT}
-  make clean
-  hack/build-go.sh
-  cd -
+  ensure-log-dir
+
+  # Build client and server binaries.
+  make-clean
+  anchnet-build-local
   anchnet-build-server
 
-  #
-  # Push new binaries to master and nodes.
-  #
-  echo "[`TZ=Asia/Shanghai date`] +++++ Pushing binaries to master ..."
+  # Push new binaries to master.
+  echo "[`TZ=Asia/Shanghai date`] +++++ Push binaries to master ..."
   expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
   ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
+  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
   ${INSTANCE_USER}@${MASTER_EIP}:~/kube/master
 expect {
   "*?assword:" {
@@ -241,7 +217,8 @@ expect {
 }
 EOF
 
-  echo "[`TZ=Asia/Shanghai date`] +++++ Pushing binaries to all nodes ..."
+  # Push new binaries to nodes.
+  echo "[`TZ=Asia/Shanghai date`] +++++ Push binaries to nodes ..."
   for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
     local node_eip=${NODE_EIPS_ARR[${i}]}
     expect <<EOF
@@ -260,129 +237,40 @@ expect {
 EOF
   done
 
-  #
-  # Stop running cluster.
-  #
-  echo "[`TZ=Asia/Shanghai date`] +++++ Stop master ..."
-  expect <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "sudo service etcd stop"
-expect {
-  "*assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-
-  echo "[`TZ=Asia/Shanghai date`] +++++ Stop nodes ..."
-  IFS=',' read -ra node_eips_arr <<< "${NODE_EIPS}"
-  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
-    local node_eip=${NODE_EIPS_ARR[${i}]}
-    expect <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_eip} "sudo service flanneld stop"
-expect {
-  "*assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-  done
-
-  #
   # Restart cluster.
-  #
-  KUBE_INSTANCE_LOGDIR="/tmp/kubepush-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"
-  mkdir -p ${KUBE_INSTANCE_LOGDIR}
+  echo "[`TZ=Asia/Shanghai date`] +++++ Restart running cluster ..."
+  stop-cluster
+  install-configurations
   provision-instances
 }
 
 
 # Delete a kubernete cluster from anchnet, using CLUSTER_NAME.
-#
-# Assumed vars:
-#   CLUSTER_NAME
-#   PROJECT_ID
 function kube-down {
   # Find all instances prefixed with CLUSTER_NAME.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
-  count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
-  if [[ "${count}" != "" ]]; then
-    # Print and collect instance information
-    for i in `seq 0 $(($count-1))`; do
-      instance_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
-      instance_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
-      eip_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_id']")
-      echo "[`TZ=Asia/Shanghai date`] Found instances: ${instance_name},${instance_id},${eip_id}"
-      if [[ -z "${ALL_INSTANCES-}" ]]; then
-        ALL_INSTANCES="${instance_id}"
-      else
-        ALL_INSTANCES="${ALL_INSTANCES},${instance_id}"
-      fi
-      if [[ -z "${ALL_EIPS-}" ]]; then
-        ALL_EIPS="${eip_id}"
-      else
-        ALL_EIPS="${ALL_EIPS},${eip_id}"
-      fi
-    done
-    # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${ALL_INSTANCES} --project=${PROJECT_ID}"
+  find-instance-and-eip-resouces
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${INSTANCE_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
-    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${ALL_EIPS} --project=${PROJECT_ID}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} releaseeips ${INSTANCE_EIP_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${EIP_RELEASE_WAIT_RETRY} ${EIP_RELEASE_WAIT_INTERVAL}
   fi
 
   # Find all vxnets prefixed with CLUSTER_NAME.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_NAME} --project=${PROJECT_ID}"
-  count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
-  # We'll also find default one - bug in anchnet.
-  if [[ "${count}" != "" && "${count}" != "1" ]]; then
-    for i in `seq 0 $(($count-1))`; do
-      vxnet_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_name']")
-      vxnet_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_id']")
-      if [[ "${vxnet_id}" = "vxnet-0" ]]; then
-        continue
-      fi
-      echo "[`TZ=Asia/Shanghai date`] Found vxnets: ${vxnet_name},${vxnet_id}"
-      if [[ -z "${ALL_VXNETS-}" ]]; then
-        ALL_VXNETS="${vxnet_id}"
-      else
-        ALL_VXNETS="${ALL_VXNETS},${vxnet_id}"
-      fi
-    done
-
-    # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${ALL_VXNETS} --project=${PROJECT_ID}"
+  find-vxnet-resources
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletevxnets ${VXNET_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_DELETE_WAIT_RETRY} ${VXNET_DELETE_WAIT_INTERVAL}
   fi
 
   # Find all security group prefixed with CLUSTER_NAME.
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_NAME} --project=${PROJECT_ID}"
-  count=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
-  if [[ "${count}" != "" ]]; then
-    for i in `seq 0 $(($count-1))`; do
-      security_group_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_name']")
-      security_group_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_id']")
-      echo "[`TZ=Asia/Shanghai date`] Found security group: ${security_group_name},${security_group_id}"
-      if [[ -z "${ALL_SECURITY_GROUPS-}" ]]; then
-        ALL_SECURITY_GROUPS="${security_group_id}"
-      else
-        ALL_SECURITY_GROUPS="${ALL_SECURITY_GROUPS},${security_group_id}"
-      fi
-    done
-
-    # Executing commands.
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${ALL_SECURITY_GROUPS} --project=${PROJECT_ID}"
+  find-securitygroup-resources
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
   fi
 
-  # TODO: Find all loadbalancers.
+  # TODO: Find all loadbalancers. For now, Loadbalancer is not prefixed with CLUSTER_NAME.
 }
 
 
@@ -390,6 +278,7 @@ function kube-down {
 #
 # Assumed vars:
 #   MASTER_NAME
+#   PROJECT_ID
 #
 # Vars set:
 #   KUBE_MASTER
@@ -399,7 +288,7 @@ function detect-master {
   while true; do
     echo "[`TZ=Asia/Shanghai date`] Attempt $(($attempt+1)) to detect kube master"
     echo "[`TZ=Asia/Shanghai date`] $MASTER_NAME"
-    local eip=$(${ANCHNET_CMD} searchinstance $MASTER_NAME --project=${PROJECT_ID} | json_val '["item_set"][0]["eip"]["eip_addr"]')
+    local eip=$(${ANCHNET_CMD} searchinstance ${MASTER_NAME} --project=${PROJECT_ID} | json_val '["item_set"][0]["eip"]["eip_addr"]')
     if [[ "${?}" != "0" || ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
       if (( attempt > 20 )); then
         echo
@@ -514,23 +403,200 @@ function create-dev-variables {
   done
   export NUM_MINIONS=${#node_instance_ids_arr[@]}
   PRIVATE_SDN_INTERFACE="eth1"
-  # Recreate NODE_INTERNAL_IPS since we've chnaged NUM_MINIONS.
-  unset NODE_INTERNAL_IPS
-  create-node-internal-ips
+  # Recreate NODE_IIPS since we've chnaged NUM_MINIONS.
+  unset NODE_IIPS
+  create-node-internal-ips-variable
 }
 
 
-# Create resource variables for followup functions.
+# Stop cluster stops a running cluster.
+function stop-cluster {
+  echo "[`TZ=Asia/Shanghai date`] +++++ Stop master ..."
+  expect <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${MASTER_EIP} "sudo service etcd stop"
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+
+  echo "[`TZ=Asia/Shanghai date`] +++++ Stop nodes ..."
+  IFS=',' read -ra node_eips_arr <<< "${NODE_EIPS}"
+  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
+    local node_eip=${NODE_EIPS_ARR[${i}]}
+    expect <<EOF
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${INSTANCE_USER}@${node_eip} "sudo service flanneld stop"
+expect {
+  "*assword*" {
+    send -- "${KUBE_INSTANCE_PASSWORD}\r"
+    exp_continue
+  }
+  eof {}
+}
+EOF
+  done
+}
+
+
+# Find instances and eips in anchnet via CLUSTER_NAME and PROJECT_ID. Return 1 if
+# no resource is found. By convention, every instance is prefixed with CLUSTER_NAME.
+#
+# Assumed vars:
+#   CLUSTER_NAME
+#   PROJECT_ID
+#
+# Vars set:
+#   MASTER_INSTANCE_ID
+#   MASTER_EIP
+#   MASTER_EIP_ID
+#   NODE_INSTANCE_IDS
+#   NODE_EIPS
+#   NODE_EIP_IDS
+#   NUM_MINIONS
+#   INSTANCE_IDS
+#   INSTANCE_EIPS
+#   INSTANCE_EIP_IDS
+#   TOTAL_COUNT
+function find-instance-and-eip-resouces {
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
+  if [[ "${TOTAL_COUNT}" = "" ]]; then
+    return 1
+  fi
+  # Print and collect instance information.
+  for i in `seq 0 $(($TOTAL_COUNT-1))`; do
+    instance_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
+    instance_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
+    eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
+    eip_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_id']")
+    echo "[`TZ=Asia/Shanghai date`] Found instances: ${instance_name},${instance_id},${eip_id},${eip}"
+    if [[ ${instance_name} == *"master"* ]]; then
+      MASTER_EIP=${eip}
+      MASTER_EIP_ID=${eip_id}
+      MASTER_INSTANCE_ID=${instance_id}
+    else
+      if [[ -z "${NODE_EIPS-}" ]]; then
+        NODE_EIPS="${eip}"
+        NODE_EIP_IDS="${eip_id}"
+        NODE_INSTANCE_IDS="${instance_id}"
+      else
+        NODE_EIPS="${NODE_EIPS},${eip}"
+        NODE_EIP_IDS="${NODE_EIP_IDS},${eip_id}"
+        NODE_INSTANCE_IDS="${NODE_INSTANCE_IDS},${instance_id}"
+      fi
+    fi
+  done
+  INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
+  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
+  INSTANCE_EIP_IDS="${MASTER_EIP_ID},${NODE_EIP_IDS}"
+  IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
+  IFS=',' read -ra NODE_EIP_IDS_ARR <<< "${NODE_EIP_IDS}"
+  IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
+  export NUM_MINIONS=${#NODE_EIPS_ARR[@]}
+}
+
+
+# Find vxnets in anchnet via CLUSTER_NAME and PROJECT_ID. Return 1 if no resource is found.
+# By convention, every vxnet name is prefixed with CLUSTER_NAME.
+#
+# Assumed vars:
+#   CLUSTER_NAME
+#   PROJECT_ID
+#
+# Vars set:
+#   VXNET_IDS
+#   TOTAL_COUNT
+function find-vxnet-resources {
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
+  if [[ "${TOTAL_COUNT}" = "" ]]; then
+    return 1
+  fi
+  for i in `seq 0 $(($TOTAL_COUNT-1))`; do
+    vxnet_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_id']")
+    if [[ "${vxnet_id}" = "vxnet-0" ]]; then
+      continue
+    fi
+    vxnet_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_name']")
+    echo "[`TZ=Asia/Shanghai date`] Found vxnets: ${vxnet_name},${vxnet_id}"
+    if [[ -z "${ALL_VXNETS-}" ]]; then
+      VXNET_IDS="${vxnet_id}"
+    else
+      VXNET_IDS="${VXNET_IDS},${vxnet_id}"
+    fi
+  done
+}
+
+
+# Find security group in anchnet via CLUSTER_NAME and PROJECT_ID. Return 1 if no resource is
+# found. By convention, every security group name is prefixed with CLUSTER_NAME.
+#
+# Assumed vars:
+#   CLUSTER_NAME
+#   PROJECT_ID
+#
+# Vars set:
+#   SECURITY_GROUP_IDS
+#   TOTAL_COUNT
+function find-securitygroup-resources {
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
+  if [[ "${TOTAL_COUNT}" == "" ]]; then
+    return 1
+  fi
+  for i in `seq 0 $(($TOTAL_COUNT-1))`; do
+    security_group_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_name']")
+    security_group_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['security_group_id']")
+    echo "[`TZ=Asia/Shanghai date`] Found security group: ${security_group_name},${security_group_id}"
+    if [[ -z "${SECURITY_GROUP_IDS-}" ]]; then
+      SECURITY_GROUP_IDS="${security_group_id}"
+    else
+      SECURITY_GROUP_IDS="${SECURITY_GROUP_IDS},${security_group_id}"
+    fi
+  done
+}
+
+
+# Create resource variables for follow-up functions. This is called when master
+# and nodes have started, and their IDs and EIPs have been recorded. The function
+# will make two kinds of vars: 1. concatenate master and node vars; 2. create
+# array for comma separated string.
+#
+# Assumed vars:
+#   MASTER_INSTANCE_ID
+#   MASTER_EIP
+#   MASTER_IIP
+#   NODE_INSTANCE_IDS
+#   NODE_EIPS
+#   NODE_IIPS
+#
+# Vars set:
+#   INSTANCE_IDS
+#   INSTANCE_EIPS
+#   INSTANCE_IIPS
+#   INSTANCE_IDS_ARR
+#   INSTANCE_EIPS_ARR
+#   INSTANCE_IIPS_ARR
+#   NODE_INSTANCE_IDS_ARR
+#   NODE_EIPS_ARR
+#   NODE_IIPS_ARR
 function create-resource-variables {
   INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
   INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
-  INSTANCE_IIPS="${MASTER_INTERNAL_IP},${NODE_INTERNAL_IPS}"
+  INSTANCE_IIPS="${MASTER_IIP},${NODE_IIPS}"
   IFS=',' read -ra INSTANCE_IDS_ARR <<< "${INSTANCE_IDS}"
   IFS=',' read -ra INSTANCE_EIPS_ARR <<< "${INSTANCE_EIPS}"
   IFS=',' read -ra INSTANCE_IIPS_ARR <<< "${INSTANCE_IIPS}"
   IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
   IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
-  IFS=',' read -ra NODE_IIPS_ARR <<< "${NODE_INTERNAL_IPS}"
+  IFS=',' read -ra NODE_IIPS_ARR <<< "${NODE_IIPS}"
 }
 
 
@@ -553,18 +619,8 @@ function prompt-instance-password {
 # Create ~/.ssh/id_rsa.pub if it doesn't exist.
 function ensure-pub-key {
   if [[ ! -f $HOME/.ssh/id_rsa.pub ]]; then
-    echo "[`TZ=Asia/Shanghai date`] +++++++++ Create public key ..."
-    expect <<EOF
-spawn ssh-keygen -t rsa -b 4096
-expect "*rsa key*"
-expect "*file in which to save the key*"
-send -- "\r"
-expect "*assphrase*"
-send -- "\r"
-expect "*assphrase*"
-send -- "\r"
-expect eof
-EOF
+    echo "[`TZ=Asia/Shanghai date`] +++++++++ Create public/private key pair in ~/.ssh/id_rsa ..."
+    ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
   fi
 }
 
@@ -595,6 +651,17 @@ function ensure-temp-dir {
   if [[ -z ${KUBE_TEMP-} ]]; then
     KUBE_TEMP=$(mktemp -d -t kubernetes.XXXXXX)
     trap 'rm -rf "${KUBE_TEMP}"' EXIT
+  fi
+}
+
+
+# Make sure log directory exists.
+#
+# Assumed vars
+#   KUBE_INSTANCE_LOGDIR
+function ensure-log-dir {
+  if [[ ! -z ${KUBE_INSTANCE_LOGDIR-} ]]; then
+    mkdir -p ${KUBE_INSTANCE_LOGDIR}
   fi
 }
 
@@ -670,31 +737,47 @@ with open("'$1'", "w") as f:
 }
 
 
-# Create an anchnet project if PROJECT_ID is not specified and report it back
-# to executor. Note that we do not create user project if neither PROJECT_ID
-# nor KUBE_USER is specified. Also KUBE_USER at this point has not yet been set
-# to "admin" (in function get-password), so it's safe to check if it's empty.
+# Create an anchnet project if PROJECT_ID is not specified, and report it back
+# to executor. Note that we do not create anchnet project if neither PROJECT_ID
+# nor KUBE_USER is specified, this is primarily used for development.
+#
+# Important: At this point, KUBE_USER must not be set (set to "admin" in function
+# get-password); otherwise, create-project will create a project for admin, which
+# is not what we want for development. In production, we'll always set KUBE_USER.
+#
+# Assumed vars:
+#   INITIAL_DEPOSIT
 #
 # Vars set:
 #   PROJECT_ID
 function create-project {
-  if [[ -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
+  if [[ ! -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
+    # If both PROJECT_ID and KUBE_USER are given, make sure the project actually
+    # belongs to the user.
+    anchnet-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
+    PROJECT_NAME=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_name']")
+    if [[ "${PROJECT_NAME}" != "${KUBE_USER}" ]]; then
+      echo "[`TZ=Asia/Shanghai date`] +++++ project_id ${PROJECT_ID} doesn't belong to user ${KUBE_USER} ..."
+      kube-up-complete N
+      exit 1
+    fi
+  elif [[ -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
     # First try to match if there's any sub account created before.
     anchnet-exec-and-retry "${ANCHNET_CMD} searchuserproject ${KUBE_USER}"
     PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_id']")
-    # If PROJECT_ID is still empty, then create sub account
+    # If PROJECT_ID is still empty, then create sub account.
     if [[ -z "${PROJECT_ID-}" ]]; then
       echo "[`TZ=Asia/Shanghai date`] +++++ Create new anchnet sub account for ${KUBE_USER} ..."
       anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
       anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
       PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
-      # Get the userId of the sub account. Note the userId here is used internally by
-      # anchnet which will be used in tranferring money.
+      # Get the userId of the sub account. Note the userId here is used internally
+      # by anchnet which will be used in tranferring money.
       anchnet-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
       SUB_ACCOUNT_UID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['userid']")
       # Transfer money from main account to sub-account. We need at least $INITIAL_DEPOSIT
       # to create resources in sub-account.
-      echo "[`TZ=Asia/Shanghai date`] +++++ Transferring balance to sub account ..."
+      echo "[`TZ=Asia/Shanghai date`] +++++ Transfer balance to sub account ..."
       anchnet-exec-and-retry "${ANCHNET_CMD} transfer ${SUB_ACCOUNT_UID} ${INITIAL_DEPOSIT}"
       report-project-id ${PROJECT_ID}
     else
@@ -938,20 +1021,24 @@ EOF
 
 # Wrapper of setup-sdn-network-internal
 function setup-sdn-network {
-  # Use multiple retries since seting up sdn network is essentially for followup installations,
+  # Use multiple retries since seting up sdn network is essential for follow-up installations,
   # and we ses occational errors:
   # https://github.com/caicloud/caicloud-kubernetes/issues/175
   command-exec-and-retry "setup-sdn-network-internal" 5 "false"
 }
 
 
-# Setup private SDN network.
+# Setup private SDN network. This will assign internal IP address to all
+# instances.
 #
 # Assumed vars:
-#   MASTER_INTERNAL_IP
-#   NODE_INTERNAL_IPS
-#   MASTER_EIP
-#   NODE_EIPS
+#   KUBE_TEMP
+#   INSTANCE_IIPS_ARR
+#   INSTANCE_EIPS_ARR
+#   INSTANCE_IDS_ARR
+#   PRIVATE_SDN_INTERFACE
+#   INTERNAL_IP_MASK
+#   KUBE_INSTANCE_LOGDIR
 function setup-sdn-network-internal {
   # Setup SDN networks for all instances.
   for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
@@ -1102,22 +1189,22 @@ function ensure-firewall {
 
 
 # Create a comma separated string of node internal ips based on the cluster
-# config NODE_INTERNAL_IP_RANGE and NUM_MINIONS. E.g. if NODE_INTERNAL_IP_RANGE
+# config NODE_IIP_RANGE and NUM_MINIONS. E.g. if NODE_IIP_RANGE
 # is 10.244.1.0/16 and NUM_MINIONS is 2, then output: "10.244.1.0,10.244.1.1".
 #
 # Assumed vars:
-#   NODE_INTERNAL_IP_RANGE
+#   NODE_IIP_RANGE
 #   NUM_MINIONS
 #
 # Vars set:
-#   NODE_INTERNAL_IPS
-function create-node-internal-ips {
-  # Transform NODE_INTERNAL_IP_RANGE into different info, e.g. 10.244.1.0/16 =>
+#   NODE_IIPS
+function create-node-internal-ips-variable {
+  # Transform NODE_IIP_RANGE into different info, e.g. 10.244.1.0/16 =>
   #   cidr = 16
   #   ip_octects = 10 244 1 0
   #   mask_octects = 255 255 0 0
-  cidr=($(echo "$NODE_INTERNAL_IP_RANGE" | sed -e 's|.*/||'))
-  ip_octects=($(echo "$NODE_INTERNAL_IP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
+  cidr=($(echo "$NODE_IIP_RANGE" | sed -e 's|.*/||'))
+  ip_octects=($(echo "$NODE_IIP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
   mask_octects=($(cdr2mask ${cidr} | sed -e 's/\./ /g'))
 
   # Total Number of hosts in this subnet. e.g. 10.244.1.0/16 => 65535. This number
@@ -1161,10 +1248,10 @@ function create-node-internal-ips {
       ((ip_octects[3]+=1))
     fi
     local ip=$(echo "${ip_octects[*]}" | sed 's/ /./g')
-    if [[ -z "${NODE_INTERNAL_IPS-}" ]]; then
-      NODE_INTERNAL_IPS="${ip}"
+    if [[ -z "${NODE_IIPS-}" ]]; then
+      NODE_IIPS="${ip}"
     else
-      NODE_INTERNAL_IPS="${NODE_INTERNAL_IPS},${ip}"
+      NODE_IIPS="${NODE_IIPS},${ip}"
     fi
     ((ip_octects[3]+=1))
     for (( k = 3; k > 0; k--)); do
@@ -1216,16 +1303,23 @@ function install-tarball-binaries {
 
 
 # Fetch tarball and install binaries to master and nodes, used in tarball mode.
+# After installation, each node will have binaires in ~/kube/master and ~/kube/node.
 #
 # Assumed vars:
 #   INSTANCE_USER
-#   MASTER_EIP
 #   KUBE_INSTANCE_PASSWORD
+#   KUBE_INSTANCE_LOGDIR
+#   CAICLOUD_TARBALL_URL
+#   MASTER_EIP
 #   MASTER_INSTANCE_ID
+#   NUM_MINIONS
+#   NODE_IIPS_ARR
+#   NODE_INSTANCE_IDS_ADDR
 function install-tarball-binaries-internal {
   local pids=""
   local fail=0
-  echo "[`TZ=Asia/Shanghai date`] +++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}. \
+Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
   # Fetch tarball for master node.
   expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID}
@@ -1328,7 +1422,7 @@ EOF
 
 # Wrapper of install-packages-internal.
 function install-packages {
-  APT_MIRROR_INDEX=0
+  APT_MIRROR_INDEX=0            # Used for choosing an apt mirror.
   command-exec-and-retry "install-packages-internal" 2 "false"
 }
 
@@ -1339,8 +1433,12 @@ function install-packages {
 #
 # Assumed vars:
 #   APT_MIRRORS
-#   MASTER_EIP
-#   NODE_IPS
+#   INSTANCE_USER
+#   KUBE_INSTANCE_PASSWORD
+#   KUBE_INSTANCE_LOGDIR
+#   NUM_MINIONS
+#   INSTANCE_EIPS_ARR
+#   INSTANCE_IDS_ARR
 function install-packages-internal {
   local pids=""
   echo "[`TZ=Asia/Shanghai date`] +++++ Start installing packages. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
@@ -1425,21 +1523,33 @@ function provision-instances {
 # Configure master/nodes and start them concurrently.
 #
 # Assumed vars:
+#   INSTANCE_USER
 #   KUBE_INSTANCE_PASSWORD
+#   KUBE_INSTANCE_LOGDIR
 #   NUM_MINIONS
 #   MASTER_EIP
 #   MASTER_INSTANCE_ID
 #   NODE_EIPS_ARR
 #   NODE_INSTANCE_IDS_ADDR
-#   KUBE_INSTANCE_LOGDIR
 function provision-instances-internal {
   local pids=""
-  echo "[`TZ=Asia/Shanghai date`] +++++ Start provisioning master and nodes. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start provisioning master and nodes. \
+Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+
+  # Decide which script to run.
+  if [[ "${KUBE_UP}" == "true" ]]; then
+    MASTER_SCRIPT="master-start.sh"
+    NODE_SCRIPT="node-start.sh"
+  else
+    MASTER_SCRIPT="master-upgrade.sh"
+    NODE_SCRIPT="node-upgrade.sh"
+  fi
+
   # Call master-start.sh to start master.
   expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID} &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/master-start.sh || \
+  ${INSTANCE_USER}@${MASTER_EIP} "sudo ~/kube/${MASTER_SCRIPT} || \
 echo 'Command failed provisioning master'"
 
 expect {
@@ -1465,7 +1575,7 @@ EOF
     expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${node_instance_id} &
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_eip} "sudo ./kube/node-start.sh || \
+  ${INSTANCE_USER}@${node_eip} "sudo ~/kube/${NODE_SCRIPT} || \
 echo 'Command failed provisioning node $node_eip'"
 
 expect {
@@ -1505,29 +1615,114 @@ function install-configurations {
 # The method assumes instances are running. It does the following things:
 # 1. Copies master component configurations to working directory (~/kube).
 # 2. Create a master-start.sh file which applies the configs, setup network, and
-#   starts k8s master.
+#    starts k8s master.
 # 3. Copies node component configurations to working directory (~/kube).
 # 4. Create a node-start.sh file which applies the configs, setup network, and
-#   starts k8s node.
+#    starts k8s node.
 #
 # Assumed vars:
-#   KUBE_ROOT
-#   KUBE_TEMP
-#   MASTER_EIP
-#   MASTER_INTERNAL_IP
 #   MASTER_INSTANCE_ID
-#   NODE_EIPS
-#   NODE_INTERNAL_IPS
-#   SERVICE_CLUSTER_IP_RANGE
-#   PRIVATE_SDN_INTERFACE
-#   DNS_SERVER_IP
-#   DNS_DOMAIN
-#   POD_INFRA_CONTAINER
+#   NODE_INSTANCE_IDS_ARR
+#   ANCHNET_CONFIG_FILE
+#   DAOCLOUD_ACCELERATORS
+#   KUBE_INSTANCE_LOGDIR
+#   KUBE_UP
 function install-configurations-internal {
   local pids=""
-  echo "[`TZ=Asia/Shanghai date`] +++++ Start installing master and node configurations. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start installing master and node configurations. \
+Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
 
-  # Create master startup script.
+  # Add a project field in anchnet config file which will be used by k8s cloudprovider.
+  cp ${ANCHNET_CONFIG_FILE} ${KUBE_TEMP}/anchnet-config
+  json_add_field ${KUBE_TEMP}/anchnet-config "projectid" "${PROJECT_ID}"
+
+  # Randomly choose one daocloud accelerator.
+  IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATORS}"
+  REG_MIRROR=${reg_mirror_arr[$(( ${RANDOM} % ${#reg_mirror_arr[*]} ))]}
+  echo "[`TZ=Asia/Shanghai date`] Use daocloud registry mirror ${REG_MIRROR}"
+
+  # Create a master start-up or upgrade script, and copy configs to master under ~/kube.
+  if [[ "${KUBE_UP}" == "true" ]]; then
+    create-master-start-script "${KUBE_TEMP}/master-start.sh"
+    scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+        ${KUBE_ROOT}/cluster/anchnet/master/* \
+        ${KUBE_TEMP}/master-start.sh \
+        ${KUBE_TEMP}/known-tokens.csv \
+        ${KUBE_TEMP}/basic-auth.csv \
+        ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
+        ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
+        ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
+        ${KUBE_TEMP}/anchnet-config \
+        "${INSTANCE_USER}@${MASTER_EIP}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID} &
+    pids="$pids $!"
+  else
+    create-master-upgrade-script "${KUBE_TEMP}/master-upgrade.sh"
+    scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+        ${KUBE_ROOT}/cluster/anchnet/master/* \
+        ${KUBE_TEMP}/master-upgrade.sh \
+        "${INSTANCE_USER}@${MASTER_EIP}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID} &
+    pids="$pids $!"
+  fi
+
+  # Create a node start-up or upgrade script, and copy configs to node under ~/kube.
+  for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
+    local index=$(($i-1))
+    local node_eip=${NODE_EIPS_ARR[${index}]}
+    local node_instance_id=${NODE_INSTANCE_IDS_ARR[${index}]}
+    mkdir -p "${KUBE_TEMP}/node${i}"
+    if [[ "${KUBE_UP}" == "true" ]]; then
+      create-node-start-script "${KUBE_TEMP}/node${i}/node-start.sh" "${node_instance_id}"
+      scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+          ${KUBE_ROOT}/cluster/anchnet/node/* \
+          ${KUBE_ROOT}/cluster/anchnet/manifest/fluentd-es.yaml \
+          ${KUBE_TEMP}/node${i}/node-start.sh \
+          ${KUBE_TEMP}/kubelet-kubeconfig \
+          ${KUBE_TEMP}/kube-proxy-kubeconfig \
+          ${KUBE_TEMP}/anchnet-config \
+          "${INSTANCE_USER}@${node_eip}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${node_instance_id} &
+      pids="$pids $!"
+    else
+      create-node-upgrade-script "${KUBE_TEMP}/node${i}/node-upgrade.sh" "${node_instance_id}"
+      scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+          ${KUBE_ROOT}/cluster/anchnet/node/* \
+          ${KUBE_ROOT}/cluster/anchnet/manifest/fluentd-es.yaml \
+          ${KUBE_TEMP}/node${i}/node-upgrade.sh \
+          "${INSTANCE_USER}@${node_eip}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${node_instance_id} &
+      pids="$pids $!"
+    fi
+  done
+
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for all configurations to be installed ... "
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
+    return 0
+  else
+    echo -e "${color_red}Failed${color_norm}"
+    return 1
+  fi
+}
+
+
+# Create a master start script used to start a fresh master.
+#
+# Input:
+#   $1 File to store the script.
+#
+# Assumed vars:
+#   ADMISSION_CONTROL
+#   CLUSTER_NAME
+#   FLANNEL_NET
+#   MASTER_INSTANCE_ID
+#   NODE_IIPS_ARR
+#   NODE_INSTANCE_IDS_ARR
+#   NUM_MINIONS
+#   PRIVATE_SDN_INTERFACE
+#   SERVICE_CLUSTER_IP_RANGE
+function create-master-start-script {
   (
     echo "#!/bin/bash"
     echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security"
@@ -1547,7 +1742,8 @@ function install-configurations-internal {
     echo "create-kube-scheduler-opts"
     echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} 127.0.0.1"
     # The following lines organize file structure a little bit. To make it
-    # pleasant when running the script multiple times, we ignore errors.
+    # pleasant when running the script multiple times, we ignore errors;
+    # otherwise, we'll see file not exist error.
     echo "mv ~/kube/known-tokens.csv ~/kube/basic-auth.csv ~/kube/security 1>/dev/null 2>&1"
     echo "mv ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key ~/kube/security 1>/dev/null 2>&1"
     echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
@@ -1571,106 +1767,137 @@ function install-configurations-internal {
     echo "sudo service etcd start"
     # After starting etcd, configure flannel options.
     echo "config-etcd-flanneld ${FLANNEL_NET}"
-  ) > "${KUBE_TEMP}/master-start.sh"
-  chmod a+x ${KUBE_TEMP}/master-start.sh
+  ) > "$1"
+  chmod a+x "$1"
+}
 
-  # Add a project field in anchnet config file which will be used by k8s cloudprovider
-  cp ${ANCHNET_CONFIG_FILE} ${KUBE_TEMP}/anchnet-config
-  json_add_field ${KUBE_TEMP}/anchnet-config "projectid" "${PROJECT_ID}"
 
-  # Copy master component configs and startup scripts to master instance under ~/kube.
-  scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-      ${KUBE_ROOT}/cluster/anchnet/master/* \
-      ${KUBE_TEMP}/master-start.sh \
-      ${KUBE_TEMP}/known-tokens.csv \
-      ${KUBE_TEMP}/basic-auth.csv \
-      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
-      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
-      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
-      ${KUBE_TEMP}/anchnet-config \
-      "${INSTANCE_USER}@${MASTER_EIP}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${MASTER_INSTANCE_ID} &
-  pids="$pids $!"
+# Create a node start script used to start a fresh node.
+#
+# Input:
+#   $1 File to store the script.
+#   $2 Instance id of the node.
+#   $3 Daocloud mirror for the node.
+#
+# Assumed vars:
+#   DNS_DOMAIN
+#   DNS_SERVER_IP
+#   KUBELET_IP_ADDRESS
+#   MASTER_IIP
+#   PRIVATE_SDN_INTERFACE
+#   POD_INFRA_CONTAINER
+#   REG_MIRROR
+function create-node-start-script {
+  # Create node startup script. Note we assume the base image has necessary
+  # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
+  # master startup script.
+  (
+    echo "#!/bin/bash"
+    echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security ~/kube/manifest"
+    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
+    echo ""
+    echo "config-hostname ${2}"
+    # Create component options. Note in 'create-kubelet-opts', we use node
+    # instance id as hostname override for each node - see 'pkg/cloudprovider/anchnet/anchnet_instances.go'
+    # for how this works.
+    echo "create-kubelet-opts ${2} ${KUBELET_IP_ADDRESS} ${MASTER_IIP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
+    echo "create-kube-proxy-opts ${MASTER_IIP}"
+    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_IIP}"
+    # Organize files a little bit.
+    echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/null 2>&1"
+    echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
+    echo "mv ~/kube/fluentd-es.yaml ~/kube/manifest/fluentd-es.yaml 1>/dev/null 2>&1"
+    # Create the system directories used to hold the final data.
+    echo "sudo mkdir -p /opt/bin"
+    echo "sudo mkdir -p /etc/kubernetes"
+    echo "sudo mkdir -p /etc/kubernetes/manifest"
+    # Since we might retry on error, we need to stop services. If no service
+    # is running, this is just no-op.
+    echo "sudo service flanneld stop"
+    # Copy binaries and configurations to system directories.
+    echo "sudo cp ~/kube/node/* /opt/bin"
+    echo "sudo cp ~/kube/default/* /etc/default"
+    echo "sudo cp ~/kube/init_conf/* /etc/init/"
+    echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
+    echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
+    echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
+    echo "sudo cp ~/kube/manifest/fluentd-es.yaml /etc/kubernetes/manifest"
+    # Finally, start kubernetes cluster. Upstart will make sure all components
+    # start upon flannel start.
+    echo "sudo service flanneld start"
+    # After starting flannel, configure docker network to use flannel overlay.
+    echo "restart-docker ${REG_MIRROR}"
+  ) > "$1"
+  chmod a+x "$1"
+}
 
-  # Randomly choose one daocloud accelerator.
-  IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATOR}"
-  reg_mirror=${reg_mirror_arr[$(( ${RANDOM} % ${#reg_mirror_arr[*]} ))]}
-  echo "[`TZ=Asia/Shanghai date`] Use daocloud registry mirror ${reg_mirror}"
 
-  # Start installing nodes.
-  for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
-    index=$(($i-1))
-    local node_internal_ip=${NODE_IIPS_ARR[${index}]}
-    local node_eip=${NODE_EIPS_ARR[${index}]}
-    local node_instance_id=${NODE_INSTANCE_IDS_ARR[${index}]}
-    # Create node startup script. Note we assume the base image has necessary
-    # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
-    # master startup script.
-    mkdir -p ${KUBE_TEMP}/node${i}
-    (
-      echo "#!/bin/bash"
-      echo "mkdir -p ~/kube/default ~/kube/network ~/kube/security ~/kube/manifest"
-      grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-      grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
-      echo ""
-      echo "config-hostname ${node_instance_id}"
-      # Create component options. Note in 'create-kubelet-opts', we use
-      # ${node_instance_id} as hostname override for each node - see
-      # 'pkg/cloudprovider/anchnet/anchnet_instances.go' for how this works.
-      echo "create-kubelet-opts ${node_instance_id} ${KUBELET_IP_ADDRESS} ${MASTER_INTERNAL_IP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
-      echo "create-kube-proxy-opts ${MASTER_INTERNAL_IP}"
-      echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_INTERNAL_IP}"
-      # Organize files a little bit.
-      echo "mv ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig ~/kube/security 1>/dev/null 2>&1"
-      echo "mv ~/kube/anchnet-config ~/kube/security/anchnet-config 1>/dev/null 2>&1"
-      echo "mv ~/kube/fluentd-es.yaml ~/kube/manifest/fluentd-es.yaml 1>/dev/null 2>&1"
-      # Create the system directories used to hold the final data.
-      echo "sudo mkdir -p /opt/bin"
-      echo "sudo mkdir -p /etc/kubernetes"
-      echo "sudo mkdir -p /etc/kubernetes/manifest"
-      # Since we might retry on error, we need to stop services. If no service
-      # is running, this is just no-op.
-      echo "sudo service flanneld stop"
-      # Copy binaries and configurations to system directories.
-      echo "sudo cp ~/kube/node/* /opt/bin"
-      echo "sudo cp ~/kube/default/* /etc/default"
-      echo "sudo cp ~/kube/init_conf/* /etc/init/"
-      echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-      echo "sudo cp ~/kube/security/kubelet-kubeconfig ~/kube/security/kube-proxy-kubeconfig /etc/kubernetes"
-      echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
-      echo "sudo cp ~/kube/manifest/fluentd-es.yaml /etc/kubernetes/manifest"
-      # Finally, start kubernetes cluster. Upstart will make sure all components start
-      # upon flannel start.
-      echo "sudo service flanneld start"
-      # After starting flannel, configure docker network to use flannel overlay.
-      echo "restart-docker ${reg_mirror}"
-    ) > "${KUBE_TEMP}/node${i}/node-start.sh"
-    chmod a+x ${KUBE_TEMP}/node${i}/node-start.sh
+# Create a master upgrade script used to upgrade an existing master.
+#
+# Input:
+#   $1 File to store the script.
+#
+# Assumed vars:
+#   ADMISSION_CONTROL
+#   CLUSTER_NAME
+#   FLANNEL_NET
+#   PRIVATE_SDN_INTERFACE
+#   SERVICE_CLUSTER_IP_RANGE
+function create-master-upgrade-script {
+  (
+    echo "#!/bin/bash"
+    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
+    echo ""
+    echo "create-etcd-opts kubernetes-master"
+    echo "create-kube-apiserver-opts ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${CLUSTER_NAME}"
+    echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
+    echo "create-kube-scheduler-opts"
+    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} 127.0.0.1"
+    echo "sudo service etcd stop"
+    echo "sudo cp ~/kube/master/* /opt/bin"
+    echo "sudo cp ~/kube/default/* /etc/default"
+    echo "sudo cp ~/kube/init_conf/* /etc/init/"
+    echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
+    echo "sudo service etcd start"
+  ) > "$1"
+  chmod a+x "$1"
+}
 
-    # Copy node component configurations and startup script to node instance. The
-    # base image we use have the binaries in place.
-    scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-        ${KUBE_ROOT}/cluster/anchnet/node/* \
-        ${KUBE_ROOT}/cluster/anchnet/manifest/fluentd-es.yaml \
-        ${KUBE_TEMP}/node${i}/node-start.sh \
-        ${KUBE_TEMP}/kubelet-kubeconfig \
-        ${KUBE_TEMP}/kube-proxy-kubeconfig \
-        ${KUBE_TEMP}/anchnet-config \
-        "${INSTANCE_USER}@${node_eip}":~/kube >> ${KUBE_INSTANCE_LOGDIR}/${node_instance_id} &
-    pids="$pids $!"
-  done
 
-  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for all configurations to be installed ... "
-  local fail=0
-  for pid in ${pids}; do
-    wait $pid || let "fail+=1"
-  done
-  if [[ "$fail" == "0" ]]; then
-    echo -e "${color_green}Done${color_norm}"
-    return 0
-  else
-    echo -e "${color_red}Failed${color_norm}"
-    return 1
-  fi
+# Create a node upgrade script used to upgrade an existing node.
+#
+# Input:
+#   $1 File to store the script.
+#   $2 Instance id of the node.
+#
+# Assumed vars:
+#   DNS_DOMAIN
+#   DNS_SERVER_IP
+#   KUBELET_IP_ADDRESS
+#   MASTER_IIP
+#   PRIVATE_SDN_INTERFACE
+#   POD_INFRA_CONTAINER
+function create-node-upgrade-script {
+  (
+    echo "#!/bin/bash"
+    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
+    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
+    echo ""
+    echo "create-kubelet-opts ${2} ${KUBELET_IP_ADDRESS} ${MASTER_IIP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
+    echo "create-kube-proxy-opts ${MASTER_IIP}"
+    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_IIP}"
+    echo "sudo service flanneld stop"
+    echo "mv ~/kube/fluentd-es.yaml ~/kube/manifest/fluentd-es.yaml 1>/dev/null 2>&1"
+    echo "sudo cp ~/kube/node/* /opt/bin"
+    echo "sudo cp ~/kube/default/* /etc/default"
+    echo "sudo cp ~/kube/init_conf/* /etc/init/"
+    echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
+    echo "sudo cp ~/kube/manifest/fluentd-es.yaml /etc/kubernetes/manifest"
+    echo "sudo service flanneld start"
+  ) > "$1"
+  chmod a+x "$1"
 }
 
 
@@ -1735,7 +1962,7 @@ function create-certs-and-credentials {
   local octects=($(echo "$SERVICE_CLUSTER_IP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
   ((octects[3]+=1))
   local service_ip=$(echo "${octects[*]}" | sed 's/ /./g')
-  local sans="IP:${MASTER_EIP},IP:${MASTER_INTERNAL_IP},IP:${service_ip}"
+  local sans="IP:${MASTER_EIP},IP:${MASTER_IIP},IP:${service_ip}"
   sans="${sans},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc"
   sans="${sans},DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME},DNS:master"
 
@@ -2003,13 +2230,11 @@ function anchnet-build-release {
   if [[ `uname` == "Darwin" ]]; then
     boot2docker start
   fi
-  (
-    cd ${KUBE_ROOT}
-    hack/caicloud/k8s-replace.sh
-    trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
-    build/release.sh
-    cd -
-  )
+  cd ${KUBE_ROOT}
+  hack/caicloud/k8s-replace.sh
+  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  build/release.sh
+  cd -
 }
 
 
@@ -2018,13 +2243,38 @@ function anchnet-build-server {
   if [[ `uname` == "Darwin" ]]; then
     boot2docker start
   fi
-  (
-    cd ${KUBE_ROOT}
-    hack/caicloud/k8s-replace.sh
-    trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
-    build/run.sh hack/build-go.sh
-    cd -
-  )
+  cd ${KUBE_ROOT}
+  hack/caicloud/k8s-replace.sh
+  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  build/run.sh hack/build-go.sh
+  cd -
+}
+
+
+# Build local binaries.
+function anchnet-build-local {
+  cd ${KUBE_ROOT}
+  hack/build-go.sh
+  cd -
+}
+
+
+# Build release tarball.
+#
+# Assumed vars:
+#   FINAL_VERSION
+function anchnet-build-tarball {
+  cd ${KUBE_ROOT}
+  ./hack/caicloud/build-tarball.sh ${FINAL_VERSION}
+  cd -
+}
+
+
+# Clean up repository.
+function make-clean {
+  cd ${KUBE_ROOT}
+  make clean
+  cd -
 }
 
 
@@ -2069,10 +2319,7 @@ function test-build-release {
   # dockerized build; however, developer may use local kubectl (_output/local/bin/kubectl),
   # so we do a local build here.
   echo "[`TZ=Asia/Shanghai date`] Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
-  cd ${KUBE_ROOT}
-  make clean
-  hack/build-go.sh
-  cd -
+  anchnet-build-local
 }
 
 

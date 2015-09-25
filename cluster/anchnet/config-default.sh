@@ -52,7 +52,7 @@ BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
 # The version of caicloud release to use if building release is not required.
 # E.g. 2015-09-09-15-30-30, v1.0.2, etc.
-CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.1.0"}
+CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.2.1"}
 
 # KUBE_USER uniquely identifies a caicloud user. This is the user that owns the
 # cluster, and will be used to create kubeconfig file.

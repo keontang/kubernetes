@@ -179,6 +179,6 @@ fi
 
 # A reminder for creating Github release.
 if [[ "$#" == "1" && $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "Finish building release ${CAICLOUD_VERSION}; if this is a formal release, please remember"
-  echo "to create a release tag at Github (https://github.com/caicloud/caicloud-kubernetes/releases)"
+  echo "Finish building release ${CAICLOUD_VERSION}; if this is a formal release, please remember \
+to create a release tag at Github (https://github.com/caicloud/caicloud-kubernetes/releases)"
 fi

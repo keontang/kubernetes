@@ -1066,7 +1066,7 @@ function setup-sdn-network-internal {
     local pids=""
     expect <<EOF >> ${KUBE_INSTANCE_LOGDIR}/${instance_id} &
 set timeout -1
-spawn scp -vvv -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${KUBE_TEMP}/network-opts${i} ${INSTANCE_USER}@${instance_eip}:~/network-opts
 
 expect {

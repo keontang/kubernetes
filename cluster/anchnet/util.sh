@@ -47,6 +47,11 @@ function verify-prereqs {
     echo "[`TZ=Asia/Shanghai date`] For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
     exit 1
   fi
+  if [[ "$(which python)" == "" ]]; then
+    echo "[`TZ=Asia/Shanghai date`] Can't find python in PATH, please fix and retry."
+    echo "[`TZ=Asia/Shanghai date`] For ubuntu/debian, if you have root access, run: sudo apt-get install python."
+    exit 1
+  fi
   if [[ "$(which expect)" == "" ]]; then
     echo "[`TZ=Asia/Shanghai date`] Can't find expect binary in PATH, please fix and retry."
     echo "[`TZ=Asia/Shanghai date`] For ubuntu/debian, if you have root access, run: sudo apt-get install expect."
@@ -482,7 +487,7 @@ function find-instance-and-eip-resouces {
       MASTER_EIP_ID=${eip_id}
       MASTER_INSTANCE_ID=${instance_id}
     else
-      if [[ -z "${NODE_EIPS-}" ]]; then
+      if [[ -z "${NODE_INSTANCE_IDS-}" ]]; then
         NODE_EIPS="${eip}"
         NODE_EIP_IDS="${eip_id}"
         NODE_INSTANCE_IDS="${instance_id}"
@@ -493,13 +498,23 @@ function find-instance-and-eip-resouces {
       fi
     fi
   done
-  INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
-  INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
-  INSTANCE_EIP_IDS="${MASTER_EIP_ID},${NODE_EIP_IDS}"
-  IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
-  IFS=',' read -ra NODE_EIP_IDS_ARR <<< "${NODE_EIP_IDS}"
-  IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
-  export NUM_MINIONS=${#NODE_EIPS_ARR[@]}
+  if [[ -z "${NODE_INSTANCE_IDS-}" ]]; then
+    INSTANCE_IDS="${MASTER_INSTANCE_ID}"
+    INSTANCE_EIPS="${MASTER_EIP}"
+    INSTANCE_EIP_IDS="${MASTER_EIP_ID}"
+    NODE_EIPS_ARR=""
+    NODE_EIP_IDS_ARR=""
+    NODE_INSTANCE_IDS_ARR=""
+    export NUM_MINIONS=0
+  else
+    INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
+    INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
+    INSTANCE_EIP_IDS="${MASTER_EIP_ID},${NODE_EIP_IDS}"
+    IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
+    IFS=',' read -ra NODE_EIP_IDS_ARR <<< "${NODE_EIP_IDS}"
+    IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
+    export NUM_MINIONS=${#NODE_EIPS_ARR[@]}
+  fi
 }
 
 
@@ -516,7 +531,7 @@ function find-instance-and-eip-resouces {
 function find-vxnet-resources {
   anchnet-exec-and-retry "${ANCHNET_CMD} searchvxnets ${CLUSTER_NAME} --project=${PROJECT_ID}"
   TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
-  if [[ "${TOTAL_COUNT}" = "" ]]; then
+  if [[ "${TOTAL_COUNT}" = "" || "${TOTAL_COUNT}" = "1" ]]; then
     return 1
   fi
   for i in `seq 0 $(($TOTAL_COUNT-1))`; do
@@ -526,7 +541,7 @@ function find-vxnet-resources {
     fi
     vxnet_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['vxnet_name']")
     echo "[`TZ=Asia/Shanghai date`] Found vxnets: ${vxnet_name},${vxnet_id}"
-    if [[ -z "${ALL_VXNETS-}" ]]; then
+    if [[ -z "${VXNET_IDS-}" ]]; then
       VXNET_IDS="${vxnet_id}"
     else
       VXNET_IDS="${VXNET_IDS},${vxnet_id}"
@@ -1041,6 +1056,7 @@ function setup-sdn-network {
 #   KUBE_INSTANCE_LOGDIR
 function setup-sdn-network-internal {
   # Setup SDN networks for all instances.
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start setting up sdn network. Log will be saved to ${KUBE_INSTANCE_LOGDIR} ..."
   for (( i = 0; i < $(($NUM_MINIONS+1)); i++ )); do
     local instance_iip=${INSTANCE_IIPS_ARR[${i}]}
     local instance_eip=${INSTANCE_EIPS_ARR[${i}]}
@@ -1103,8 +1119,6 @@ EOF
 #
 # Vars set:
 #   VXNET_ID
-#
-# Vars set:
 #   PRIVATE_SDN_INTERFACE - The interface created by the SDN network
 function create-sdn-network {
   echo "[`TZ=Asia/Shanghai date`] +++++ Create private SDN network ..."

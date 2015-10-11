@@ -35,10 +35,10 @@ function usage {
   echo -e "        \tfor development."
   echo -e ""
   echo -e "Environment variable:"
-  echo -e " UPLOAD_TO_TOOLSERVER\tSet to Y if the script needs to push new tarballs to toolserver, default to Y"
-  echo -e " UPLOAD_TO_QINIU\tSet to Y if the script needs to push new tarballs to qiniu, default to N"
   echo -e " ETCD_VERSION\tetcd version to use. etcd will be packed into release tarball, default value is ${ETCD_VERSION}"
   echo -e " FLANNEL_VERSION\tflannel version to use. flannel will be packed into release tarball, default value is ${FLANNEL_VERSION}"
+  echo -e " UPLOAD_TO_QINIU\tSet to Y if the script needs to push new tarballs to qiniu, default to N"
+  echo -e " UPLOAD_TO_TOOLSERVER\tSet to Y if the script needs to push new tarballs to toolserver, default to Y"
 }
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
@@ -99,15 +99,15 @@ fi
 echo "Building tarball ${CAICLOUD_KUBE_PKG} and ${CAICLOUD_KUBE_EXECUTOR_PKG}"
 
 # Fetch non-kube binaries.
-if [[ ! -f ${KUBE_ROOT}/hack/caicloud/cache/${ETCD_PACKAGE} ]]; then
-  mkdir -p ${KUBE_ROOT}/hack/caicloud/cache && wget ${ETCD_URL} -P ${KUBE_ROOT}/hack/caicloud/cache
+if [[ ! -f /tmp/${ETCD_PACKAGE} ]]; then
+  wget ${ETCD_URL} -P /tmp
 fi
-mkdir -p etcd-linux && tar xzf ${KUBE_ROOT}/hack/caicloud/cache/${ETCD_PACKAGE} -C etcd-linux --strip-components=1
+mkdir -p etcd-linux && tar xzf /tmp/${ETCD_PACKAGE} -C etcd-linux --strip-components=1
 
-if [[ ! -f ${KUBE_ROOT}/hack/caicloud/cache/${FLANNEL_PACKAGE} ]]; then
-  mkdir -p ${KUBE_ROOT}/hack/caicloud/cache && wget ${FLANNEL_URL} -P ${KUBE_ROOT}/hack/caicloud/cache
+if [[ ! -f /tmp/${FLANNEL_PACKAGE} ]]; then
+  wget ${FLANNEL_URL} -P /tmp
 fi
-mkdir -p flannel-linux && tar xzf ${KUBE_ROOT}/hack/caicloud/cache/${FLANNEL_PACKAGE} -C flannel-linux --strip-components=1
+mkdir -p flannel-linux && tar xzf /tmp/${FLANNEL_PACKAGE} -C flannel-linux --strip-components=1
 
 # Reset output directory.
 rm -rf ${KUBE_ROOT}/_output/caicloud && mkdir -p ${KUBE_ROOT}/_output/caicloud

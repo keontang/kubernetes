@@ -15,14 +15,14 @@
 # limitations under the License.
 
 # Third-party binary versions, used to create tarball, etc.
-ETCD_VERSION=${ETCD_VERSION:-v2.1.2}
+ETCD_VERSION=${ETCD_VERSION:-v2.2.0}
 FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.3}
 
-# URL of the server hosting binaries.
+# URL of the server hosting packages.
 RELEASE_HOST_URL="http://7xli2p.dl1.z0.glb.clouddn.com"
 
+# Derived variables. DO NOT CHANGE.
 ETCD_PACKAGE="etcd-${ETCD_VERSION}-linux-amd64.tar.gz"
 FLANNEL_PACKAGE="flannel-${FLANNEL_VERSION}-linux-amd64.tar.gz"
-
 ETCD_URL="${RELEASE_HOST_URL}/${ETCD_PACKAGE}"
 FLANNEL_URL="${RELEASE_HOST_URL}/${FLANNEL_PACKAGE}"

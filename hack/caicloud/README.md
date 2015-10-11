@@ -42,7 +42,7 @@ A couple points related to how to maintain caicloud kubernetes.
 These are brand new folders created to support our cloudprovider:
 * hack/caicloud
   * Central information about caicloud kubernetes
-  * Tools for working caicloud kubernetes
+  * Tools for working with caicloud kubernetes
 * cluster/anchnet
   * Shell scripts used to bring up cluster in anchnet
 * examples/caicloud
@@ -77,4 +77,4 @@ Add more dependencies in godeps:
 * Merge conflict from above changes (we try to keep this as minimal as possible)
 * In `hack/caicloud/`, we have scripts fixing GFW issues, make sure it still works with newer kubernetes version
 * Run `hack/caicloud/sync-images.sh` to sync all gcr.io images
-* Run `hack/caicloud/caicloud-e2e-test.sh` to test new version
+* Run `hack/caicloud/caicloud-e2e-test.sh`, `hack/build-go.sh`, `hack/test-go.sh`, `hack/test-integration.sh` to build/test new version

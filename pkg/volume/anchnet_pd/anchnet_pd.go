@@ -199,7 +199,7 @@ func (b *anchnetPersistentDiskBuilder) SetUp() error {
 // SetUpAt attaches the disk and bind mounts to the volume path.
 func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string) error {
 	notMnt, err := b.mounter.IsLikelyNotMountPoint(dir)
-	glog.Infof("PersistentDisk set up: %s %v %v", dir, !notMnt, err)
+	glog.V(4).Infof("PersistentDisk set up: %s %v %v", dir, !notMnt, err)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}

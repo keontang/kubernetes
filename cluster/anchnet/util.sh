@@ -182,6 +182,16 @@ function kube-up {
 }
 
 
+# Validate a kubernetes cluster
+function validate-cluster {
+  # By default call the generic validate-cluster.sh script, customizable by
+  # any cluster provider if this does not fit.
+  "${KUBE_ROOT}/cluster/validate-cluster.sh"
+
+  echo "... calling deploy-addons" >&2
+  deploy-addons
+}
+
 # Update a kubernetes cluster with latest source.
 function kube-push {
   # Find all instances and eips.

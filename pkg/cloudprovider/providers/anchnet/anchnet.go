@@ -46,7 +46,7 @@ const (
 	RetryIntervalOnWait = 3 * time.Second
 
 	// TTL for API call cache.
-	cacheTTL = 10 * time.Minute
+	cacheTTL = 6 * time.Hour
 )
 
 // Anchnet is the implementation of kubernetes cloud plugin.

@@ -69,7 +69,7 @@ PROJECT_ID=${PROJECT_ID:-""}
 KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
 # URL path of the server hosting caicloud kubernetes release.
-CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://internal-get.caicloud.io/caicloud"}
+CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://get.bitintuitive.com/caicloud"}
 
 # Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
 # there is no easy to enforce docker version in caicloud kubernetes release,
@@ -216,7 +216,7 @@ fi
 if [[ "${BUILD_TARBALL}" = "Y" ]]; then
   # build-tarball.sh will upload tarball to our own fileserver, so we must
   # override it.
-  CAICLOUD_HOST_URL="http://internal-get.caicloud.io/caicloud"
+  CAICLOUD_HOST_URL="http://get.bitintuitive.com/caicloud"
   FINAL_VERSION=${BUILD_VERSION}
 else
   FINAL_VERSION=${CAICLOUD_KUBE_VERSION}

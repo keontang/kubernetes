@@ -141,7 +141,7 @@ if [[ "${UPLOAD_TO_TOOLSERVER}" == "Y" ]]; then
   expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${KUBE_ROOT}/_output/caicloud "${INSTANCE_USER}@internal-get.caicloud.io:~"
+  ${KUBE_ROOT}/_output/caicloud "${INSTANCE_USER}@get.bitintuitive.com:~"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"
@@ -154,7 +154,7 @@ EOF
   expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@internal-get.caicloud.io "sudo mv caicloud/* /data/www/static/caicloud"
+  ${INSTANCE_USER}@get.bitintuitive.com "sudo mv caicloud/* /data/www/static/caicloud"
 expect {
   "*?assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"

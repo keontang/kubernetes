@@ -1492,7 +1492,7 @@ deb-src ${apt_mirror} trusty-security main restricted universe multiverse
 deb-src ${apt_mirror} trusty-updates main restricted universe multiverse
 EOL
 sudo sh -c 'cat > /etc/apt/sources.list.d/docker.list' << EOL
-deb \[arch=amd64\] http://internal-get.caicloud.io/repo ubuntu-trusty main
+deb \[arch=amd64\] http://get.bitintuitive.com/repo ubuntu-trusty main
 EOL
 sudo mv ~/nsenter /usr/local/bin && \
 sudo apt-get update && \

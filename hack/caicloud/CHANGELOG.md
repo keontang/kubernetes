@@ -2,12 +2,16 @@
 
 All notable changes to this project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org/).
 
-### Version 0.2.1 [TBD]
+### Version 0.3.0 [2015-10-28]
 #### Changed
+- Rebase to kubernetes v1.1-alpha
 - Support persistent volume in anchnet (see example/caicloud/anchnet_volume/README.md)
 - Fix issues with kube-push
 - Better NodeAddress error handling (inspired by volume support)
 - Add maintenance notes in hack/caicloud/README.md
+- Robust init scripts
+- Use anchnet describe volume to find device name
+- Increase anchnet TTL cache
 
 ### Version 0.2.0 [2015-09-24]
 #### Changed

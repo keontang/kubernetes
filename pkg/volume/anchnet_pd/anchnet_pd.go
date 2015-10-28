@@ -311,7 +311,7 @@ func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 			return err
 		}
 	} else {
-		glog.Infof("Found multiple refs; won't detach EBS volume: %v", refs)
+		glog.Infof("Found multiple refs; won't detach anchnet volume: %v", refs)
 	}
 	notMnt, mntErr := c.mounter.IsLikelyNotMountPoint(dir)
 	if mntErr != nil {

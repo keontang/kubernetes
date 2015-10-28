@@ -28,6 +28,7 @@ func main() {
 	addSecurityGroupCLI(cmds, os.Stdout)
 	addJobCLI(cmds, os.Stdout)
 	addUserProjectCLI(cmds, os.Stdout)
+	addVolumeCLI(cmds, os.Stdout)
 
 	cmds.Execute()
 }
@@ -362,4 +363,18 @@ func addUserProjectCLI(cmds *cobra.Command, out io.Writer) {
 	cmds.AddCommand(cmdDescribeProjects)
 	cmds.AddCommand(cmdTransfer)
 	cmds.AddCommand(cmdSearchUserProject)
+}
+
+// addVolumeCLI adds volume commands.
+func addVolumeCLI(cmds *cobra.Command, out io.Writer) {
+	cmdDescribeVolume := &cobra.Command{
+		Use:   "describevolumes volumeID",
+		Short: "get information of a volume",
+		Run: func(cmd *cobra.Command, args []string) {
+			execDescribeVolumes(cmd, args, getAnchnetClient(cmd), out)
+		},
+	}
+
+	// Add all sub-commands
+	cmds.AddCommand(cmdDescribeVolume)
 }

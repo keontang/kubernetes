@@ -1,2 +1,3 @@
 # Ignore anchnet binary
 anchnet/anchnet
+_output

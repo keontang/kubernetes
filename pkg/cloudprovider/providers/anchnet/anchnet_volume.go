@@ -29,6 +29,13 @@ import (
 	anchnet_client "github.com/caicloud/anchnet-go"
 )
 
+const (
+	// Number of retries when unable to fetch device name from anchnet.
+	RetryCountOnDeviceEmpty = 5
+	// Constant interval between two retries for the above situation.
+	RetryIntervalOnDeviceEmpty = 6 * time.Second
+)
+
 var _ Volumes = (*Anchnet)(nil)
 
 // AttachDisk attaches the disk to the specified instance. `instanceID` can be empty
@@ -37,7 +44,7 @@ var _ Volumes = (*Anchnet)(nil)
 func (an *Anchnet) AttachDisk(instanceID string, volumeID string, readOnly bool) (string, error) {
 	glog.Infof("AttachDisk(%v, %v, %v)", instanceID, volumeID, readOnly)
 
-	// It's not possible in anchnet to setup disk for other instances.
+	// Do not support attaching volume for other instances.
 	if instanceID != "" {
 		return "", errors.New("unable to attach disk for instance other than self instance")
 	}
@@ -51,12 +58,12 @@ func (an *Anchnet) AttachDisk(instanceID string, volumeID string, readOnly bool)
 	}
 	instanceID = convertToInstanceID(hostname)
 
-	// Before attaching volume, check /sys/block for known disks.
+	// Before attaching volume, check /sys/block for known disks. This is used in case anchnet
+	// doesn't return device name from describe volume API.
 	existing, err := readSysBlock("sd")
 	if err != nil {
 		return "", err
 	}
-	glog.Infof("AttachDisk found existing disks %+v", existing)
 
 	// Do the volume attach.
 	attach_response, err := an.attachVolume(instanceID, volumeID)
@@ -68,30 +75,47 @@ func (an *Anchnet) AttachDisk(instanceID string, volumeID string, readOnly bool)
 		return "", err
 	}
 
-	// After attaching volume, check /sys/block again.
-	current, err := readSysBlock("sd")
-	if err != nil {
-		return "", err
-	}
-	glog.Infof("AttachDisk found current disks %+v", current)
-
-	existingMap := make(map[string]bool)
-	for _, disk := range existing {
-		existingMap[disk] = true
-	}
-
-	var diff []string
-	for _, disk := range current {
-		if _, ok := existingMap[disk]; !ok {
-			diff = append(diff, disk)
+	devicePath := ""
+	for i := 0; i < RetryCountOnDeviceEmpty; i++ {
+		describe_response, err := an.describeVolume(volumeID)
+		if err != nil || describe_response.ItemSet[0].Device == "" {
+			glog.Infof("Volume %s device path is empty, retrying", volumeID)
+			time.Sleep(RetryIntervalOnDeviceEmpty)
+		} else {
+			devicePath = describe_response.ItemSet[0].Device
+			break
 		}
 	}
-	if len(diff) != 1 {
-		return "", fmt.Errorf("Unable to find volume %v", diff)
-	}
-	glog.Infof("Found device path %+v", "/dev/"+diff[0])
 
-	return "/dev/" + diff[0], nil
+	if devicePath == "" {
+		glog.Infof("Unable to fetch device name from describeVolume endpoint, fallback to search /sys/block")
+		glog.Infof("AttachDisk found existing disks %+v", existing)
+		// After attaching volume, check /sys/block again.
+		current, err := readSysBlock("sd")
+		if err != nil {
+			return "", err
+		}
+		glog.Infof("AttachDisk found current disks %+v", current)
+
+		existingMap := make(map[string]bool)
+		for _, disk := range existing {
+			existingMap[disk] = true
+		}
+
+		var diff []string
+		for _, disk := range current {
+			if _, ok := existingMap[disk]; !ok {
+				diff = append(diff, disk)
+			}
+		}
+		if len(diff) != 1 {
+			return "", fmt.Errorf("Unable to find volume %v", diff)
+		}
+		devicePath = "/dev/" + diff[0]
+	}
+
+	glog.Infof("Found device path %+v", devicePath)
+	return devicePath, nil
 }
 
 // DetachDisk detaches the disk from the specified instance. `instanceID` can be empty
@@ -148,7 +172,7 @@ func (an *Anchnet) detachVolume(volumeID string) (*anchnet_client.DetachVolumesR
 		var response anchnet_client.DetachVolumesResponse
 		err := an.client.SendRequest(request, &response)
 		if err == nil {
-			glog.Infof("Detached volume %v to", volumeID)
+			glog.Infof("Detached volume %v", volumeID)
 			return &response, nil
 		} else {
 			glog.Infof("Attempt %d: failed to detach volume: %v\n", i, err)
@@ -156,6 +180,25 @@ func (an *Anchnet) detachVolume(volumeID string) (*anchnet_client.DetachVolumesR
 		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to detach volume %v", volumeID)
+}
+
+// describeVolume describe a volume.
+func (an *Anchnet) describeVolume(volumeID string) (*anchnet_client.DescribeVolumesResponse, error) {
+	for i := 0; i < RetryCountOnError; i++ {
+		request := anchnet_client.DescribeVolumesRequest{
+			VolumeIDs: []string{volumeID},
+		}
+		var response anchnet_client.DescribeVolumesResponse
+		err := an.client.SendRequest(request, &response)
+		if err == nil {
+			glog.Infof("Found volume %v", volumeID)
+			return &response, nil
+		} else {
+			glog.Infof("Attempt %d: failed to describe volume: %v\n", i, err)
+		}
+		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
+	}
+	return nil, fmt.Errorf("Unable to describe volume %v", volumeID)
 }
 
 // readSysBlock reads /sys/block and returns a list of devices start with `prefix`.

@@ -132,6 +132,11 @@ func (an *Anchnet) Routes() (cloudprovider.Routes, bool) {
 	return nil, false
 }
 
+// ScrubDNS filters DNS settings for pods.
+func (an *Anchnet) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
+	return nameservers, searches
+}
+
 // ProviderName returns the cloud provider ID.
 func (an *Anchnet) ProviderName() string {
 	return ProviderName

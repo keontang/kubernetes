@@ -28,7 +28,8 @@ type DescribeVolumesItem struct {
 	VolumeID    string                  `json:"volume_id,omitempty"`
 	VolumeName  string                  `json:"volume_name,omitempty"`
 	Description string                  `json:"description,omitempty"`
-	Size        int                     `json:"size,omitempty"` // Unit: GB
+	Device      string                  `json:"device,omitempty"`
+	Size        string                  `json:"size,omitempty"` // Unit: GB
 	Status      VolumeStatus            `json:"status,omitempty"`
 	StatusTime  string                  `json:"status_time,omitempty"`
 	VolumeType  VolumeType              `json:"volume_type"`
@@ -52,11 +53,11 @@ const (
 )
 
 // Note VolumeType is the same as HDType. We separate them out due inconsistent naming in anchnet.
-type VolumeType int
+type VolumeType string
 
 const (
-	VolumeTypePerformance VolumeType = 0
-	VolumeTypeCapacity    VolumeType = 1
+	VolumeTypePerformance VolumeType = "0"
+	VolumeTypeCapacity    VolumeType = "1"
 )
 
 //

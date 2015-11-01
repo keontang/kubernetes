@@ -764,11 +764,7 @@ with open("'$1'", "w") as f:
 
 # Create an anchnet project if PROJECT_ID is not specified, and report it back
 # to executor. Note that we do not create anchnet project if neither PROJECT_ID
-# nor KUBE_USER is specified, this is primarily used for development.
-#
-# Important: At this point, KUBE_USER must not be set (set to "admin" in function
-# get-password); otherwise, create-project will create a project for admin, which
-# is not what we want for development. In production, we'll always set KUBE_USER.
+# nor SUB_ACCOUNT_USER is specified, this is primarily used for development.
 #
 # Assumed vars:
 #   INITIAL_DEPOSIT
@@ -776,24 +772,24 @@ with open("'$1'", "w") as f:
 # Vars set:
 #   PROJECT_ID
 function create-project {
-  if [[ ! -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
-    # If both PROJECT_ID and KUBE_USER are given, make sure the project actually
+  if [[ ! -z "${PROJECT_ID-}" && ! -z "${SUB_ACCOUNT_USER-}" ]]; then
+    # If both PROJECT_ID and SUB_ACCOUNT_USER are given, make sure the project actually
     # belongs to the user.
     anchnet-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
     PROJECT_NAME=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_name']")
-    if [[ "${PROJECT_NAME}" != "${KUBE_USER}" ]]; then
-      echo "[`TZ=Asia/Shanghai date`] +++++ project_id ${PROJECT_ID} doesn't belong to user ${KUBE_USER} ..."
+    if [[ "${PROJECT_NAME}" != "${SUB_ACCOUNT_USER}" ]]; then
+      echo "[`TZ=Asia/Shanghai date`] +++++ project_id ${PROJECT_ID} doesn't belong to user ${SUB_ACCOUNT_USER} ..."
       kube-up-complete N
       exit 1
     fi
-  elif [[ -z "${PROJECT_ID-}" && ! -z "${KUBE_USER-}" ]]; then
+  elif [[ -z "${PROJECT_ID-}" && ! -z "${SUB_ACCOUNT_USER-}" ]]; then
     # First try to match if there's any sub account created before.
-    anchnet-exec-and-retry "${ANCHNET_CMD} searchuserproject ${KUBE_USER}"
+    anchnet-exec-and-retry "${ANCHNET_CMD} searchuserproject ${SUB_ACCOUNT_USER}"
     PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_id']")
     # If PROJECT_ID is still empty, then create sub account.
     if [[ -z "${PROJECT_ID-}" ]]; then
-      echo "[`TZ=Asia/Shanghai date`] +++++ Create new anchnet sub account for ${KUBE_USER} ..."
-      anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${KUBE_USER}"
+      echo "[`TZ=Asia/Shanghai date`] +++++ Create new anchnet sub account for ${SUB_ACCOUNT_USER} ..."
+      anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${SUB_ACCOUNT_USER}"
       anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
       PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
       # Get the userId of the sub account. Note the userId here is used internally
@@ -806,7 +802,7 @@ function create-project {
       anchnet-exec-and-retry "${ANCHNET_CMD} transfer ${SUB_ACCOUNT_UID} ${INITIAL_DEPOSIT}"
       report-project-id ${PROJECT_ID}
     else
-      echo "[`TZ=Asia/Shanghai date`] +++++ Reuse existing project ID ${PROJECT_ID} for ${KUBE_USER} ..."
+      echo "[`TZ=Asia/Shanghai date`] +++++ Reuse existing project ID ${PROJECT_ID} for ${SUB_ACCOUNT_USER} ..."
       report-project-id ${PROJECT_ID}
     fi
   fi

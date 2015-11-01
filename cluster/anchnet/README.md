@@ -40,21 +40,21 @@ options, consult the file.
   KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
   ```
 
-* `KUBE_USER`: The kubernetes user name. This variable is default to empty string. If `KUBE_USER` is set, the `kubeconfig` file, which has all the information of how to access
-  the cluster, will be created at `$HOME/.kube/config_${KUBE_USER}`. If not set, default location (`$HOME/.kube/config`) will be used. In production, we should always set
-  `KUBE_USER`, leaving it empty should only be used during development. The variable has some correlation with `PROJECT_ID`:
+* `SUB_ACCOUNT_USER`: The anchnet sub account user name. This variable is default to empty string. If `SUB_ACCOUNT_USER` is set, the `kubeconfig` file, which has all the information
+  of how to access the cluster, will be created at `$HOME/.kube/config_${SUB_ACCOUNT_USER}`. If not set, default location (`$HOME/.kube/config`) will be used. In production, we should
+  always set `SUB_ACCOUNT_USER`, leaving it empty should only be used during development. The variable has some correlation with `PROJECT_ID`:
 
-  * If `PROJECT_ID` is set, it means this `KUBE_USER` has already been accociated with a sub account before, so that we just bring up cluster under that sub account:
+  * If `PROJECT_ID` is set, it means this `SUB_ACCOUNT_USER` has already been accociated with a sub account before, so that we just bring up cluster under that sub account:
     E.g. following command creates a cluster under a specific sub account:
     ```
-    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
+    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks SUB_ACCOUNT_USER=test_user PROJECT_ID=pro-H4ZW87K2 ./cluster/kube-up.sh
     ```
 
-  * If `PROJECT_ID` is not set, it means this is the first time user wants to create a cluster and there is no anchnet sub account associated with `KUBE_USER`. In this case,
+  * If `PROJECT_ID` is not set, it means this is the first time user wants to create a cluster and there is no anchnet sub account associated with `SUB_ACCOUNT_USER`. In this case,
     an anchnet sub account will be automatically created and reported back to executor service, and the cluster will be created in the new sub account. E.g. following
     command will create a sub-account and then create a cluster:
     ```
-    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks KUBE_USER=test_user ./cluster/kube-up.sh
+    KUBERNETES_PROVIDER=anchnet CLUSTER_NAME=caicloud-rocks SUB_ACCOUNT_USER=test_user ./cluster/kube-up.sh
     ```
 
 * `CAICLOUD_KUBE_VERSION`: The version of caicloud release to use if building release is not required. E.g. 2015-09-09-15-30, v1.0.2, etc. Default value is current release

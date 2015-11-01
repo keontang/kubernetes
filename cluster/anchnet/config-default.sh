@@ -54,9 +54,9 @@ BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 # E.g. 2015-09-09-15-30-30, v1.0.2, etc.
 CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.2.1"}
 
-# KUBE_USER uniquely identifies a caicloud user. This is the user that owns the
+# SUB_ACCOUNT_USER uniquely identifies a caicloud user. This is the user that owns the
 # cluster, and will be used to create kubeconfig file.
-KUBE_USER=${KUBE_USER:-""}
+SUB_ACCOUNT_USER=${SUB_ACCOUNT_USER:-""}
 
 # Project ID actually stands for anchnet sub-account. If PROJECT_ID and KUBE_USER
 # are not set, all the subsequent anchnet calls will use main account in anchnet.
@@ -222,10 +222,10 @@ else
   FINAL_VERSION=${CAICLOUD_KUBE_VERSION}
 fi
 
-# If KUBE_USER is specified, set the path to save per user k8s config file;
+# If SUB_ACCOUNT_USER is specified, set the path to save per user k8s config file;
 # otherwise, use default one from k8s.
-if [[ ! -z ${KUBE_USER-} ]]; then
-  KUBECONFIG="$HOME/.kube/config_${KUBE_USER}"
+if [[ ! -z ${SUB_ACCOUNT_USER-} ]]; then
+  KUBECONFIG="$HOME/.kube/config_${SUB_ACCOUNT_USER}"
 fi
 
 # Note that master_name and node_name are name of the instances in anchnet, which

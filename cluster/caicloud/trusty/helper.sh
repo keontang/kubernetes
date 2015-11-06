@@ -19,7 +19,74 @@
 # for ubuntu:trusty.
 #
 
-# Create a script to start a fresh master.
+# Create master startup script and send all necessary files to master.
+#
+# Input:
+#   $1 Master ssh info, e.g. "root:password@43.254.54.59"
+#   $2 Interface or IP address used by flanneld to send internal traffic.
+#      If empty, master IP address will be used.
+#   $3 Cloudprovider name, leave empty if running without cloudprovider.
+#      Otherwise, all k8s components will see the cloudprovider, and read
+#      config file from /etc/kubernetes/cloud-config.
+#
+# Assumed vars:
+#   KUBE_TEMP
+#   KUBE_ROOT
+#   ADMISSION_CONTROL
+#   CLUSTER_NAME
+#   FLANNEL_NET
+#   KUBERNETES_PROVIDER
+#   SERVICE_CLUSTER_IP_RANGE
+function master-create-and-send-files {
+  if [[ "${2:-}" = "" ]]; then
+    IFS=':@' read -ra ssh_info <<< "${1}"
+    interface="${ssh_info[2]}"
+  else
+    interface="${2}"
+  fi
+  create-master-start-script "${KUBE_TEMP}/master-start.sh" "${interface}" "${3:-}"
+  send-files-to-master "${1}"
+}
+
+# Create node startup script and send all necessary files to nodes.
+#
+# Input:
+#   $1 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+#   $2 Master internal IP.
+#   $3 Interface or IP address used by flanneld to send internal traffic.
+#      If empty, node IP address will be used.
+#   $4 Cloudprovider name, leave empty if running without cloudprovider.
+#      Otherwise, all k8s components will see the cloudprovider, and read
+#      config file from /etc/kubernetes/cloud-config.
+#
+# Assumed vars:
+#   KUBE_TEMP
+#   KUBE_ROOT
+#   DNS_DOMAIN
+#   DNS_SERVER_IP
+#   KUBELET_IP_ADDRESS
+#   MASTER_IIP
+#   PRIVATE_SDN_INTERFACE
+#   POD_INFRA_CONTAINER
+#   REG_MIRROR
+function node-create-and-send-files {
+  IFS=',' read -ra node_ssh_info <<< "${1}"
+  for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
+    if [[ "${3:-}" = "" ]]; then
+      IFS=':@' read -ra ssh_info <<< "${node_ssh_info[$i]}"
+      interface="${ssh_info[2]}"
+    else
+      interface="${3}"
+    fi
+    mkdir -p ${KUBE_TEMP}/node${i}
+    create-node-start-script "${KUBE_TEMP}/node${i}/node-start.sh" "${2}" "${interface}" "${4:-}"
+    echo "${node_ssh_info[$i]}"
+    send-files-to-node "${node_ssh_info[$i]}"
+  done
+}
+
+# Create a script to start a fresh master. Only used in function
+# master-create-and-send-files.
 #
 # Input:
 #   $1 File path used to store the script, e.g. /tmp/master1-script.sh
@@ -27,14 +94,6 @@
 #   $3 Cloudprovider name, leave empty if running without cloudprovider.
 #      Otherwise, all k8s components will see the cloudprovider, and read
 #      config file from /etc/kubernetes/cloud-config.
-#
-# Assumed vars:
-#   ADMISSION_CONTROL
-#   CLUSTER_NAME
-#   FLANNEL_NET
-#   KUBE_ROOT
-#   KUBERNETES_PROVIDER
-#   SERVICE_CLUSTER_IP_RANGE
 function create-master-start-script {
   (
     echo "#!/bin/bash"
@@ -75,70 +134,8 @@ function create-master-start-script {
     echo "sudo service etcd start"
     # After starting etcd, configure flannel options.
     echo "config-etcd-flanneld ${FLANNEL_NET}"
-  ) > "$1"
-  chmod a+x "$1"
-}
-
-# Create a node start script used to start a fresh node.
-#
-# Input:
-#   $1 File to store the script.
-#   $2 Master internal IP.
-#   $3 Daocloud mirror for the node.
-#   $4 Interface or IP address used by flanneld to send internal traffic.
-#   $5 Cloudprovider name, leave empty if running without cloudprovider.
-#      Otherwise, all k8s components will see the cloudprovider, and read
-#      config file from /etc/kubernetes/cloud-config.
-#
-# Assumed vars:
-#   DNS_DOMAIN
-#   DNS_SERVER_IP
-#   KUBELET_IP_ADDRESS
-#   MASTER_IIP
-#   PRIVATE_SDN_INTERFACE
-#   POD_INFRA_CONTAINER
-function create-node-start-script {
-  # Create node startup script. Note we assume the base image has necessary
-  # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
-  # master startup script.
-  (
-    echo "#!/bin/bash"
-    grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/config-components.sh"
-    grep -v "^#" "${KUBE_ROOT}/cluster/${KUBERNETES_PROVIDER}/config-default.sh"
-    echo ""
-    echo "mkdir -p ~/kube/configs"
-    # Create component options.
-    if [[ "${5:-}" != "" ]]; then
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true '' ${2} ${5} /etc/kubernetes/cloud-config"
-    else
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true '' ${2}"
-    fi
-    echo "create-kube-proxy-opts 'node' ${2}"
-    echo "create-flanneld-opts ${4} ${2}"
-    # Create the system directories used to hold the final data.
-    echo "sudo mkdir -p /opt/bin"
-    echo "sudo mkdir -p /etc/kubernetes"
-    echo "sudo mkdir -p /etc/kubernetes/manifest"
-    # Since we might retry on error, we need to stop services. If no service
-    # is running, this is just no-op.
-    echo "sudo service flanneld stop"
-    # Copy binaries and configurations to system directories.
-    echo "sudo cp ~/kube/node/* /opt/bin"
-    echo "sudo cp ~/kube/nsenter /usr/local/bin"
-    echo "sudo cp ~/kube/configs/* /etc/default"
-    echo "sudo cp ~/kube/init_conf/* /etc/init/"
-    echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-    echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
-    echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
-    # Make sure cloud-config exists, even if not used.
-    echo "touch ~/kube/cloud-config && sudo cp ~/kube/cloud-config /etc/kubernetes"
-    # Finally, start kubernetes cluster. Upstart will make sure all components
-    # start upon flannel start.
-    echo "sudo service flanneld start"
-    # After starting flannel, configure docker network to use flannel overlay.
-    echo "restart-docker ${3} /etc/default/docker"
-  ) > "$1"
-  chmod a+x "$1"
+  ) > "${1}"
+  chmod a+x "${1}"
 }
 
 # Send all necessary files to master, after which, we can just call master start
@@ -146,8 +143,7 @@ function create-node-start-script {
 # generated dynamically, some are fetched from remote host.
 #
 # Input:
-#   $1 username and node address, e.g. ubuntu@43.254.54.14
-#   $2 optional passward if needed
+#   $1 Master ssh info, e.g. "root:password@43.254.54.59"
 function send-files-to-master {
   rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/master
   # Copy config files.
@@ -173,15 +169,67 @@ function send-files-to-master {
   if [[ -f ${KUBE_TEMP}/cloud-config ]]; then
     cp ${KUBE_TEMP}/cloud-config ${KUBE_TEMP}/kube
   fi
-  scp-to-instance "${KUBE_TEMP}/kube" "${1}" "~" "${2:-}"
+  scp-to-instance "${1}" "${KUBE_TEMP}/kube" "~"
+}
+
+# Create a node start script used to start a fresh node.
+#
+# Input:
+#   $1 File to store the script.
+#   $2 Master internal IP.
+#   $3 Interface or IP address used by flanneld to send internal traffic.
+#   $4 Cloudprovider name, leave empty if running without cloudprovider.
+#      Otherwise, all k8s components will see the cloudprovider, and read
+#      config file from /etc/kubernetes/cloud-config.
+function create-node-start-script {
+  # Create node startup script. Note we assume the base image has necessary
+  # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
+  # master startup script.
+  (
+    echo "#!/bin/bash"
+    grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/config-components.sh"
+    grep -v "^#" "${KUBE_ROOT}/cluster/${KUBERNETES_PROVIDER}/config-default.sh"
+    echo ""
+    echo "mkdir -p ~/kube/configs"
+    # Create component options.
+    if [[ "${4:-}" != "" ]]; then
+      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true '' ${2} ${4} /etc/kubernetes/cloud-config"
+    else
+      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true '' ${2}"
+    fi
+    echo "create-kube-proxy-opts 'node' ${2}"
+    echo "create-flanneld-opts ${3} ${2}"
+    # Create the system directories used to hold the final data.
+    echo "sudo mkdir -p /opt/bin"
+    echo "sudo mkdir -p /etc/kubernetes"
+    echo "sudo mkdir -p /etc/kubernetes/manifest"
+    # Since we might retry on error, we need to stop services. If no service
+    # is running, this is just no-op.
+    echo "sudo service flanneld stop"
+    # Copy binaries and configurations to system directories.
+    echo "sudo cp ~/kube/node/* /opt/bin"
+    echo "sudo cp ~/kube/nsenter /usr/local/bin"
+    echo "sudo cp ~/kube/configs/* /etc/default"
+    echo "sudo cp ~/kube/init_conf/* /etc/init/"
+    echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
+    echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
+    echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
+    # Make sure cloud-config exists, even if not used.
+    echo "touch ~/kube/cloud-config && sudo cp ~/kube/cloud-config /etc/kubernetes"
+    # Finally, start kubernetes cluster. Upstart will make sure all components
+    # start upon flannel start.
+    echo "sudo service flanneld start"
+    # After starting flannel, configure docker network to use flannel overlay.
+    echo "restart-docker ${REG_MIRROR} /etc/default/docker"
+  ) > "${1}"
+  chmod a+x "${1}"
 }
 
 # Send all necessary files to node, after which, we can just call node start
 # script to start kubernetes node.
 #
 # Input:
-#   $1 username and node address, e.g. ubuntu@43.254.54.14
-#   $2 optional passward if needed
+#   $1 Node ssh info, e.g. "root:password@43.254.54.59"
 function send-files-to-node {
   rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/node
   # Copy config files.
@@ -203,24 +251,39 @@ function send-files-to-node {
   if [[ -f ${KUBE_TEMP}/cloud-config ]]; then
     cp ${KUBE_TEMP}/cloud-config ${KUBE_TEMP}/kube
   fi
-  scp-to-instance "${KUBE_TEMP}/kube" "${1}" "~" "${2:-}"
+  scp-to-instance "${1}" "${KUBE_TEMP}/kube" "~"
 }
 
-# Install packages for a given node.
+# Install packages for all nodes. The packages are required for running
+# kubernetes nodes.
 #
 # Input:
-#   $1 username and node address, e.g. ubuntu@43.254.54.14
-#   $2 optional passward if needed
+#   $1 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+#   $2 report failure; if true, report failure to caicloud cluster manager.
+#
+# Assumed vars:
+#   APT_MIRRORS
 function install-packages {
-  APT_MIRROR_INDEX=0            # Not used for now.
+  APT_MIRROR_INDEX=0            # Used for choosing an apt mirror.
+  command-exec-and-retry "install-packages-internal ${1}" 3 "${2-}"
+}
+
+function install-packages-internal {
+  # Choose an apt-mirror for installing packages.
   IFS=',' read -ra apt_mirror_arr <<< "${APT_MIRRORS}"
   apt_mirror=${apt_mirror_arr[$(( ${APT_MIRROR_INDEX} % ${#apt_mirror_arr[*]} ))]}
+  log "Use apt mirror ${apt_mirror}"
 
-  expect <<EOF
+  # Install packages for given nodes concurrently.
+  local pids=""
+  IFS=',' read -ra node_ssh_info <<< "${1}"
+  for ssh_info in "${node_ssh_info[@]}"; do
+    IFS=':@' read -ra ssh_info <<< "${ssh_info}"
+    expect <<EOF &
 set timeout -1
 
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${1} "\
+  ${ssh_info[0]}@${ssh_info[2]} "\
 sudo sh -c 'cat > /etc/apt/sources.list' << EOL
 deb ${apt_mirror} trusty main restricted universe multiverse
 deb ${apt_mirror} trusty-security main restricted universe multiverse
@@ -239,7 +302,7 @@ echo 'Command failed installing packages on remote host $1'"
 
 expect {
   "*?assword*" {
-    send -- "${2}\r"
+    send -- "${ssh_info[1]}\r"
     exp_continue
   }
   "Command failed" {exit 1}
@@ -247,4 +310,7 @@ expect {
   eof {}
 }
 EOF
+    pids="$pids $!"
+  done
+  wait ${pids}
 }

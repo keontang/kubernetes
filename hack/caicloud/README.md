@@ -54,8 +54,6 @@ These are brand new folders created to support our cloudprovider:
 
 #### Changes to individual files
 These are individual files we have to change in order to meet our requirements:
-* cluster/kube-up.sh
-  * To call deploy-addons, should go away if we deploy addons reliably
 * cmd/kubelet/app/plugins.go
   * To load anchnet volume plugin
 * test/e2e/util.go

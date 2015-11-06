@@ -14,16 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Caicloud baremetal cloudprovider.
+# In kube-up.sh, bash is set to exit on error. However, we need to retry
+# on error. Therefore, we disable errexit here.
+set +o errexit
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 
 # Get cluster configuration parameters from config-default, as well as all
 # other utilities. Note KUBE_DISTRO will be available after sourcing file
 # config-default.sh.
 function setup-cluster-env {
-  source "${KUBE_ROOT}/cluster/caicloud/common.sh"
   source "${KUBE_ROOT}/cluster/caicloud-baremetal/config-default.sh"
+  source "${KUBE_ROOT}/cluster/caicloud/common.sh"
   source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 }
 
@@ -46,6 +48,10 @@ function verify-prereqs {
 
 # Instantiate a kubernetes cluster
 function kube-up {
+  # Print all environment and local variables at this point.
+  log "+++++ Running kube-up with variables ..."
+  (set -o posix; set)
+
   # Make sure we have:
   #  1. a staging area
   #  2. a public/private key pair used to provision instances.
@@ -62,27 +68,14 @@ function kube-up {
   find-registry-mirror
 
   # Concurrently install all packages for nodes.
-  local pids=""
-  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
-    local node_ip=${NODE_IPS_ARR[${i}]}
-    install-packages "${INSTANCE_USER}@${node_ip}" "${KUBE_INSTANCE_PASSWORD}" & pids="${pids} $!"
-  done
-  wait ${pids}
+  install-packages "${NODE_SSH_INFO}" "false"
 
   # Prepare master environment.
-  create-master-start-script "${KUBE_TEMP}/master-start.sh" "${MASTER_IP}"
-  send-files-to-master "${INSTANCE_USER}@${MASTER_IP}" "${KUBE_INSTANCE_PASSWORD}"
-
-  # Prepare node environment.
-  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
-    local node_ip=${NODE_IPS_ARR[${i}]}
-    mkdir -p ${KUBE_TEMP}/node${i}
-    create-node-start-script "${KUBE_TEMP}/node${i}/node-start.sh" "${MASTER_IP}" "${REG_MIRROR}" "${node_ip}"
-    send-files-to-node "${INSTANCE_USER}@${node_ip}" "${KUBE_INSTANCE_PASSWORD}"
-  done
+  master-create-and-send-files "${MASTER_SSH_INFO}"
+  node-create-and-send-files "${NODE_SSH_INFO}" "${MASTER_IP}"
 
   # Now start kubernetes.
-  start-kubernetes "${MASTER_IP}" "${NODE_IPS_ARR}" "${KUBE_INSTANCE_PASSWORD}"
+  start-kubernetes "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}"
 
   # Create config file, i.e. ~/.kube/config.
   source "${KUBE_ROOT}/cluster/common.sh"
@@ -97,7 +90,7 @@ function validate-cluster {
   "${KUBE_ROOT}/cluster/validate-cluster.sh"
 
   echo "... calling deploy-addons" >&2
-  deploy-addons "${INSTANCE_USER}@${MASTER_IP}" "${KUBE_INSTANCE_PASSWORD}"
+  deploy-addons "${MASTER_SSH_INFO}"
 }
 
 # Delete a kubernetes cluster

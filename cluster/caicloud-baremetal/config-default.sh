@@ -20,13 +20,11 @@
 # Linux distribution of underline machines.
 KUBE_DISTRO=${KUBE_DISTRO:-"trusty"}
 
-# Master IP and node IPs, must be able to ssh from provision host.
-MASTER_IP="192.168.205.10"
-NODE_IPS="192.168.205.11"
+# ssh information for master.
+MASTER_SSH_INFO="vagrant:vagrant@192.168.205.10"
 
-# Instance user and password, for all cluster machines.
-INSTANCE_USER=${INSTANCE_USER:-"vagrant"}
-KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"vagrant"}
+# ssh information for nodes (comma separated string).
+NODE_SSH_INFO="vagrant:vagrant@192.168.205.11"
 
 # Name of the cluster. This is used for constructing the prefix of resource IDs
 # in anchnet. The same name needs to be specified when running kube-down to
@@ -107,6 +105,19 @@ KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 if [[ ! -z ${KUBE_USER-} ]]; then
   KUBECONFIG="$HOME/.kube/config_${KUBE_USER}"
 fi
+
+# Master IP and node IPs.
+MASTER_IP=${MASTER_SSH_INFO#*@}
+NODE_IPS=""
+IFS=',' read -ra node_info_array <<< "${NODE_SSH_INFO}"
+for node_info in "${node_info_array[@]}"; do
+  IFS=':@' read -ra ssh_info <<< "${node_info}"
+  if [[ -z "${NODE_IPS-}" ]]; then
+    NODE_IPS="${ssh_info[2]}"
+  else
+    NODE_IPS="${NODE_IPS},${ssh_info[2]}"
+  fi
+done
 
 # Create node IP address array and NUM_MINIONS.
 IFS=',' read -ra NODE_IPS_ARR <<< "${NODE_IPS}"

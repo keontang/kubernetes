@@ -96,48 +96,11 @@ KIBANA_REPLICAS=${KIBANA_REPLICAS:-1}
 ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-true}
 KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 
+# Optional: Install cluster monitoring
+ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-true}
+# TODO: config the default memory limit according to num of nodes
+HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
 
-# -----------------------------------------------------------------------------
-# Derived params for kube-up (calculated based on above params: DO NOT CHANGE).
-# -----------------------------------------------------------------------------
-# If KUBE_USER is specified, set the path to save per user k8s config file;
-# otherwise, use default one from k8s.
-if [[ ! -z ${KUBE_USER-} ]]; then
-  KUBECONFIG="$HOME/.kube/config_${KUBE_USER}"
-fi
-
-# Master IP and node IPs.
-MASTER_IP=${MASTER_SSH_INFO#*@}
-NODE_IPS=""
-IFS=',' read -ra node_info_array <<< "${NODE_SSH_INFO}"
-for node_info in "${node_info_array[@]}"; do
-  IFS=':@' read -ra ssh_info <<< "${node_info}"
-  if [[ -z "${NODE_IPS-}" ]]; then
-    NODE_IPS="${ssh_info[2]}"
-  else
-    NODE_IPS="${NODE_IPS},${ssh_info[2]}"
-  fi
-done
-
-# Create node IP address array and NUM_MINIONS.
-IFS=',' read -ra NODE_IPS_ARR <<< "${NODE_IPS}"
-export NUM_MINIONS=${#NODE_IPS_ARR[@]}
-
-# Note that master_name and node_name are name of the instances in anchnet, which
-# is helpful to group instances; however, anchnet API works well with instance id,
-# so we provide instance id to kubernetes as nodename and hostname, which makes it
-# easy to query anchnet in kubernetes.
-MASTER_NAME="${CLUSTER_NAME}-master"
-NODE_NAME_PREFIX="${CLUSTER_NAME}-node"
-
-# Context to use in kubeconfig.
-CONTEXT="baremetal_${CLUSTER_NAME}"
-
-# Caicloud tarball package name.
-CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_KUBE_VERSION}.tar.gz"
-
-# Final URL of caicloud tarball URL.
-CAICLOUD_TARBALL_URL="${CAICLOUD_HOST_URL}/${CAICLOUD_KUBE_PKG}"
 
 # -----------------------------------------------------------------------------
 # Cluster IP address and ranges: all are static configuration values.
@@ -180,3 +143,51 @@ SYSTEM_NAMESPACE="kube-system"
 # Extra options to set on the Docker command line.  This is useful for setting
 # --insecure-registry for local registries.
 DOCKER_OPTS=""
+
+
+# -----------------------------------------------------------------------------
+# Derived params for kube-up (calculated based on above params: DO NOT CHANGE).
+# If above configs are changed manually, remember to call the function.
+# -----------------------------------------------------------------------------
+function calculate-default {
+  # If KUBE_USER is specified, set the path to save per user k8s config file;
+  # otherwise, use default one from k8s.
+  if [[ ! -z ${KUBE_USER-} ]]; then
+    KUBECONFIG="$HOME/.kube/config_${KUBE_USER}"
+  fi
+
+  # Master IP and node IPs.
+  MASTER_IP=${MASTER_SSH_INFO#*@}
+  NODE_IPS=""
+  IFS=',' read -ra node_info_array <<< "${NODE_SSH_INFO}"
+  for node_info in "${node_info_array[@]}"; do
+    IFS=':@' read -ra ssh_info <<< "${node_info}"
+    if [[ -z "${NODE_IPS-}" ]]; then
+      NODE_IPS="${ssh_info[2]}"
+    else
+      NODE_IPS="${NODE_IPS},${ssh_info[2]}"
+    fi
+  done
+
+  # Create node IP address array and NUM_MINIONS.
+  IFS=',' read -ra NODE_IPS_ARR <<< "${NODE_IPS}"
+  export NUM_MINIONS=${#NODE_IPS_ARR[@]}
+
+  # Note that master_name and node_name are name of the instances in anchnet, which
+  # is helpful to group instances; however, anchnet API works well with instance id,
+  # so we provide instance id to kubernetes as nodename and hostname, which makes it
+  # easy to query anchnet in kubernetes.
+  MASTER_NAME="${CLUSTER_NAME}-master"
+  NODE_NAME_PREFIX="${CLUSTER_NAME}-node"
+
+  # Context to use in kubeconfig.
+  CONTEXT="baremetal_${CLUSTER_NAME}"
+
+  # Caicloud tarball package name.
+  CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_KUBE_VERSION}.tar.gz"
+
+  # Final URL of caicloud tarball URL.
+  CAICLOUD_TARBALL_URL="${CAICLOUD_HOST_URL}/${CAICLOUD_KUBE_PKG}"
+}
+
+calculate-default

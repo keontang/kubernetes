@@ -295,3 +295,4 @@ function restart-docker {
        --insecure-registry=internal-registry.caicloud.io\" > $2
   sudo service docker start
 }
+

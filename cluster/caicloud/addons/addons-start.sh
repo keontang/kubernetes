@@ -27,6 +27,7 @@ set -o pipefail
 ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS:-false}
 ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING:-false}
 ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-false}
+ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE:-"kube-system"}
 
 # Do retries when failing in objects creation from yaml files. It
@@ -75,6 +76,12 @@ function create-kube-ui-addon {
   done
 }
 
+function create-monitoring-addon {
+  for obj in $(find ~/kube/addons/monitoring -type f -name \*.yaml -o -name \*.json); do
+    create-resource-from-file ${obj} 10 10 "${SYSTEM_NAMESPACE}"
+  done
+}
+
 
 create-kube-system-namespace
 
@@ -88,4 +95,8 @@ fi
 
 if [[ "${ENABLE_CLUSTER_UI}" == "true" ]]; then
   create-kube-ui-addon
+fi
+
+if [[ "${ENABLE_CLUSTER_MONITORING}" == "true" ]]; then
+  create-monitoring-addon
 fi

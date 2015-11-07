@@ -23,13 +23,10 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 # Get cluster configuration parameters from config-default, as well as all
 # other utilities. Note KUBE_DISTRO will be available after sourcing file
 # config-default.sh.
-function setup-cluster-env {
-  source "${KUBE_ROOT}/cluster/caicloud-baremetal/config-default.sh"
-  source "${KUBE_ROOT}/cluster/caicloud/common.sh"
-  source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
-}
+source "${KUBE_ROOT}/cluster/caicloud-baremetal/config-default.sh"
+source "${KUBE_ROOT}/cluster/caicloud/common.sh"
+source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 
-setup-cluster-env
 
 # -----------------------------------------------------------------------------
 # Cluster specific library utility functions.
@@ -56,23 +53,17 @@ function kube-up {
   #  1. a staging area
   #  2. a public/private key pair used to provision instances.
   ensure-temp-dir
-  ensure-pub-key
-
-  # Get the caicloud kubernetes release tarball.
-  fetch-and-extract-tarball
+  ensure-ssh-agent
 
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials "${MASTER_IP}"
-
-  # Randomly choose one daocloud accelerator.
-  find-registry-mirror
 
   # Concurrently install all packages for nodes.
   install-packages "${NODE_SSH_INFO}" "false"
 
   # Prepare master environment.
-  master-create-and-send-files "${MASTER_SSH_INFO}"
-  node-create-and-send-files "${NODE_SSH_INFO}" "${MASTER_IP}"
+  send-master-startup-config-files "${MASTER_SSH_INFO}"
+  send-node-startup-config-files "${NODE_SSH_INFO}" "${MASTER_IP}"
 
   # Now start kubernetes.
   start-kubernetes "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}"

@@ -48,7 +48,7 @@
 #   KIBANA_REPLICAS
 #   KUBE_UI_REPLICAS
 function deploy-addons {
-  log "+++++ Deploy caicloud addons"
+  log "+++++ Start deploying caicloud addons"
   # Replace placeholder with our configuration for dns rc/svc.
   local -r skydns_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/dns/skydns-rc.yaml.in"
   local -r skydns_svc_file="${KUBE_ROOT}/cluster/caicloud/addons/dns/skydns-svc.yaml.in"
@@ -67,21 +67,32 @@ function deploy-addons {
   local -r kube_ui_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/kube-ui/kube-ui-rc.yaml.in"
   sed -e "s/{{ pillar\['kube-ui_replicas'\] }}/${KUBE_UI_REPLICAS}/g" ${kube_ui_rc_file} > ${KUBE_TEMP}/kube-ui-rc.yaml
 
+  # Replace placeholder with our configuration for monitoring rc.
+  local -r heapster_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-controller.yaml.in"
+  sed -e "s/{{ pillar\['heapster_memory'\] }}/${HEAPSTER_MEMORY}/g" ${heapster_rc_file} > ${KUBE_TEMP}/heapster-controller.yaml
+
   # Copy addon configurationss and startup script to master instance under ~/kube.
-  rm -rf ${KUBE_TEMP}/addons && mkdir -p ${KUBE_TEMP}/addons/dns ${KUBE_TEMP}/addons/logging ${KUBE_TEMP}/addons/kube-ui
+  rm -rf ${KUBE_TEMP}/addons && mkdir -p ${KUBE_TEMP}/addons/dns ${KUBE_TEMP}/addons/logging ${KUBE_TEMP}/addons/kube-ui ${KUBE_TEMP}/addons/monitoring
   cp ${KUBE_TEMP}/skydns-rc.yaml ${KUBE_TEMP}/skydns-svc.yaml ${KUBE_TEMP}/addons/dns
   cp ${KUBE_TEMP}/elasticsearch-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/logging/elasticsearch-svc.yaml \
      ${KUBE_TEMP}/kibana-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/logging/kibana-svc.yaml ${KUBE_TEMP}/addons/logging
   cp ${KUBE_TEMP}/kube-ui-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/kube-ui/kube-ui-svc.yaml ${KUBE_TEMP}/addons/kube-ui
-  scp-to-instance \
-    "${1}" \
+  cp ${KUBE_TEMP}/heapster-controller.yaml ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/grafana-service.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-service.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-service.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-grafana-controller.yaml ${KUBE_TEMP}/addons/monitoring
+  scp-to-instance-expect "${1}" \
     "${KUBE_TEMP}/addons ${KUBE_ROOT}/cluster/caicloud/addons/namespace.yaml ${KUBE_ROOT}/cluster/caicloud/addons/addons-start.sh" \
     "~/kube"
 
   # Call 'addons-start.sh' to start addons.
-  ssh-to-instance \
-    "${1}" \
-    "sudo SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE} ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} ./kube/addons-start.sh"
+  ssh-to-instance-expect "${1}" \
+    "sudo SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE} \
+          ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} \
+          ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} \
+          ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} \
+          ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING} \
+          ./kube/addons-start.sh"
 }
 
 # Create certificate pairs and credentials for the cluster.
@@ -331,9 +342,9 @@ EOF
 function start-kubernetes {
   local pids=""
   IFS=',' read -ra node_ssh_info <<< "${2}"
-  ssh-to-instance "${1}" "sudo ./kube/master-start.sh" & pids="${pids} $!"
+  ssh-to-instance-expect "${1}" "sudo ./kube/master-start.sh" & pids="${pids} $!"
   for ssh_info in "${node_ssh_info[@]}"; do
-    ssh-to-instance "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
+    ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
   done
   wait ${pids}
 }
@@ -447,10 +458,89 @@ function fetch-and-extract-tarball {
   cd - > /dev/null
 }
 
+# Ask for a password which will be used for all instances.
+#
+# Vars set:
+#   KUBE_INSTANCE_PASSWORD
+function prompt-instance-password {
+  read -s -p "Please enter password for new instances: " KUBE_INSTANCE_PASSWORD
+  echo
+  read -s -p "Password (again): " another
+  echo
+  if [[ "${KUBE_INSTANCE_PASSWORD}" != "${another}" ]]; then
+    log "Passwords do not match"
+    exit 1
+  fi
+}
+
 
 # -----------------------------------------------------------------------------
 # Generic common operations.
 # -----------------------------------------------------------------------------
+SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet"
+
+# ssh to the machine and put the host's pub key to instance's authorized_key,
+# so future ssh commands do not require password to login. Also, if username
+# is not 'root', we setup sudoer for the user so that we do not need to feed
+# in password when executing commands.
+#
+# Input:
+#   $1 Instance external IP address
+#   $2 Instance user name
+#   $3 Instance user password
+function setup-instance {
+  attempt=0
+
+  while true; do
+    log "Attempt $(($attempt+1)) to setup instance ssh for $1"
+    expect <<EOF
+set timeout $((($attempt+1)*3))
+spawn scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  $HOME/.ssh/id_rsa.pub ${2}@${1}:~/host_rsa.pub
+
+expect {
+  "*?assword*" {
+    send -- "${3}\r"
+    exp_continue
+  }
+  "lost connection" { exit 1 }
+  timeout { exit 1 }
+  eof {}
+}
+
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${2}@${1} "\
+umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub && \
+sudo sh -c 'echo \"${INSTANCE_USER} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)'"
+
+expect {
+  "*?assword*" {
+    send -- "${3}\r"
+    exp_continue
+  }
+  "lost connection" { exit 1 }
+  timeout { exit 1 }
+  eof {}
+}
+EOF
+    if [[ "$?" != "0" ]]; then
+      # We give more attempts for setting up ssh to allow slow instance startup.
+      if (( attempt > 40 )); then
+        echo
+        log "${color_red}Unable to setup instance ssh for $1 (sorry!)${color_norm}" >&2
+        kube-up-complete N
+        exit 1
+      fi
+    else
+      log "${color_green}[ssh to instance working]${color_norm}"
+      break
+    fi
+    # No need to sleep here, we increment timout in expect.
+    log "${color_yellow}[ssh to instance not working yet]${color_norm}"
+    attempt=$(($attempt+1))
+  done
+}
+
 
 # Create a temp dir that'll be deleted at the end of bash session.
 #
@@ -480,10 +570,29 @@ function log-oneline {
 }
 
 # Create ~/.ssh/id_rsa.pub if it doesn't exist.
-function ensure-pub-key {
+function ensure-ssh-agent {
   if [[ ! -f ${HOME}/.ssh/id_rsa.pub ]]; then
     log "+++++++++ Create public/private key pair in ~/.ssh/id_rsa"
     ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+  fi
+  ssh-add -L > /dev/null 2>&1
+  # Could not open a connection to authentication agent (ssh-agent),
+  # try creating one.
+  if [[ "$?" == "2" ]]; then
+    eval "$(ssh-agent)" > /dev/null
+    trap "kill ${SSH_AGENT_PID}" EXIT
+  fi
+  ssh-add -L > /dev/null 2>&1
+  # The agent has no identities, try adding one of the default identities,
+  # with or without pass phrase.
+  if [[ "$?" == "1" ]]; then
+    ssh-add || true
+  fi
+  # Expect at least one identity to be available.
+  if ! ssh-add -L > /dev/null 2>&1; then
+    echo "Could not find or add an SSH identity."
+    echo "Please start ssh-agent, add your identity, and retry."
+    exit 1
   fi
 }
 
@@ -519,17 +628,20 @@ function ensure-log-dir {
 # Input:
 #   $1 ssh info, e.g. root:password@43.254.54.58
 #   $2 Command string
-function ssh-to-instance {
-  ssh_opts="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet"
+#   $3 Optional timeout
+function ssh-to-instance-expect {
   IFS=':@' read -ra ssh_info <<< "${1}"
+  timeout=${3:-"-1"}
   expect <<EOF
-set timeout -1
-spawn ssh -t ${ssh_opts} ${ssh_info[0]}@${ssh_info[2]} ${2}
+set timeout ${timeout}
+spawn ssh -t ${SSH_OPTS} ${ssh_info[0]}@${ssh_info[2]} ${2}
 expect {
   "*?assword*" {
     send -- "${ssh_info[1]}\r"
     exp_continue
   }
+  "?ommand failed" {exit 1}
+  "lost connection" { exit 1 }
   eof {}
 }
 EOF
@@ -542,20 +654,104 @@ EOF
 #   $1 ssh info, e.g. root:password@43.254.54.58
 #   $2 files to copy, separate with space
 #   $3 destination directory on remote machine
-function scp-to-instance {
-  ssh_opts="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet"
+#   $4 Optional timeout
+function scp-to-instance-expect {
   IFS=':@' read -ra ssh_info <<< "${1}"
+  timeout=${4:-"-1"}
   expect <<EOF
-set timeout -1
-spawn scp -r ${ssh_opts} ${2} ${ssh_info[0]}@${ssh_info[2]}:${3}
+set timeout ${timeout}
+spawn scp -r ${SSH_OPTS} ${2} ${ssh_info[0]}@${ssh_info[2]}:${3}
 expect {
   "*?assword:" {
     send -- "${ssh_info[1]}\r"
     exp_continue
   }
+  "?ommand failed" {exit 1}
+  "lost connection" { exit 1 }
   eof {}
 }
 EOF
+}
+
+# scp files to given instance and execute command, e.g.
+#  scp-to-instance "root:password@43.254.54.58" "file1" "~/destdir" "source ~/destdir/file1"
+#
+# Input:
+#   $1 ssh info, e.g. root:password@43.254.54.58
+#   $2 files to copy, separate with space
+#   $3 destination directory on remote machine
+#   $4 Command string
+#   $5 Optional timeout
+function scp-then-execute-expect {
+  IFS=':@' read -ra ssh_info <<< "${1}"
+  timeout=${5:-"-1"}
+  expect <<EOF
+set timeout ${timeout}
+spawn scp -r ${SSH_OPTS} ${2} ${ssh_info[0]}@${ssh_info[2]}:${3}
+expect {
+  "*?assword:" {
+    send -- "${ssh_info[1]}\r"
+    exp_continue
+  }
+  "?ommand failed" {exit 1}
+  "lost connection" { exit 1 }
+  eof {}
+}
+EOF
+
+  expect <<EOF
+set timeout ${timeout}
+spawn ssh -t ${SSH_OPTS} ${ssh_info[0]}@${ssh_info[2]} ${4}
+expect {
+  "*?assword*" {
+    send -- "${ssh_info[1]}\r"
+    exp_continue
+  }
+  "?ommand failed" {exit 1}
+  "lost connection" { exit 1 }
+  eof {}
+}
+EOF
+}
+
+# ssh to given node and execute command, e.g.
+#   ssh-to-instance "root:password@43.254.54.58" "touch abc && mkdir def"
+# The function doesn't use expect, just plan ssh.
+#
+# Input:
+#   $1 ssh info, e.g. root:password@43.254.54.58
+#   $2 Command string
+function ssh-to-instance {
+  IFS=':@' read -ra ssh_info <<< "${1}"
+  ssh -t ${SSH_OPTS} ${ssh_info[0]}@${ssh_info[2]} ${2}
+}
+
+# scp files to given instance, e.g.
+#  scp-to-instance "root:password@43.254.54.58" "file1 file2" "~/destdir"
+# The function doesn't use expect, just plan scp.
+#
+# Input:
+#   $1 ssh info, e.g. root:password@43.254.54.58
+#   $2 files to copy, separate with space
+#   $3 destination directory on remote machine
+function scp-to-instance {
+  IFS=':@' read -ra ssh_info <<< "${1}"
+  scp -r ${SSH_OPTS} ${2} ${ssh_info[0]}@${ssh_info[2]}:${3}
+}
+
+# scp files to given instance and execute command, e.g.
+#  scp-to-instance "root:password@43.254.54.58" "file1" "~/destdir" "source ~/destdir/file1"
+# The function doesn't use expect, just plan ssh and scp.
+#
+# Input:
+#   $1 ssh info, e.g. root:password@43.254.54.58
+#   $2 files to copy, separate with space
+#   $3 destination directory on remote machine
+#   $4 Command string
+function scp-then-execute {
+  IFS=':@' read -ra ssh_info <<< "${1}"
+  scp -r ${SSH_OPTS} ${2} ${ssh_info[0]}@${ssh_info[2]}:${3}
+  ssh -t ${SSH_OPTS} ${ssh_info[0]}@${ssh_info[2]} ${4}
 }
 
 # Randomly choose one daocloud accelerator.
@@ -601,11 +797,11 @@ function caicloud-build-server {
 
 # Build release tarball.
 #
-# Assumed vars:
-#   FINAL_VERSION
+# Inputs:
+#   $1 Tarbal version
 function caicloud-build-tarball {
   cd ${KUBE_ROOT}
-  ./hack/caicloud/build-tarball.sh ${FINAL_VERSION}
+  ./hack/caicloud/build-tarball.sh ${1}
   cd -
 }
 
@@ -621,6 +817,76 @@ function make-clean {
   cd ${KUBE_ROOT}
   make clean
   cd -
+}
+
+# Evaluate a json string and return required fields. Example:
+# $ echo '{"action":"RunInstances", "ret_code":0}' | json_val '["action"]'
+# $ RunInstance
+#
+# Input:
+#   $1 A valid string for indexing json string.
+#   $stdin A json string
+#
+# Output:
+#   stdout: value at given index (empty if error occurs).
+#   stderr: any parsing error
+function json_val {
+  python -c '
+import json,sys,datetime,pytz
+try:
+  obj = json.load(sys.stdin)
+  print obj'$1'
+except Exception as e:
+  timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).strftime("%a %b %d %H:%M:%S %Z %Y")
+  sys.stderr.write("[%s] Unable to parse json string: %s. Please retry\n" % (timestamp, e))
+'
+}
+
+
+# Evaluate a json string and return length of required fields. Example:
+# $ echo '{"price": [{"item1":12}, {"item2":21}]}' | json_len '["price"]'
+# $ 2
+#
+# Input:
+#   $1 A valid string for indexing json string.
+#   $stdin A json string
+#
+# Output:
+#   stdout: length at given index (empty if error occurs).
+#   stderr: any parsing error
+function json_len {
+  python -c '
+import json,sys,datetime,pytz
+try:
+  obj = json.load(sys.stdin)
+  print len(obj'$1')
+except Exception as e:
+  timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).strftime("%a %b %d %H:%M:%S %Z %Y")
+  sys.stderr.write("[%s] Unable to parse json string: %s. Please retry\n" % (timestamp, e))
+'
+}
+
+
+# Add a top level field in a json file. e.g.:
+# $ json_add_field key.json "privatekey" "456"
+# {"publickey": "123"} ==> {"publickey": "123", "privatekey": "456"}
+#
+# Input:
+#   $1 Absolute path to the json file
+#   $2 Key of the field to be added
+#   $3 Value of the field to be added
+#
+# Output:
+#   A top level field gets added to $1
+function json_add_field {
+  python -c '
+import json
+with open("'$1'") as f:
+  data = json.load(f)
+data.update({"'$2'": "'$3'"})
+with open("'$1'", "w") as f:
+  json.dump(data, f)
+'
 }
 
 # A helper function that executes a command (or shell function), and retries on
@@ -654,4 +920,9 @@ function command-exec-and-retry {
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
+}
+
+# Remove kube directory on remote hosts.
+function clean-kube-up {
+  echo
 }

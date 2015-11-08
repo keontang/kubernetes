@@ -27,6 +27,7 @@ set -o pipefail
 ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS:-false}
 ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING:-false}
 ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-false}
+ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE:-"kube-system"}
 
 # Do retries when failing in objects creation from yaml files. It
@@ -69,6 +70,11 @@ function prepare-addons {
   # Kube-ui addon.
   mkdir -p ~/kube/addons/kube-ui
   mv ~/kube/kube-ui-rc.yaml ~/kube/kube-ui-svc.yaml ~/kube/addons/kube-ui
+  # Cluster monitoring addon.
+  mkdir -p ~/kube/addons/cluster-monitoring
+  mv ~/kube/heapster-controller.yaml ~/kube/heapster-service.yaml ~/kube/addons/cluster-monitoring
+  mv ~/kube/influxdb-grafana-controller.yaml ~/kube/influxdb-service.yaml ~/kube/addons/cluster-monitoring
+  mv ~/kube/grafana-service.yaml ~/kube/addons/cluster-monitoring
 }
 
 function create-dns-addon {
@@ -89,6 +95,12 @@ function create-kube-ui-addon {
   done
 }
 
+function create-cluster-monitoring-addon {
+  for obj in $(find ~/kube/addons/cluster-monitoring -type f -name \*.yaml -o -name \*.json); do
+    create-resource-from-file ${obj} 10 10 "${SYSTEM_NAMESPACE}"
+  done
+}
+
 
 prepare-addons
 
@@ -102,4 +114,8 @@ fi
 
 if [[ "${ENABLE_CLUSTER_UI}" == "true" ]]; then
   create-kube-ui-addon
+fi
+
+if [[ "${ENABLE_CLUSTER_MONITORING}" == "true" ]]; then
+  create-cluster-monitoring-addon
 fi

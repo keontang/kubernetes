@@ -185,6 +185,11 @@ KIBANA_REPLICAS=${KIBANA_REPLICAS:-1}
 ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-true}
 KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 
+# Optional: Install cluster monitoring
+ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-true}
+# TODO: config the default memory limit according to num of nodes
+HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
+
 # -----------------------------------------------------------------------------
 # Params from user for kube-up.
 # -----------------------------------------------------------------------------

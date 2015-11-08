@@ -354,6 +354,9 @@ function deploy-addons {
   local -r kube_ui_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/kube-ui/kube-ui-rc.yaml.in"
   sed -e "s/{{ pillar\['kube-ui_replicas'\] }}/${KUBE_UI_REPLICAS}/g" ${kube_ui_rc_file} > ${KUBE_TEMP}/kube-ui-rc.yaml
 
+  local -r heapster_rc_file="${KUBE_ROOT}/cluster/anchnet/addons/influxdb/heapster-controller.yaml.in"
+  sed -e "s/{{ pillar\['heapster_memory'\] }}/${HEAPSTER_MEMORY}/g" ${heapster_rc_file} > ${KUBE_TEMP}/heapster-controller.yaml
+
   # Copy addon configurationss and startup script to master instance under ~/kube.
   scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
       ${KUBE_ROOT}/cluster/anchnet/addons/addons-start.sh \
@@ -366,6 +369,11 @@ function deploy-addons {
       ${KUBE_ROOT}/cluster/anchnet/addons/kube-ui/kube-ui-svc.yaml \
       ${KUBE_TEMP}/skydns-rc.yaml \
       ${KUBE_TEMP}/skydns-svc.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/grafana-service.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/heapster-service.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/influxdb-grafana-controller.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/influxdb-service.yaml \
+      ${KUBE_TEMP}/heapster-controller.yaml \
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
 
   # Calling 'addons-start.sh' to start addons.
@@ -374,7 +382,11 @@ set timeout -1
 
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@${MASTER_EIP} "\
-sudo ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} ./kube/addons-start.sh"
+sudo ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} \
+     ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} \
+     ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} \
+     ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING} \
+     ./kube/addons-start.sh"
 
 expect {
   "*?assword*" {

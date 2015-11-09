@@ -108,7 +108,7 @@ function send-master-startup-config-files-internal {
   if [[ "${4:-}" != "" ]]; then
     cp ${4} ${KUBE_TEMP}/kube-master/kube/cloud-config
   fi
-  scp-to-instance "${1}" "${KUBE_TEMP}/kube-master/kube" "~"
+  scp-to-instance-expect "${1}" "${KUBE_TEMP}/kube-master/kube" "~"
 }
 
 # Create node startup script and send all config files to nodes.
@@ -188,9 +188,9 @@ function send-node-startup-config-files-internal {
     echo "mkdir -p ~/kube/configs"
     # Create component options.
     if [[ "${5:-}" != "" ]]; then
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true ${4:-} ${2} ${5} /etc/kubernetes/cloud-config"
+      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true \"${4:-}\" ${2} ${5} /etc/kubernetes/cloud-config"
     else
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true ${4:-} ${2}"
+      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true \"${4:-}\" ${2}"
     fi
     echo "create-kube-proxy-opts 'node' ${2}"
     echo "create-flanneld-opts ${3} ${2}"
@@ -229,7 +229,7 @@ function send-node-startup-config-files-internal {
   if [[ "${6:-}" != "" ]]; then
     cp ${6} ${KUBE_TEMP}/kube-node${1}/kube/cloud-config
   fi
-  scp-to-instance "${1}" "${KUBE_TEMP}/kube-node${1}/kube" "~"
+  scp-to-instance-expect "${1}" "${KUBE_TEMP}/kube-node${1}/kube" "~"
 }
 
 # Install binaries from local directory.
@@ -251,10 +251,10 @@ function install-binaries-from-local {
      ${KUBE_TEMP}/caicloud-kube/kube-scheduler \
      ${KUBE_TEMP}/caicloud-kube/kube-controller-manager \
      ${KUBE_TEMP}/kube/master
-  scp-to-instance "${1}" "${KUBE_TEMP}/kube" "~"
+  scp-to-instance-expect "${1}" "${KUBE_TEMP}/kube" "~"
   # Copy binaries to nodes.
   rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/node
-  IFS=',' read -ra node_ssh_info <<< "${1}"
+  IFS=',' read -ra node_ssh_info <<< "${2}"
   for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
     cp -r ${KUBE_TEMP}/caicloud-kube/etcd \
        ${KUBE_TEMP}/caicloud-kube/etcdctl \
@@ -262,7 +262,7 @@ function install-binaries-from-local {
        ${KUBE_TEMP}/caicloud-kube/kubelet \
        ${KUBE_TEMP}/caicloud-kube/kube-proxy \
        ${KUBE_TEMP}/kube/node
-    scp-to-instance "${node_ssh_info[$i]}" "${KUBE_TEMP}/kube" "~"
+    scp-to-instance-expect "${node_ssh_info[$i]}" "${KUBE_TEMP}/kube" "~"
   done
 }
 
@@ -289,7 +289,7 @@ function install-binaries-from-master-internal {
   log "+++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}. Log will be saved to ${KUBE_INSTANCE_LOGDIR}"
 
   # Fetch tarball for master node.
-  ssh-to-instance "${1}" "wget ${CAICLOUD_TARBALL_URL} -O ~/caicloud-kube.tar.gz"
+  ssh-to-instance-expect "${1}" "wget ${CAICLOUD_TARBALL_URL} -O ~/caicloud-kube.tar.gz"
 
   # Distribute tarball from master to nodes. Use internal address if possible.
   if [[ -z "${3:-}" ]]; then
@@ -334,7 +334,7 @@ EOF
   pids=""
   IFS=',' read -ra instance_ssh_info <<< "${1},${2}"
   for (( i = 0; i < ${#instance_ssh_info[*]}; i++ )); do
-    ssh-to-instance "${instance_ssh_info[$i]}" "\
+    ssh-to-instance-expect "${instance_ssh_info[$i]}" "\
 tar xvzf caicloud-kube.tar.gz && mkdir -p ~/kube/master && \
 cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
   caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
@@ -401,7 +401,7 @@ deb-src ${apt_mirror} trusty-security main restricted universe multiverse
 deb-src ${apt_mirror} trusty-updates main restricted universe multiverse
 EOL
 sudo sh -c 'cat > /etc/apt/sources.list.d/docker.list' << EOL
-deb \[arch=amd64\] http://get.bitintuitive.com/repo ubuntu-trusty main
+deb \[arch=amd64\] http://get.caicloud.io/docker ubuntu-trusty main
 EOL
 sudo apt-get update && \
 sudo apt-get install --allow-unauthenticated -y docker-engine=${DOCKER_VERSION}-0~trusty && \

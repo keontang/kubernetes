@@ -59,6 +59,7 @@ function kube-up {
   create-certs-and-credentials "${MASTER_IP}"
 
   # Concurrently install all packages for nodes.
+  install-binaries-from-local "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}"
   install-packages "${NODE_SSH_INFO}" "false"
 
   # Prepare master environment.

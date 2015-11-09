@@ -91,6 +91,10 @@ RAW_BASE_IMAGE=${RAW_BASE_IMAGE:-"trustysrvx64c"}
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
+# The user & password without sudo privilege
+LOGIN_USER=${LOGIN_USER:-"caicloud"}
+LOGIN_PWD=${LOGIN_PWD:-"caiyun12345678"}
+
 # To indicate if the execution status needs to be reported back to caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}

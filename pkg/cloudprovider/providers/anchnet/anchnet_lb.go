@@ -330,7 +330,7 @@ func (an *Anchnet) allocateEIP() (*anchnet_client.AllocateEipsResponse, error) {
 
 // releaseEIP releasees an external IP from anchnet, with retry.
 func (an *Anchnet) releaseEIP(eip string) (*anchnet_client.ReleaseEipsResponse, error) {
-	for i := 0; i < RetryCountOnError; i++ {
+	for i := 0; i < 10*RetryCountOnError; i++ {
 		request := anchnet_client.ReleaseEipsRequest{
 			EipIDs: []string{eip},
 		}

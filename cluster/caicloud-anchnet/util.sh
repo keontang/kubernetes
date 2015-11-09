@@ -140,6 +140,8 @@ function kube-up {
   # Setup host, including hostname, private SDN network, etc.
   setup-anchnet-hosts
 
+  trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
+
   # Install binaries and packages concurrently. If we are to use image mode,
   # everythingshould already be installed so there is no need to install tarball
   # and packages.
@@ -228,42 +230,31 @@ function kube-push {
   caicloud-build-local
   caicloud-build-server
 
+  # Populate ssh info needed by clean-ups.
+  create-node-internal-ips-variable
+  create-resource-variables
+
+  # Clean up working directory once we are done updating.
+  trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
+
   # Push new binaries to master.
   log "+++++ Push binaries to master ..."
-  expect <<EOF
-set timeout -1
-spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler \
-  ${INSTANCE_USER}@${MASTER_EIP}:~/kube/master
-expect {
-  "*?assword:" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
+  ensure-working-dir "${MASTER_SSH_EXTERNAL}"
+  scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
+    "${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
+     ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
+     ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler" \
+    "~/kube/master"
 
   # Push new binaries to nodes.
   log "+++++ Push binaries to nodes ..."
-  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
-    local node_eip=${NODE_EIPS_ARR[${i}]}
-    expect <<EOF
-set timeout -1
-spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
-  ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy \
-  ${INSTANCE_USER}@${node_eip}:~/kube/node
-expect {
-  "*?assword:" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
+  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
+  for ssh_info in "${node_ssh_info[@]}"; do
+    ensure-working-dir "${ssh_info}"
+    scp-to-instance-expect "${ssh_info}" \
+      "${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
+      ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy" \
+      "~/kube/node"
   done
 
   # Restart cluster.
@@ -669,7 +660,7 @@ function create-master-instance {
   MASTER_EIP=${EIP_ADDRESS}
 
   # Enable ssh without password and enable sudoer for ${INSTANCE_USER}.
-  setup-instance "${MASTER_EIP}" "${INSTANCE_USER}" "${KUBE_INSTANCE_PASSWORD}"
+  setup-instance "${MASTER_EIP}" "${INSTANCE_USER}" "${KUBE_INSTANCE_PASSWORD}" "${LOGIN_USER}" "${LOGIN_PWD}"
 
   echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, \
 eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
@@ -712,7 +703,7 @@ function create-node-instances {
     local node_eip=${EIP_ADDRESS}
 
     # Enable ssh without password and enable sudoer for ${INSTANCE_USER}.
-    setup-instance "${node_eip}" "${INSTANCE_USER}" "${KUBE_INSTANCE_PASSWORD}"
+    setup-instance "${node_eip}" "${INSTANCE_USER}" "${KUBE_INSTANCE_PASSWORD}" "${LOGIN_USER}" "${LOGIN_PWD}"
 
     echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[created node-${i} with instance ID ${node_instance_id}, \
 eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
@@ -1128,7 +1119,7 @@ function prepare-e2e() {
 
   # As part of e2e preparation, we fix image path.
   ${KUBE_ROOT}/hack/caicloud/k8s-replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
 }
 
 # Execute prior to running tests to build a release if required for env.

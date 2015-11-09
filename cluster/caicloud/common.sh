@@ -479,15 +479,20 @@ function prompt-instance-password {
 # -----------------------------------------------------------------------------
 SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet"
 
-# ssh to the machine and put the host's pub key to instance's authorized_key,
-# so future ssh commands do not require password to login. Also, if username
-# is not 'root', we setup sudoer for the user so that we do not need to feed
-# in password when executing commands.
+# This function mainly does the following:
+# 1. ssh to the machine and put the host's pub key to instance's authorized_key,
+#    so future ssh commands do not require password to login.
+# 2. Also, if username is not 'root', we setup sudoer for the user so that we do
+#    not need to feed in password when executing commands.
+# 3. Create login user without sudo privilege so that actual user won't have access
+#    to stuff like anchnet api keys.
 #
 # Input:
 #   $1 Instance external IP address
 #   $2 Instance user name
 #   $3 Instance user password
+#   $4 Login user name
+#   $5 Login user password
 function setup-instance {
   attempt=0
 
@@ -511,7 +516,9 @@ expect {
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${2}@${1} "\
 umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub && \
-sudo sh -c 'echo \"${INSTANCE_USER} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)'"
+sudo sh -c 'echo \"${2} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)' && \
+sudo adduser --quiet --disabled-password --gecos \"${4}\" ${4} && \
+echo \"${4}:${5}\" | sudo chpasswd"
 
 expect {
   "*?assword*" {
@@ -541,6 +548,39 @@ EOF
   done
 }
 
+# Wrapper for clean-up-working-dir-internal
+function clean-up-working-dir {
+  command-exec-and-retry "clean-up-working-dir-internal ${1} ${2}" 3 "false"
+}
+
+# This function simply remove the ~/kube directory from instances
+#
+# Input:
+#   $1 Master external ssh info, e.g. "root:password@43.254.54.59"
+#   $2 Node external ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+function clean-up-working-dir-internal {
+  local pids=""
+  log "+++++ Start cleaning working dir. "
+  ssh-to-instance "${1}" "sudo rm -rf ~/kube" & pids="${pids} $!"
+
+  IFS=',' read -ra node_ssh_info <<< "${2}"
+  for ssh_info in "${node_ssh_info[@]}"; do
+    ssh-to-instance "${ssh_info}" "sudo rm -rf ~/kube" & pids="${pids} $!"
+  done
+
+  log-oneline "+++++ Wait for all instances to clean up working dir ..."
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    log "${color_green}Done${color_norm}"
+    return 0
+  else
+    log "${color_red}Failed${color_norm}"
+    return 1
+  fi
+}
 
 # Create a temp dir that'll be deleted at the end of bash session.
 #
@@ -549,7 +589,7 @@ EOF
 function ensure-temp-dir {
   if [[ -z ${KUBE_TEMP-} ]]; then
     KUBE_TEMP=$(mktemp -d -t kubernetes.XXXXXX)
-    trap 'rm -rf "${KUBE_TEMP}"' EXIT
+    trap-add 'rm -rf "${KUBE_TEMP}"' EXIT
   fi
 }
 
@@ -580,7 +620,7 @@ function ensure-ssh-agent {
   # try creating one.
   if [[ "$?" == "2" ]]; then
     eval "$(ssh-agent)" > /dev/null
-    trap "kill ${SSH_AGENT_PID}" EXIT
+    trap-add "kill ${SSH_AGENT_PID}" EXIT
   fi
   ssh-add -L > /dev/null 2>&1
   # The agent has no identities, try adding one of the default identities,
@@ -620,6 +660,40 @@ function ensure-log-dir {
   if [[ ! -z ${KUBE_INSTANCE_LOGDIR-} ]]; then
     mkdir -p ${KUBE_INSTANCE_LOGDIR}
   fi
+}
+
+# Make sure ~/kube exists on the master/node. This is used in kube-push
+# because we now clean up ~/kube directory once the cluster is up and running.
+#
+# Input:
+#   $1 EIP of the instance
+function ensure-working-dir {
+  ssh-to-instance "${1}" "mkdir -p ~/kube/master ~/kube/node"
+}
+
+# Add trap cmd to signal(s). Since there is no better way of setting multiple
+# trap cmds on a signal, we are just appending new command to the current trap cmd.
+#
+# Input:
+#   $1  trap cmd to add
+#   $2- signals to add cmd to
+function trap-add {
+  local trap_add_cmd=$1; shift
+  local new_cmd=""
+  for trap_add_name in "$@"; do
+    # Grab the currently defined trap commands for this trap
+    existing_cmd=`trap -p "${trap_add_name}" |  awk -F"'" '{print $2}'`
+
+    if [[ -z "${existing_cmd}" ]];then
+      new_cmd=${trap_add_cmd}
+    else
+      new_cmd="${existing_cmd};${trap_add_cmd}"
+    fi
+
+    # Assign the test
+    trap   "${new_cmd}" "${trap_add_name}" || \
+      echo "unable to add to trap ${trap_add_name}"
+  done
 }
 
 # ssh to given node and execute command, e.g.
@@ -799,7 +873,7 @@ function caicloud-build-release {
   fi
   cd ${KUBE_ROOT}
   hack/caicloud/k8s-replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
   build/release.sh
   cd -
 }
@@ -811,7 +885,7 @@ function caicloud-build-server {
   fi
   cd ${KUBE_ROOT}
   hack/caicloud/k8s-replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
   build/run.sh hack/build-go.sh
   cd -
 }

@@ -754,6 +754,27 @@ function scp-then-execute {
   ssh -t ${SSH_OPTS} ${ssh_info[0]}@${ssh_info[2]} ${4}
 }
 
+# Wait a list of pids (or whitespace separated). If any one of them fails,
+# return 1, otherwise, return 0.
+#
+# Input:
+#   $1 Pids to wait
+#   $2 A string of what's being waited
+function wait-pids {
+  log-oneline "${2}"
+  local fail=0
+  for pid in ${1}; do
+    wait ${pid} || let "fail+=1"
+  done
+  if [[ "${fail}" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
+    return 0
+  else
+    echo -e "${color_red}Failed${color_norm}"
+    return 1
+  fi
+}
+
 # Randomly choose one daocloud accelerator.
 #
 # TODO: Use our own registry.

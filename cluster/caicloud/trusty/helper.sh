@@ -286,7 +286,7 @@ function install-binaries-from-master {
 function install-binaries-from-master-internal {
   local pids=""
   local fail=0
-  log "+++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}. Log will be saved to ${KUBE_INSTANCE_LOGDIR}"
+  log "+++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}."
 
   # Fetch tarball for master node.
   ssh-to-instance-expect "${1}" "wget ${CAICLOUD_TARBALL_URL} -O ~/caicloud-kube.tar.gz"
@@ -320,15 +320,10 @@ EOF
     pids="$pids $!"
   done
 
-  log "+++++ Wait for tarball to be distributed to all nodes"
-  for pid in ${pids}; do
-    wait $pid || let "fail+=1"
-  done
-  if [[ "$fail" != "0" ]]; then
-    echo -e "${color_red}Failed${color_norm}"
+  wait-pids "${pids}" "+++++ Wait for tarball to be distributed to all nodes"
+  if [[ "$?" != "0" ]]; then
     return 1
   fi
-  echo -e "${color_green}Done${color_norm}"
 
   # Extract and install tarball for all instances.
   pids=""
@@ -346,18 +341,7 @@ echo 'Command failed installing tarball binaries on remote host ${instance_ssh_i
     pids="$pids $!"
   done
 
-  log-oneline "+++++ Wait for all instances to install tarball"
-  fail=0
-  for pid in ${pids}; do
-    wait $pid || let "fail+=1"
-  done
-  if [[ "$fail" == "0" ]]; then
-    echo -e "${color_green}Done${color_norm}"
-    return 0
-  else
-    echo -e "${color_red}Failed${color_norm}"
-    return 1
-  fi
+  wait-pids "${pids}" "+++++ Wait for all instances to install tarball"
 }
 
 # Install packages for all nodes. The packages are required for running
@@ -375,7 +359,7 @@ function install-packages {
   command-exec-and-retry "install-packages-internal ${1}" 2 "${2-}"
 }
 function install-packages-internal {
-  log "+++++ Start installing packages. Log will be saved to ${KUBE_INSTANCE_LOGDIR}"
+  log "+++++ Start installing packages."
 
   # Choose an apt-mirror for installing packages.
   IFS=',' read -ra apt_mirror_arr <<< "${APT_MIRRORS}"
@@ -420,7 +404,8 @@ expect {
 EOF
     pids="$pids $!"
   done
-  wait ${pids}
+
+  wait-pids "${pids}" "+++++ Wait for all instances to install packages"
 }
 
 # Set hostname of an instance. In anchnet, hostname has the same format but

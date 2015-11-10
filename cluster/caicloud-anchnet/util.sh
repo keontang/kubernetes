@@ -151,7 +151,7 @@ function kube-up {
       "${NODE_SSH_INTERNAL}" & pids="$pids $!"
     install-packages \
       "${NODE_SSH_EXTERNAL}" & pids="$pids $!"
-    wait $pids
+    wait ${pids}
   fi
 
   # Configure master/nodes instances.
@@ -1004,7 +1004,7 @@ function setup-anchnet-hosts-internal {
   chmod a+x "${KUBE_TEMP}/master-host-setup.sh"
   create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_IIP} ${INTERNAL_IP_MASK} "${KUBE_TEMP}/master-network-opts"
 
-  scp-then-execute "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/master-network-opts ${KUBE_TEMP}/master-host-setup.sh" "~" "\
+  scp-then-execute-expect "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/master-network-opts ${KUBE_TEMP}/master-host-setup.sh" "~" "\
 mkdir -p ~/kube && \
 sudo mv ~/master-host-setup.sh ~/kube && \
 sudo rm -rf /etc/network/interfaces && sudo mv ~/master-network-opts /etc/network/interfaces && \
@@ -1026,14 +1026,15 @@ echo 'Command failed setting up remote host'" & pids="${pids} $!"
     chmod a+x "${KUBE_TEMP}/node${i}-host-setup.sh"
     create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${node_iip} ${INTERNAL_IP_MASK} "${KUBE_TEMP}/node${i}-network-opts"
 
-    scp-then-execute "${node_ssh_info[$i]}" "${KUBE_TEMP}/node${i}-network-opts ${KUBE_TEMP}/node${i}-host-setup.sh" "~" "\
+    scp-then-execute-expect "${node_ssh_info[$i]}" "${KUBE_TEMP}/node${i}-network-opts ${KUBE_TEMP}/node${i}-host-setup.sh" "~" "\
 mkdir -p ~/kube && \
 sudo mv ~/node${i}-host-setup.sh ~/kube && \
 sudo rm -rf /etc/network/interfaces && sudo mv ~/node${i}-network-opts /etc/network/interfaces && \
 sudo ./kube/node${i}-host-setup.sh || \
 echo 'Command failed setting up remote host'" & pids="${pids} $!"
   done
-  wait ${pids}
+
+  wait-pids "${pids}" "+++++ Wait for all instances to be setup"
 }
 
 # A helper function that executes an anchnet command, and retries on failure.

@@ -45,6 +45,7 @@ function create-kube-apiserver-opts {
   cat <<EOF > ~/kube/default/kube-apiserver
 KUBE_APISERVER_OPTS="--logtostderr=true \
 --insecure-bind-address=${MASTER_INSECURE_ADDRESS} \
+--cors-allowed-origins=.*
 --insecure-port=${MASTER_INSECURE_PORT} \
 --bind-address=${MASTER_SECURE_ADDRESS} \
 --secure-port=${MASTER_SECURE_PORT} \

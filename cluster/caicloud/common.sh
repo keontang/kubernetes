@@ -863,7 +863,6 @@ except Exception as e:
 '
 }
 
-
 # Evaluate a json string and return length of required fields. Example:
 # $ echo '{"price": [{"item1":12}, {"item2":21}]}' | json_len '["price"]'
 # $ 2
@@ -886,7 +885,6 @@ except Exception as e:
   sys.stderr.write("[%s] Unable to parse json string: %s. Please retry\n" % (timestamp, e))
 '
 }
-
 
 # Add a top level field in a json file. e.g.:
 # $ json_add_field key.json "privatekey" "456"

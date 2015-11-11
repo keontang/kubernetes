@@ -154,12 +154,16 @@ function kube-up {
     wait ${pids}
   fi
 
+  # Add project_id to cloud config.
+  cp "${ANCHNET_CONFIG_FILE}" ${KUBE_TEMP}/anchnet-config
+  json_add_field ${KUBE_TEMP}/anchnet-config "projectid" "${PROJECT_ID}"
+
   # Configure master/nodes instances.
   send-master-startup-config-files \
     "${MASTER_SSH_EXTERNAL}" \
     "${PRIVATE_SDN_INTERFACE}" \
     "anchnet" \
-    "${ANCHNET_CONFIG_FILE}"
+    "${KUBE_TEMP}/anchnet-config"
 
   send-node-startup-config-files \
     "${NODE_SSH_EXTERNAL}" \
@@ -167,7 +171,7 @@ function kube-up {
     "${PRIVATE_SDN_INTERFACE}" \
     "${NODE_INSTANCE_IDS}" \
     "anchnet" \
-    "${ANCHNET_CONFIG_FILE}"
+    "${KUBE_TEMP}/anchnet-config"
 
   # Now start kubernetes.
   start-kubernetes \

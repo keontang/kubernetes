@@ -349,12 +349,27 @@ function start-kubernetes {
   wait ${pids}
 }
 
+# Start kubernetes component only on nodes. The function assumes that nodes have
+# already been setup correctly.
+#
+# Input:
+#   $1 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+function start-node-kubernetes {
+  local pids=""
+  IFS=',' read -ra node_ssh_info <<< "${1}"
+  for ssh_info in "${node_ssh_info[@]}"; do
+    ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
+  done
+  wait ${pids}
+}
+
 # Create a comma separated string of node internal ips based on the cluster config
 # NODE_IIP_RANGE and NUM_MINIONS. E.g. if NODE_IIP_RANGE is 10.244.1.0/16 and
 # NUM_MINIONS is 2, then output is: "10.244.1.0,10.244.1.1".
 #
 # Assumed vars:
 #   NODE_IIP_RANGE
+#   NUM_RUNNING_MINIONS
 #   NUM_MINIONS
 #
 # Vars set:
@@ -395,11 +410,26 @@ function create-node-internal-ips-variable {
     host_zeros=true
   fi
 
-  if (( NUM_MINIONS > (total_count - used_count) )); then
+  if (( NUM_RUNNING_MINIONS + NUM_MINIONS > (total_count - used_count) )); then
     log "Number of nodes is larger than allowed node internal IP address"
     kube-up-complete N
     exit 1
   fi
+
+  # We could just compute the starting point directly but I'm lazy...
+  for (( i = 0; i < ${NUM_RUNNING_MINIONS}; i++ )); do
+    # Avoid using all-zeros address for CIDR like 10.244.0.0/16.
+    if [[ ${i} == 0 && ${host_zeros} == true ]]; then
+      ((ip_octects[3]+=1))
+    fi
+    ((ip_octects[3]+=1))
+    for (( k = 3; k > 0; k--)); do
+      if [[ "${ip_octects[k]}" == "256" ]]; then
+        ip_octects[k]=0
+        ((ip_octects[k-1]+=1))
+      fi
+    done
+  done
 
   # Since we've checked the required number of hosts < total number of hosts,
   # we can just simply add 1 to previous IP.
@@ -550,6 +580,9 @@ EOF
 
 # Wrapper for clean-up-working-dir-internal
 function clean-up-working-dir {
+  # Only do cleanups on success
+  [[ "$?" == "0" ]] || return 1
+
   command-exec-and-retry "clean-up-working-dir-internal ${1} ${2}" 3 "false"
 }
 

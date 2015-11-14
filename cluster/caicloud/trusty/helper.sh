@@ -89,6 +89,8 @@ function send-master-startup-config-files-internal {
     echo "sudo cp ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key /etc/kubernetes"
     # Make sure cloud-config exists, even if not used.
     echo "touch ~/kube/cloud-config && sudo cp ~/kube/cloud-config /etc/kubernetes"
+    # Remove rwx permission on folders we don't want user to mess up with
+    echo "sudo chmod go-rwx /opt/bin /etc/kubernetes"
     # Finally, start kubernetes cluster. Upstart will make sure all components start
     # upon etcd start.
     echo "sudo service etcd start"

@@ -74,6 +74,9 @@ function verify-prereqs {
 
 # Step2 of cluster bootstrapping: create all resources and provision them.
 function kube-up {
+  # Clean up the working dir once we successfully created a cluster
+  trap-add 'clean-up-working-dir' EXIT
+
   # Print all environment and local variables at this point.
   echo "[`TZ=Asia/Shanghai date`] +++++ Running kube-up with variables ..."
   (set -o posix; set)
@@ -194,6 +197,9 @@ function validate-cluster {
 
 # Update a kubernetes cluster with latest source.
 function kube-push {
+  # Clean up working directory once we are done updating.
+  trap-add 'clean-up-working-dir' EXIT
+
   # Find all instances and eips.
   find-instance-and-eip-resouces
   if [[ "$?" != "0" ]]; then
@@ -216,6 +222,7 @@ function kube-push {
 
   # Push new binaries to master.
   echo "[`TZ=Asia/Shanghai date`] +++++ Push binaries to master ..."
+  ensure-working-dir "${MASTER_EIP}"
   expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
@@ -236,6 +243,7 @@ EOF
   echo "[`TZ=Asia/Shanghai date`] +++++ Push binaries to nodes ..."
   for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
     local node_eip=${NODE_EIPS_ARR[${i}]}
+    ensure-working-dir "${node_eip}"
     expect <<EOF
 set timeout -1
 spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
@@ -687,7 +695,7 @@ function get-password {
 function ensure-temp-dir {
   if [[ -z ${KUBE_TEMP-} ]]; then
     KUBE_TEMP=$(mktemp -d -t kubernetes.XXXXXX)
-    trap 'rm -rf "${KUBE_TEMP}"' EXIT
+    trap-add 'rm -rf "${KUBE_TEMP}"' EXIT
   fi
 }
 
@@ -702,6 +710,42 @@ function ensure-log-dir {
   fi
 }
 
+# Make sure ~/kube exists on the master/node. This is used in kube-push
+# because we now clean up ~/kube directory once the cluster is up and running.
+#
+# Input:
+#   $1 EIP of the instance
+function ensure-working-dir {
+  ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+      ${INSTANCE_USER}@${1} "mkdir -p ~/kube/master ~/kube/node"
+}
+
+# Add trap cmd to signal(s). Since there is no better way of setting multiple
+# trap cmds on a signal, we are just appending new command to the current trap cmd.
+#
+# Input:
+#   $1  trap cmd to add
+#   $2- signals to add cmd to
+function trap-add {
+  local trap_add_cmd=$1; shift
+  local new_cmd=""
+  for trap_add_name in "$@"; do
+    # Grab the currently defined trap commands for this trap
+    existing_cmd=`trap -p "${trap_add_name}" |  awk -F"'" '{print $2}'`
+
+    # Define default command
+    if [[ -z "${existing_cmd}" ]];then
+      new_cmd=${trap_add_cmd}
+    else
+      # Generate the new command
+      new_cmd="${existing_cmd};${trap_add_cmd}"
+    fi
+
+    # Assign the test
+    trap   "${new_cmd}" "${trap_add_name}" || \
+      fatal "unable to add to trap ${trap_add_name}"
+  done
+}
 
 # Evaluate a json string and return required fields. Example:
 # $ echo '{"action":"RunInstances", "ret_code":0}' | json_val '["action"]'
@@ -985,13 +1029,16 @@ function get-ip-address-from-eipid {
   done
 }
 
-# SSH to the machine and put the host's pub key to instance's authorized_key,
-# so future ssh commands do not require password to login. Note however,
-# if ubuntu is used, we still need to use 'expect' to enter password, because
-# root login is disabled by default in ubuntu.
-# Also setup sudoer for ${INSTANCE} user on $1 so that we do not need to feed
-# in password when executing commands. We do this mainly for e2e tests since
-# e2e will run sudo commands on nodes.
+# This function mainly does the following:
+# 1. SSH to the machine and put the host's pub key to instance's authorized_key,
+#    so future ssh commands do not require password to login. Note however,
+#    if ubuntu is used, we still need to use 'expect' to enter password, because
+#    root login is disabled by default in ubuntu.
+# 2. Setup sudoer for ${INSTANCE} user on $1 so that we do not need to feed
+#    in password when executing commands. We do this mainly for e2e tests since
+#    e2e will run sudo commands on nodes.
+# 3. Create login user without sudo privilege so that actual user won't have access
+#    to stuff like anchnet api keys.
 #
 # Input:
 #   $1 Instance external IP address
@@ -999,6 +1046,8 @@ function get-ip-address-from-eipid {
 # Assumed vars:
 #   INSTANCE_USER
 #   KUBE_INSTANCE_PASSWORD
+#   LOGIN_USER
+#   LOGIN_PWD
 function setup-instance {
   attempt=0
   while true; do
@@ -1021,7 +1070,9 @@ expect {
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${INSTANCE_USER}@$1 "\
 umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub && \
-sudo sh -c 'echo \"${INSTANCE_USER} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)'"
+sudo sh -c 'echo \"${INSTANCE_USER} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)' && \
+sudo adduser --quiet --disabled-password --gecos \"${LOGIN_USER}\" ${LOGIN_USER} && \
+echo \"${LOGIN_USER}:${LOGIN_PWD}\" | sudo chpasswd"
 
 expect {
   "*?assword*" {
@@ -1546,6 +1597,39 @@ EOF
 }
 
 
+function clean-up-working-dir {
+  command-exec-and-retry "clean-up-working-dir-internal" 3 "false"
+}
+
+function clean-up-working-dir-internal {
+  local pids=""
+  echo "[`TZ=Asia/Shanghai date`] +++++ Start cleaning working dir. "
+  ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+      ${INSTANCE_USER}@${MASTER_EIP} "sudo rm -rf ~/kube"
+  pids="$pids $!"
+
+  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
+    local node_eip=${NODE_EIPS_ARR[${i}]}
+    local node_instance_id=${NODE_INSTANCE_IDS_ARR[${i}]}
+    ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+        ${INSTANCE_USER}@${node_eip} "sudo rm -rf ~/kube"
+    pids="$pids $!"
+  done
+
+  echo -n "[`TZ=Asia/Shanghai date`] +++++ Wait for all instances to clean up working dir ..."
+  local fail=0
+  for pid in ${pids}; do
+    wait $pid || let "fail+=1"
+  done
+  if [[ "$fail" == "0" ]]; then
+    echo -e "${color_green}Done${color_norm}"
+    return 0
+  else
+    echo -e "${color_red}Failed${color_norm}"
+    return 1
+  fi
+}
+
 # Wrapper of provision-instances-internal.
 function provision-instances {
   command-exec-and-retry "provision-instances-internal" 3 "false"
@@ -1794,6 +1878,8 @@ function create-master-start-script {
     echo "sudo cp ~/kube/security/known-tokens.csv ~/kube/security/basic-auth.csv /etc/kubernetes"
     echo "sudo cp ~/kube/security/ca.crt ~/kube/security/master.crt ~/kube/security/master.key /etc/kubernetes"
     echo "sudo cp ~/kube/security/anchnet-config /etc/kubernetes"
+    # Remove rwx permission on folders we don't want user to mess up with
+    echo "sudo chmod o-rwx /opt/bin /etc/kubernetes"
     # Finally, start kubernetes cluster. Upstart will make sure all components start
     # upon etcd start.
     echo "sudo service etcd start"
@@ -2264,7 +2350,7 @@ function anchnet-build-release {
   fi
   cd ${KUBE_ROOT}
   hack/caicloud/k8s-replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
   build/release.sh
   cd -
 }
@@ -2277,7 +2363,7 @@ function anchnet-build-server {
   fi
   cd ${KUBE_ROOT}
   hack/caicloud/k8s-replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
   build/run.sh hack/build-go.sh
   cd -
 }
@@ -2336,7 +2422,7 @@ function prepare-e2e() {
 
   # As part of e2e preparation, we fix image path.
   ${KUBE_ROOT}/hack/caicloud/k8s-replace.sh
-  trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
 }
 
 

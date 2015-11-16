@@ -45,10 +45,10 @@ function create-kube-apiserver-opts {
   cat <<EOF > ~/kube/default/kube-apiserver
 KUBE_APISERVER_OPTS="--logtostderr=true \
 --insecure-bind-address=${MASTER_INSECURE_ADDRESS} \
---cors-allowed-origins=.*
 --insecure-port=${MASTER_INSECURE_PORT} \
 --bind-address=${MASTER_SECURE_ADDRESS} \
 --secure-port=${MASTER_SECURE_PORT} \
+--cors-allowed-origins=.* \
 --etcd-servers=http://127.0.0.1:4001 \
 --service-cluster-ip-range=${1} \
 --token-auth-file=/etc/kubernetes/known-tokens.csv \

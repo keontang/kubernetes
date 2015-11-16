@@ -15,7 +15,14 @@
 # limitations under the License.
 
 # Add skipped test regex here.
-CAICLOUD_TEST_SKIP_REGEX=${CAICLOUD_TEST_SKIP_REGEX:-"kube-ui|Skipped|Example"}
+CAICLOUD_TEST_SKIP_REGEX=${CAICLOUD_TEST_SKIP_REGEX:-"Skipped|Example"}
+
+# Disable logging and monitoring since it takes a long time to bring up (due to docker pull image).
+export ENABLE_CLUSTER_LOGGING=false
+export ENABLE_CLUSTER_MONITORING=false
+
+# Make sure kube-ui addon is enabled.
+export ENABLE_CLUSTER_UI=true
 
 # Provided for backwards compatibility, see ${KUBE_ROOT}/hack/e2e-test.sh.
 go run "$(dirname $0)/../e2e.go" -v -build -up -test --test_args="--ginkgo.skip=${CAICLOUD_TEST_SKIP_REGEX}" -down

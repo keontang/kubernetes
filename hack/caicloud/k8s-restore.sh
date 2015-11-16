@@ -40,8 +40,8 @@ perl -i -pe "s|${ETCD_URL}|https://github.com/coreos/etcd/releases/download/v2.0
 perl -i -pe "s|${ETCD_VERSION}|v2.0.0|g" ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Restore supported e2e tests.
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
      ${KUBE_ROOT}/test/e2e/kubectl.go
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
      ${KUBE_ROOT}/test/e2e/service.go
 perl -i -pe "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go

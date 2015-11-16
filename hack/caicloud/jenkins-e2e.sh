@@ -22,8 +22,8 @@ set -o xtrace
 # Join all args with |
 #   Example: join_regex_allow_empty a b "c d" e  =>  a|b|c d|e
 function join_regex_allow_empty() {
-    local IFS="|"
-    echo "$*"
+  local IFS="|"
+  echo "$*"
 }
 
 # Join all args with |, but in case of empty result prints "EMPTY\sSET" instead.
@@ -92,17 +92,17 @@ GINKGO_TEST_ARGS="--ginkgo.skip=$(join_regex_allow_empty \
 
 ### Set up ###
 if [[ "${E2E_UP}" == "true" ]]; then
-    go run ./hack/e2e.go -v -build --up
+  go run ./hack/e2e.go -v -build --up
 fi
 
 ### Run tests ###
 if [[ "${E2E_TEST}" == "true" ]]; then
-    go run ./hack/e2e.go -v --test --test_args="${GINKGO_TEST_ARGS}"
+  go run ./hack/e2e.go -v --test --test_args="${GINKGO_TEST_ARGS}"
 fi
 
 ### Tear down
 if [[ "${E2E_DOWN}" == "true" ]]; then
-    go run ./hack/e2e.go -v --down
+  go run ./hack/e2e.go -v --down
 fi
 
 # Provided for backwards compatibility, see ${KUBE_ROOT}/hack/e2e-test.sh.

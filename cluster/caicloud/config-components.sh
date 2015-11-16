@@ -68,6 +68,7 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --insecure-port=${MASTER_INSECURE_PORT} \
 --bind-address=${MASTER_SECURE_ADDRESS} \
 --secure-port=${MASTER_SECURE_PORT} \
+--cors-allowed-origins=.* \
 --etcd-servers=http://127.0.0.1:4001 \
 --cluster-name=${1} \
 --service-cluster-ip-range=${2} \

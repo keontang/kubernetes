@@ -40,8 +40,8 @@ perl -i -pe "s|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0
 perl -i -pe "s|v2.0.0|${ETCD_VERSION}|g" ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Our cloudprovider supports following e2e tests.
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "anchnet")|g' \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")|g' \
      ${KUBE_ROOT}/test/e2e/kubectl.go
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "anchnet")|g' \
+perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")|g' \
      ${KUBE_ROOT}/test/e2e/service.go
 perl -i -pe "s|google.com|baidu.com|g" ${KUBE_ROOT}/test/e2e/networking.go

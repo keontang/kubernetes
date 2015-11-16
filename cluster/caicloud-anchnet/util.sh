@@ -1133,7 +1133,7 @@ function test-build-release {
   # dockerized build; however, developer may use local kubectl (_output/local/bin/kubectl),
   # so we do a local build here.
   log "Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
-  anchnet-build-local
+  caicloud-build-local
 }
 
 # Execute prior to running tests to initialize required structure. This is

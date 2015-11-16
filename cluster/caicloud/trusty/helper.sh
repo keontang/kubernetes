@@ -406,6 +406,7 @@ function install-packages-internal {
   # Choose an apt-mirror for installing packages.
   IFS=',' read -ra apt_mirror_arr <<< "${APT_MIRRORS}"
   apt_mirror=${apt_mirror_arr[$(( ${APT_MIRROR_INDEX} % ${#apt_mirror_arr[*]} ))]}
+  APT_MIRROR_INDEX=$(($APT_MIRROR_INDEX+1))
   log "Use apt mirror ${apt_mirror}"
 
   # Install packages for given nodes concurrently.

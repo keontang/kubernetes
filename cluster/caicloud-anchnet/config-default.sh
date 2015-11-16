@@ -204,6 +204,10 @@ HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
 # Define number of nodes (minions). There will be only one master.
 NUM_MINIONS=${NUM_MINIONS:-2}
 
+# Define number of nodes (minions) currently running in the cluster.
+# For kube-up, this should be 0.
+NUM_RUNNING_MINIONS=${NUM_RUNNING_MINIONS:-0}
+
 # The memory size of master node (in MB).
 MASTER_MEM=${MASTER_MEM:-1024}
 # The number of CPUs of the master.

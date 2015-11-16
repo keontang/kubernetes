@@ -109,7 +109,7 @@ function kube-up {
     #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
     #   NODE_INSTANCE_IDS,   NODE_EIP_IDS,   NODE_EIPS
     create-master-instance
-    create-node-instances
+    create-node-instances "${NUM_MINIONS}"
     # Create a private SDN; then add master, nodes to it. The IP address of the
     # machines in this network will be set in setup-anchnet-hosts. The function
     # will create one var:
@@ -143,10 +143,11 @@ function kube-up {
   trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
 
   # Install binaries and packages concurrently. If we are to use image mode,
-  # everythingshould already be installed so there is no need to install tarball
+  # everything should already be installed so there is no need to install tarball
   # and packages.
   if [[ "${KUBE_UP_MODE}" != "image" ]]; then
     local pids=""
+    fetch-tarball-in-master "${MASTER_SSH_EXTERNAL}" && \
     install-binaries-from-master \
       "${MASTER_SSH_EXTERNAL}" \
       "${NODE_SSH_EXTERNAL}" \
@@ -168,6 +169,7 @@ function kube-up {
     "${KUBE_TEMP}/anchnet-config"
 
   send-node-startup-config-files \
+    "${MASTER_SSH_EXTERNAL}" \
     "${NODE_SSH_EXTERNAL}" \
     "${MASTER_IIP}" \
     "${PRIVATE_SDN_INTERFACE}" \
@@ -212,7 +214,7 @@ function validate-cluster {
 # Update a kubernetes cluster with latest source.
 function kube-push {
   # Find all instances and eips.
-  find-instance-and-eip-resouces
+  find-instance-and-eip-resouces "running"
   if [[ "$?" != "0" ]]; then
     log "+++++ Unable to find instances ..."
     exit 1
@@ -267,7 +269,7 @@ function kube-push {
 # Delete a kubernete cluster from anchnet, using CLUSTER_NAME.
 function kube-down {
   # Find all instances prefixed with CLUSTER_NAME.
-  find-instance-and-eip-resouces
+  find-instance-and-eip-resouces "running,pending,stopped,suspended"
   if [[ "$?" == "0" ]]; then
     anchnet-exec-and-retry "${ANCHNET_CMD} terminateinstances ${INSTANCE_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
@@ -283,7 +285,7 @@ function kube-down {
   fi
 
   # Find all security group prefixed with CLUSTER_NAME.
-  find-securitygroup-resources
+  find-securitygroup-resources "${CLUSTER_NAME}"
   if [[ "$?" == "0" ]]; then
     anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
@@ -400,6 +402,9 @@ EOF
 #   CLUSTER_NAME
 #   PROJECT_ID
 #
+# Input:
+#   $1 Comma separated string of instance status to find (running, pending, stopped, suspended).
+#
 # Vars set:
 #   MASTER_INSTANCE_ID
 #   MASTER_EIP
@@ -407,13 +412,13 @@ EOF
 #   NODE_INSTANCE_IDS
 #   NODE_EIPS
 #   NODE_EIP_IDS
-#   NUM_MINIONS
+#   NUM_RUNNING_MINIONS
 #   INSTANCE_IDS
 #   INSTANCE_EIPS
 #   INSTANCE_EIP_IDS
 #   TOTAL_COUNT
 function find-instance-and-eip-resouces {
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchinstance ${CLUSTER_NAME} --status=${1} --project=${PROJECT_ID}"
   TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${TOTAL_COUNT}" = "" ]]; then
     return 1
@@ -422,9 +427,10 @@ function find-instance-and-eip-resouces {
   for i in `seq 0 $(($TOTAL_COUNT-1))`; do
     instance_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_name']")
     instance_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['instance_id']")
+    instance_status=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['status']")
     eip=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_addr']")
     eip_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eip']['eip_id']")
-    log "Found instances: ${instance_name},${instance_id},${eip_id},${eip}"
+    log "Found instances: ${instance_name},${instance_id},${eip_id},${eip} with status ${instance_status}"
     if [[ ${instance_name} == *"master"* ]]; then
       MASTER_EIP=${eip}
       MASTER_EIP_ID=${eip_id}
@@ -448,7 +454,7 @@ function find-instance-and-eip-resouces {
     NODE_EIPS_ARR=""
     NODE_EIP_IDS_ARR=""
     NODE_INSTANCE_IDS_ARR=""
-    export NUM_MINIONS=0
+    export NUM_RUNNING_MINIONS=0
   else
     INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
     INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
@@ -456,7 +462,7 @@ function find-instance-and-eip-resouces {
     IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
     IFS=',' read -ra NODE_EIP_IDS_ARR <<< "${NODE_EIP_IDS}"
     IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
-    export NUM_MINIONS=${#NODE_EIPS_ARR[@]}
+    export NUM_RUNNING_MINIONS=${#NODE_EIPS_ARR[@]}
   fi
 }
 
@@ -498,11 +504,14 @@ function find-vxnet-resources {
 #   CLUSTER_NAME
 #   PROJECT_ID
 #
+# Input vars:
+#   $1: search keyword
+#
 # Vars set:
 #   SECURITY_GROUP_IDS
 #   TOTAL_COUNT
 function find-securitygroup-resources {
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${CLUSTER_NAME} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchsecuritygroup ${1} --project=${PROJECT_ID}"
   TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   if [[ "${TOTAL_COUNT}" == "" ]]; then
     return 1
@@ -672,10 +681,12 @@ eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 # Create node instances from anchnet.
 #
 # Assumed vars:
-#   NUM_MINIONS
 #   NODE_MEM
 #   NODE_CPU_CORES
 #   NODE_NAME_PREFIX
+#
+# Input:
+#   $1 Number of nodes we want to create
 #
 # Vars set:
 #   NODE_INSTANCE_IDS - comma separated string of instance IDs
@@ -684,14 +695,19 @@ eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 function create-node-instances {
   log "+++++ Create kubernetes nodes from anchnet, node name prefix: ${NODE_NAME_PREFIX} ..."
 
+  # Reset node related vars.
+  NODE_INSTANCE_IDS=""
+  NODE_EIP_IDS=""
+  NODE_EIPS=""
+
   # Create 'raw' node instances from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
 -p=${KUBE_INSTANCE_PASSWORD} -i=${FINAL_IMAGE} -m=${NODE_MEM} \
--c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${NUM_MINIONS} --project=${PROJECT_ID}"
+-c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${1} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${NODES_WAIT_RETRY} ${NODES_WAIT_INTERVAL}
 
   # Node name starts from 1.
-  for (( i = 1; i < $(($NUM_MINIONS+1)); i++ )); do
+  for (( i = 1; i < $(($1+1)); i++ )); do
     # Get node information.
     local node_info=${COMMAND_EXEC_RESPONSE}
     local node_instance_id=$(echo ${node_info} | json_val "['instances'][$(($i-1))]")
@@ -1151,4 +1167,119 @@ function test-teardown {
   # CLUSTER_NAME should already be set, but we set again to make sure.
   export CLUSTER_NAME="e2e-test"
   kube-down
+}
+
+
+# -----------------------------------------------------------------------------
+# Anchnet specific utility functions used in kube-add-node
+# -----------------------------------------------------------------------------
+
+# Find the existing SDN network and add newly created node to it.
+# We are now finding vxnet ids by CLUSTER_NAME
+#
+# Assumed vars:
+#   NODE_INSTANCE_IDS
+#   CLUSTER_NAME
+#   PROJECT_ID
+function join-sdn-network {
+  # Find all vxnets prefixed with CLUSTER_NAME.
+  find-vxnet-resources
+  if [[ "$?" == "1" || "${TOTAL_COUNT}" != "2" ]];then
+    # We don't want newly created nodes to join some random vxnet if we find more than one
+    # vxnets that matches the CLUSTER_NAME prefix
+    log "Unable to join vxnet. Found: ${VXNET_IDS}." >&2
+    exit 1
+  fi
+
+  # I'm lazy and want to reuse find-vxnet-resources so I'm treating VXNET_IDS as VXNET_ID,
+  # which should only contain one record up to this point.
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} joinvxnet ${VXNET_IDS} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_JOIN_WAIT_RETRY} ${VXNET_JOIN_WAIT_INTERVAL}
+  fi
+}
+
+# Find the existing node security group and add newly created node to security group
+#
+# Assumed vars:
+#   CLUSTER_NAME
+#   PROJECT_ID
+#   NODE_SG_NAME
+#
+# Vars set:
+#   SECURITY_GROUP_IDS
+#   TOTAL_COUNT
+function join-node-securitygroup {
+  # Find all security group resources that match ${CLUSTER_NAME}-${NODE_SG_NAME}
+  find-securitygroup-resources "${CLUSTER_NAME}-${NODE_SG_NAME}"
+
+  if [[ "$?" == "1" || "$(($TOTAL_COUNT))" -gt 1 ]];then
+    # Like vxnet, we don't want newly created nodes to join some random security group.
+    log "Unable to join security group. Found: ${SECURITY_GROUP_IDS}." >&2
+    exit 1
+  fi
+
+  # Up to this point we should only have one record in ${SECURITY_GROUP_IDS}.
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${SECURITY_GROUP_IDS} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
+  fi
+}
+
+
+# Setup anchnet hosts, including hostname, interconnection and private SDN network.
+# For SDN network, this will assign internal IP address to all newly created nodes'
+# private SDN interface.  Once done, all instances can be reached from preconfigured
+# private IP addresses.
+function setup-node-network {
+  # Use multiple retries since seting up sdn network is essential for follow-up
+  # installations, and we ses occational errors:
+  # https://github.com/caicloud/caicloud-kubernetes/issues/175
+  command-exec-and-retry "setup-node-network-internal" 5
+}
+# Setup hosts before installing kubernetes. This is cloudprovider specific setup.
+function setup-node-network-internal {
+  local pids=""
+
+  # Add host entries to master.
+  (
+    echo "#!/bin/bash"
+    grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
+    echo ""
+    # Make sure master is able to find nodes using node hostname.
+    for (( i = 0; i < ${NUM_NEW_NODES}; i++ )); do
+      echo "add-hosts-entry ${NODE_INSTANCE_IDS_ARR[$i]} ${NODE_IIPS_ARR[$i]}"
+    done
+  ) > "${KUBE_TEMP}/master-host-setup.sh"
+  chmod a+x "${KUBE_TEMP}/master-host-setup.sh"
+
+  scp-then-execute "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/master-host-setup.sh" "~" "\
+mkdir -p ~/kube && \
+sudo mv ~/master-host-setup.sh ~/kube && \
+sudo ./kube/master-host-setup.sh || \
+echo 'Command failed setting up remote host'" & pids="${pids} $!"
+
+  # Setup node instances.
+  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
+  for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
+    local node_instance_id=${NODE_INSTANCE_IDS_ARR[${i}]}
+    local node_iip=${NODE_IIPS_ARR[${i}]}
+    (
+      echo "#!/bin/bash"
+      grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
+      echo ""
+      echo "config-hostname ${node_instance_id}"
+      echo "setup-network"
+    ) > "${KUBE_TEMP}/node${i}-host-setup.sh"
+    chmod a+x "${KUBE_TEMP}/node${i}-host-setup.sh"
+    create-private-interface-opts ${PRIVATE_SDN_INTERFACE} ${node_iip} ${INTERNAL_IP_MASK} "${KUBE_TEMP}/node${i}-network-opts"
+
+    scp-then-execute "${node_ssh_info[$i]}" "${KUBE_TEMP}/node${i}-network-opts ${KUBE_TEMP}/node${i}-host-setup.sh" "~" "\
+mkdir -p ~/kube && \
+sudo mv ~/node${i}-host-setup.sh ~/kube && \
+sudo rm -rf /etc/network/interfaces && sudo mv ~/node${i}-network-opts /etc/network/interfaces && \
+sudo ./kube/node${i}-host-setup.sh || \
+echo 'Command failed setting up remote host'" & pids="${pids} $!"
+  done
+  wait ${pids}
 }

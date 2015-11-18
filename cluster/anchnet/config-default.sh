@@ -231,10 +231,10 @@ else
   FINAL_VERSION=${CAICLOUD_KUBE_VERSION}
 fi
 
-# If SUB_ACCOUNT_USER is specified, set the path to save per user k8s config file;
+# If SUB_ACCOUNT_USER is specified, set the path to save per cluster k8s config file;
 # otherwise, use default one from k8s.
 if [[ ! -z ${SUB_ACCOUNT_USER-} ]]; then
-  KUBECONFIG="$HOME/.kube/config_${SUB_ACCOUNT_USER}"
+  KUBECONFIG="$HOME/.kube/config_${CLUSTER_NAME}"
 fi
 
 # Note that master_name and node_name are name of the instances in anchnet, which

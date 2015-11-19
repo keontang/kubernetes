@@ -381,6 +381,7 @@ function deploy-addons {
       ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/heapster-service.yaml \
       ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/influxdb-grafana-controller.yaml \
       ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/influxdb-service.yaml \
+      ${KUBE_ROOT}/cluster/anchnet/addons/influxdb/monitoring-controller.yaml \
       ${KUBE_TEMP}/heapster-controller.yaml \
       "${INSTANCE_USER}@${MASTER_EIP}":~/kube
 

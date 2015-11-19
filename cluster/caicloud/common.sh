@@ -80,7 +80,8 @@ function deploy-addons {
   cp ${KUBE_TEMP}/heapster-controller.yaml ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/grafana-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-service.yaml \
-     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-grafana-controller.yaml ${KUBE_TEMP}/addons/monitoring
+     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-grafana-controller.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/monitoring-controller.yaml ${KUBE_TEMP}/addons/monitoring
   scp-to-instance-expect "${1}" \
     "${KUBE_TEMP}/addons ${KUBE_ROOT}/cluster/caicloud/addons/namespace.yaml ${KUBE_ROOT}/cluster/caicloud/addons/addons-start.sh" \
     "~/kube"

@@ -34,7 +34,7 @@ spec:
           volumeMounts:
           - name: influxdb-persistent-storage
             mountPath: /data
-        - image: caicloudgcr/google_containers_heapster_grafana:v2.1.1
+        - image: caicloud/heapster_grafana:test15
           name: grafana
           env:
           resources:

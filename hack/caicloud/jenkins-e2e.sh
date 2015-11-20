@@ -56,6 +56,7 @@ export BUILD_TARBALL="true"
 # Disable logging and kube-ui
 export ENABLE_CLUSTER_LOGGING=false
 export ENABLE_CLUSTER_UI=false
+export ENABLE_CLUSTER_MONITORING=false
 
 # E2E control vars
 E2E_UP=${E2E_UP:-true}

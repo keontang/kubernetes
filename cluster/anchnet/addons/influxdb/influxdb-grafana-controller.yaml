@@ -20,7 +20,7 @@ spec:
         kubernetes.io/cluster-service: "true"
     spec:
       containers:
-        - image: caicloudgcr/google_containers_heapster_influxdb:v0.4
+        - image: kubernetes/heapster_influxdb:v0.5
           name: influxdb
           resources:
             limits:

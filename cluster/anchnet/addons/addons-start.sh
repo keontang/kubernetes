@@ -74,7 +74,7 @@ function prepare-addons {
   mkdir -p ~/kube/addons/cluster-monitoring
   mv ~/kube/heapster-controller.yaml ~/kube/heapster-service.yaml ~/kube/addons/cluster-monitoring
   mv ~/kube/influxdb-grafana-controller.yaml ~/kube/influxdb-service.yaml ~/kube/addons/cluster-monitoring
-  mv ~/kube/grafana-service.yaml ~/kube/addons/cluster-monitoring
+  mv ~/kube/grafana-service.yaml ~/kube/monitoring-controller.yaml ~/kube/addons/cluster-monitoring
 }
 
 function create-dns-addon {

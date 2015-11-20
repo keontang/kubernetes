@@ -51,7 +51,7 @@ CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://get.bitintuitive.com/caicloud"}
 # Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
 # there is no easy to enforce docker version in caicloud kubernetes release,
 # so we define it here separately.
-DOCKER_VERSION=${DOCKER_VERSION:-"1.7.1"}
+DOCKER_VERSION=${DOCKER_VERSION:-"1.8.3"}
 
 # To indicate if the execution status needs to be reported back to caicloud
 # executor via curl. Set it to be Y if reporting is needed.

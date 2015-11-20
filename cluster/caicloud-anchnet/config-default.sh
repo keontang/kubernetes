@@ -77,7 +77,7 @@ CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://get.bitintuitive.com/caicloud"}
 # Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
 # there is no easy to enforce docker version in caicloud kubernetes release,
 # so we define it here separately.
-DOCKER_VERSION=${DOCKER_VERSION:-"1.7.1"}
+DOCKER_VERSION=${DOCKER_VERSION:-"1.8.3"}
 
 # The base image used to create master and node instance in image mode. The
 # param is only used in image mode. This image is created from scripts like

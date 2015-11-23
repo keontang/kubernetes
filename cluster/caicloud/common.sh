@@ -72,16 +72,24 @@ function deploy-addons {
   sed -e "s/{{ pillar\['heapster_memory'\] }}/${HEAPSTER_MEMORY}/g" ${heapster_rc_file} > ${KUBE_TEMP}/heapster-controller.yaml
 
   # Copy addon configurationss and startup script to master instance under ~/kube.
-  rm -rf ${KUBE_TEMP}/addons && mkdir -p ${KUBE_TEMP}/addons/dns ${KUBE_TEMP}/addons/logging ${KUBE_TEMP}/addons/kube-ui ${KUBE_TEMP}/addons/monitoring
+  rm -rf ${KUBE_TEMP}/addons
+  mkdir -p ${KUBE_TEMP}/addons/dns ${KUBE_TEMP}/addons/logging ${KUBE_TEMP}/addons/kube-ui ${KUBE_TEMP}/addons/monitoring ${KUBE_TEMP}/addons/registry
+  # dns rc/svc
   cp ${KUBE_TEMP}/skydns-rc.yaml ${KUBE_TEMP}/skydns-svc.yaml ${KUBE_TEMP}/addons/dns
+  # logging rc/svc
   cp ${KUBE_TEMP}/elasticsearch-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/logging/elasticsearch-svc.yaml \
      ${KUBE_TEMP}/kibana-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/logging/kibana-svc.yaml ${KUBE_TEMP}/addons/logging
+  # kube-ui rc/svc
   cp ${KUBE_TEMP}/kube-ui-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/kube-ui/kube-ui-svc.yaml ${KUBE_TEMP}/addons/kube-ui
+  # monitoring rc/svc
   cp ${KUBE_TEMP}/heapster-controller.yaml ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/grafana-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-grafana-controller.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/monitoring-controller.yaml ${KUBE_TEMP}/addons/monitoring
+  # registry rc/svc
+  cp ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-svc.yaml \
+     ${KUBE_TEMP}/addons/registry
   scp-to-instance-expect "${1}" \
     "${KUBE_TEMP}/addons ${KUBE_ROOT}/cluster/caicloud/addons/namespace.yaml ${KUBE_ROOT}/cluster/caicloud/addons/addons-start.sh" \
     "~/kube"
@@ -93,6 +101,7 @@ function deploy-addons {
           ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} \
           ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} \
           ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING} \
+          ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY} \
           ./kube/addons-start.sh"
 }
 

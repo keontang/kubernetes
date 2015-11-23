@@ -232,6 +232,7 @@ function send-node-startup-config-files-internal {
   cp -r ${KUBE_ROOT}/cluster/caicloud/trusty/node/init_conf \
      ${KUBE_ROOT}/cluster/caicloud/trusty/node/init_scripts \
      ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/fluentd-es.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/registry-proxy.yaml \
      ${KUBE_ROOT}/cluster/caicloud/nsenter \
      ${KUBE_TEMP}/kube-node${2}/kube
   if [[ "${7:-}" != "" ]]; then

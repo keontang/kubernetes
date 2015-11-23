@@ -28,6 +28,7 @@ ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS:-false}
 ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING:-false}
 ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-false}
 ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
+ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-false}
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE:-"kube-system"}
 
 # Do retries when failing in objects creation from yaml files. It
@@ -82,6 +83,12 @@ function create-monitoring-addon {
   done
 }
 
+function create-registry-addon {
+  for obj in $(find ~/kube/addons/registry -type f -name \*.yaml -o -name \*.json); do
+    create-resource-from-file ${obj} 10 10 "${SYSTEM_NAMESPACE}"
+  done
+}
+
 
 create-kube-system-namespace
 
@@ -99,4 +106,8 @@ fi
 
 if [[ "${ENABLE_CLUSTER_MONITORING}" == "true" ]]; then
   create-monitoring-addon
+fi
+
+if [[ "${ENABLE_CLUSTER_REGISTRY}" == "true" ]]; then
+  create-registry-addon
 fi

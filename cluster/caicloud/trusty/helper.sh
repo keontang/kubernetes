@@ -40,6 +40,9 @@
 #   KUBERNETES_PROVIDER
 #   SERVICE_CLUSTER_IP_RANGE
 function send-master-startup-config-files {
+  # Randomly choose one daocloud accelerator.
+  find-registry-mirror
+
   if [[ "${2:-}" != "" ]]; then
     interface="${2}"
   else
@@ -66,11 +69,14 @@ function send-master-startup-config-files-internal {
     if [[ "${3:-}" != "" ]]; then
       echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${3} /etc/kubernetes/cloud-config"
       echo "create-kube-controller-manager-opts ${CLUSTER_NAME} ${3} /etc/kubernetes/cloud-config"
+      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} false \"\" \"\" ${3} /etc/kubernetes/cloud-config"
     else
       echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL}"
       echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
+      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} false \"\" \"\" \"\""
     fi
     echo "create-kube-scheduler-opts"
+    echo "create-kube-proxy-opts 'master'"
     echo "create-etcd-opts kubernetes-master"
     echo "create-flanneld-opts ${2} 127.0.0.1"
     # Create the system directories used to hold the final data.
@@ -86,6 +92,8 @@ function send-master-startup-config-files-internal {
     echo "sudo cp ~/kube/configs/* /etc/default"
     echo "sudo cp ~/kube/init_conf/* /etc/init/"
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
+    echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
+    echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
     echo "sudo cp ~/kube/known-tokens.csv ~/kube/basic-auth.csv /etc/kubernetes"
     echo "sudo cp ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key /etc/kubernetes"
     # Make sure cloud-config exists, even if not used.
@@ -97,11 +105,14 @@ function send-master-startup-config-files-internal {
     echo "sudo service etcd start"
     # After starting etcd, configure flannel options.
     echo "config-etcd-flanneld ${FLANNEL_NET}"
+    # After starting flannel, configure docker network to use flannel overlay.
+    echo "restart-docker ${REG_MIRROR} /etc/default/docker"
   ) > ${KUBE_TEMP}/kube-master/kube/master-start.sh
   chmod a+x ${KUBE_TEMP}/kube-master/kube/master-start.sh
 
   cp -r ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_conf \
      ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_scripts \
+     ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/fluentd-es.yaml \
      ${KUBE_TEMP}/known-tokens.csv \
      ${KUBE_TEMP}/basic-auth.csv \
      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
@@ -374,7 +385,8 @@ EOF
     ssh-to-instance-expect "${instance_ssh_info[$i]}" "\
 tar xvzf caicloud-kube.tar.gz && mkdir -p ~/kube/master && \
 cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
-  caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler ~/kube/master && \
+  caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler \
+  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/master && \
 mkdir -p ~/kube/node && \
 cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
   caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node && \
@@ -386,11 +398,11 @@ echo 'Command failed installing tarball binaries on remote host ${instance_ssh_i
   wait-pids "${pids}" "+++++ Wait for all instances to install tarball"
 }
 
-# Install packages for all nodes. The packages are required for running
+# Install packages for all instances. The packages are required for running
 # kubernetes nodes.
 #
 # Input:
-#   $1 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+#   $1 Instance ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
 #   $2 report failure; if true, report failure to caicloud cluster manager.
 #
 # Assumed vars:
@@ -409,10 +421,10 @@ function install-packages-internal {
   APT_MIRROR_INDEX=$(($APT_MIRROR_INDEX+1))
   log "Use apt mirror ${apt_mirror}"
 
-  # Install packages for given nodes concurrently.
+  # Install packages for given instances concurrently.
   local pids=""
-  IFS=',' read -ra node_ssh_info <<< "${1}"
-  for ssh_info in "${node_ssh_info[@]}"; do
+  IFS=',' read -ra instance_ssh_info <<< "${1}"
+  for ssh_info in "${instance_ssh_info[@]}"; do
     IFS=':@' read -ra ssh_info <<< "${ssh_info}"
     expect <<EOF &
 set timeout -1

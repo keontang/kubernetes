@@ -183,6 +183,9 @@ function calculate-default {
   MASTER_NAME="${CLUSTER_NAME}-master"
   NODE_NAME_PREFIX="${CLUSTER_NAME}-node"
 
+  # All instances' ssh info.
+  INSTANCE_SSH_INFO="${MASTER_SSH_INFO},${NODE_SSH_INFO}"
+
   # Context to use in kubeconfig.
   CONTEXT="baremetal_${CLUSTER_NAME}"
 

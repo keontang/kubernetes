@@ -126,7 +126,7 @@ function send-master-startup-config-files-internal {
   fi
   scp-to-instance-expect "${1}" "${KUBE_TEMP}/kube-master/kube" "~"
 
-  ssh-to-instance "${1}" "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/caicloud"
+  ssh-to-instance-expect "${1}" "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/caicloud"
 }
 
 # Create node startup script and send all config files to nodes.

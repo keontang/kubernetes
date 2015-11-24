@@ -64,7 +64,7 @@ options, consult the file.
   KUBERNETES_PROVIDER=caicloud-anchnet CAICLOUD_KUBE_VERSION=v0.2.0 ./cluster/kube-up.sh
   ```
 
-* `CAICLOUD_HOST_URL`: The host from which kube-up fetches release. Default to `http://get.bitintuitive.com/caicloud`.
+* `CAICLOUD_HOST_URL`: The host from which kube-up fetches release. Default to `http://7xli2p.dl1.z0.glb.clouddn.com`.
 
 * `BUILD_VERSION`: The version of newly built release during kube-up. Default value is current date/time, i.e. `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
 

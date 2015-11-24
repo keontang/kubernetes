@@ -37,8 +37,7 @@ function usage {
   echo -e "Environment variable:"
   echo -e " ETCD_VERSION\tetcd version to use. etcd will be packed into release tarball, default value is ${ETCD_VERSION}"
   echo -e " FLANNEL_VERSION\tflannel version to use. flannel will be packed into release tarball, default value is ${FLANNEL_VERSION}"
-  echo -e " UPLOAD_TO_QINIU\tSet to Y if the script needs to push new tarballs to qiniu, default to N"
-  echo -e " UPLOAD_TO_TOOLSERVER\tSet to Y if the script needs to push new tarballs to toolserver, default to Y"
+  echo -e " UPLOAD_TO_QINIU\tSet to Y if the script needs to push new tarballs to qiniu, default to Y"
 }
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
@@ -46,15 +45,8 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 # -----------------------------------------------------------------------------
 # Parameters for building tarball.
 # -----------------------------------------------------------------------------
-# Do we want to upload the release to qiniu: Y or N. Default to N.
-UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"N"}
-
-# Do we want to upload the release to toolserver for dev: Y or N. Default to Y.
-UPLOAD_TO_TOOLSERVER=${UPLOAD_TO_TOOLSERVER:-"Y"}
-
-# Instance user and password if we want to upload to toolserver.
-INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
-KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
+# Do we want to upload the release to qiniu: Y or N. Default to Y.
+UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"Y"}
 
 # Get configs and commone utilities.
 source ${KUBE_ROOT}/hack/caicloud/common.sh
@@ -135,35 +127,6 @@ tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_EXECUTOR_PKG} caicloud-kub
 rm -rf caicloud-kube-executor
 
 cd -
-
-# Decide if we upload releases to Toolserver.
-if [[ "${UPLOAD_TO_TOOLSERVER}" == "Y" ]]; then
-  expect <<EOF
-set timeout -1
-spawn scp -r -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${KUBE_ROOT}/_output/caicloud "${INSTANCE_USER}@get.bitintuitive.com:~"
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-
-  expect <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@get.bitintuitive.com "sudo mv caicloud/* /data/www/static/caicloud"
-expect {
-  "*?assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-fi
 
 # Decide if we upload releases to Qiniu.
 if [[ "${UPLOAD_TO_QINIU}" == "Y" ]]; then

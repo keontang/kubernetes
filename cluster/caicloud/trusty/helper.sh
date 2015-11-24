@@ -93,6 +93,7 @@ function send-master-startup-config-files-internal {
     echo "sudo cp ~/kube/init_conf/* /etc/init/"
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
     echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
+    echo "sudo cp ~/kube/registry-proxy.yaml /etc/kubernetes/manifest"
     echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
     echo "sudo cp ~/kube/known-tokens.csv ~/kube/basic-auth.csv /etc/kubernetes"
     echo "sudo cp ~/kube/ca.crt ~/kube/master.crt ~/kube/master.key /etc/kubernetes"
@@ -113,6 +114,7 @@ function send-master-startup-config-files-internal {
   cp -r ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_conf \
      ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_scripts \
      ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/fluentd-es.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/registry-proxy.yaml \
      ${KUBE_TEMP}/known-tokens.csv \
      ${KUBE_TEMP}/basic-auth.csv \
      ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
@@ -229,6 +231,7 @@ function send-node-startup-config-files-internal {
     echo "sudo cp ~/kube/init_conf/* /etc/init/"
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
     echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
+    echo "sudo cp ~/kube/registry-proxy.yaml /etc/kubernetes/manifest"
     echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
     # Make sure cloud-config exists, even if not used.
     echo "touch ~/kube/cloud-config && sudo cp ~/kube/cloud-config /etc/kubernetes"

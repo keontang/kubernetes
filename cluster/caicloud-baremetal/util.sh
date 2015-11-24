@@ -60,7 +60,7 @@ function kube-up {
 
   # Concurrently install all packages for nodes.
   install-binaries-from-local "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}"
-  install-packages "${NODE_SSH_INFO}" "false"
+  install-packages "${INSTANCE_SSH_INFO}" "false"
 
   # Prepare master environment.
   send-master-startup-config-files "${MASTER_SSH_INFO}"

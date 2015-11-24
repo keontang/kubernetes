@@ -153,7 +153,7 @@ function kube-up {
       "${NODE_SSH_EXTERNAL}" \
       "${NODE_SSH_INTERNAL}" & pids="$pids $!"
     install-packages \
-      "${NODE_SSH_EXTERNAL}" & pids="$pids $!"
+      "${INSTANCE_SSH_EXTERNAL}" & pids="$pids $!"
     wait ${pids}
   fi
 

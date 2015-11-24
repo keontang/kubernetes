@@ -64,7 +64,7 @@ function kube-up {
 
   # Prepare master environment.
   send-master-startup-config-files "${MASTER_SSH_INFO}"
-  send-node-startup-config-files "${NODE_SSH_INFO}" "${MASTER_IP}"
+  send-node-startup-config-files "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}" "${MASTER_IP}"
 
   # Now start kubernetes.
   start-kubernetes "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}"

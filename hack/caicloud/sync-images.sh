@@ -66,7 +66,7 @@ sync_image registry:2.2 index.caicloud.io/registry:2.2
 
 # Before index.caicloud.io is performant enough, we also sync to caicloudgcr.
 echo "Login in to docker hub account caicloudgcr ..."
-docker login caicloudgcr
+docker login
 
 # Sync images in gcr.io/google_containers. E.g.
 #     gcr.io/google_containers/cloudsql-authenticator

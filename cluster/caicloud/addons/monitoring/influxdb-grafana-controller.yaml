@@ -34,7 +34,7 @@ spec:
           volumeMounts:
           - name: influxdb-persistent-storage
             mountPath: /data
-        - image: caicloud/heapster_grafana:test15
+        - image: caicloud/monitoring-grafana:v0.0.3
           name: grafana
           env:
           resources:

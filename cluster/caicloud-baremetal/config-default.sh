@@ -114,9 +114,14 @@ SERVICE_CLUSTER_IP_RANGE=10.254.0.0/16  # formerly PORTAL_NET
 
 # Define the IP range used for flannel overlay network, should not conflict
 # with above SERVICE_CLUSTER_IP_RANGE.
-FLANNEL_NET=172.16.0.0/12
+# TODO: This is for jinjiang and allow only three machines right now.
+FLANNEL_NET=172.24.60.0/22
+FLANNEL_SUBNET_LEN=24
+FLANNEL_SUBNET_MIN=172.24.61.0
+FLANNEL_SUBNET_MAX=172.24.63.0
+FLANNEL_TYPE="host-gw"
 
-# The IP address for the Kubelet to serve on
+# The IP address for the Kubelet to serve on.
 KUBELET_IP_ADDRESS=0.0.0.0
 
 # MASTER_INSECURE_* is used to serve insecure connection. It is either

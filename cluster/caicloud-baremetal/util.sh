@@ -71,7 +71,11 @@ function kube-up {
 
   # Create config file, i.e. ~/.kube/config.
   source "${KUBE_ROOT}/cluster/common.sh"
-  KUBE_MASTER_IP="${MASTER_IP}"
+  # create-kubeconfig assumes master ip is in the variable KUBE_MASTER_IP.
+  # Also, in bare metal environment, we are deploying on master instance,
+  # so we make sure it can find kubectl binary.
+  export KUBE_MASTER_IP="${MASTER_IP}"
+  export KUBECTL_PATH="/opt/bin/kubectl"
   create-kubeconfig
 }
 

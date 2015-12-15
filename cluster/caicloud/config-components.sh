@@ -236,6 +236,10 @@ EOF
 #
 # Input:
 #   $1 Flannel overlay network CIDR
+#   $2 Flannel subnet length
+#   $3 Flannel subnet min
+#   $4 Flannel subnet max
+#   $5 Flannel type
 function config-etcd-flanneld {
   attempt=0
   while true; do
@@ -250,7 +254,7 @@ function config-etcd-flanneld {
         echo "timeout waiting for network config"
         exit 2
       fi
-      /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"$1\"}"
+      /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"$1\", \"SubnetLen\":$2, \"SubnetMin\":\"$3\", \"SubnetMax\":\"$4\", \"Backend\": {\"Type\": \"$5\"}}"
       attempt=$((attempt+1))
       sleep 3
     fi
@@ -293,7 +297,6 @@ function restart-docker {
   source /run/flannel/subnet.env
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
        --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$1 \
-       --insecure-registry=internal-registry.caicloud.io\" > $2
+       --insecure-registry=get.caicloud.io\" > $2
   sudo service docker start
 }
-

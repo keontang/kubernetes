@@ -255,6 +255,10 @@ SERVICE_CLUSTER_IP_RANGE=10.254.0.0/16  # formerly PORTAL_NET
 # Define the IP range used for flannel overlay network, should not conflict
 # with above SERVICE_CLUSTER_IP_RANGE.
 FLANNEL_NET=172.16.0.0/12
+FLANNEL_SUBNET_LEN=24
+FLANNEL_SUBNET_MIN=172.16.0.0
+FLANNEL_SUBNET_MAX=172.31.0.0
+FLANNEL_TYPE="udp"
 
 # The IP address for the Kubelet to serve on
 KUBELET_IP_ADDRESS=0.0.0.0

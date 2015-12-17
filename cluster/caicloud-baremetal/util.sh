@@ -25,6 +25,7 @@ KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 # config-default.sh.
 source "${KUBE_ROOT}/cluster/caicloud-baremetal/config-default.sh"
 source "${KUBE_ROOT}/cluster/caicloud/common.sh"
+source "${KUBE_ROOT}/cluster/caicloud/executor-service.sh"
 source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 
 
@@ -77,6 +78,10 @@ function kube-up {
   export KUBE_MASTER_IP="${MASTER_IP}"
   export KUBECTL_PATH="/opt/bin/kubectl"
   create-kubeconfig
+
+  # Report kube-up completes. As we can't hook into validate-cluster, this is the
+  # best place to report. Executor should validate cluster itself.
+  kube-up-complete Y
 }
 
 # Validate a kubernetes cluster

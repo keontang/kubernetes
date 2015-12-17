@@ -21,10 +21,10 @@
 KUBE_DISTRO=${KUBE_DISTRO:-"trusty"}
 
 # ssh information for master.
-MASTER_SSH_INFO="vagrant:vagrant@192.168.205.10"
+MASTER_SSH_INFO=${MASTER_SSH_INFO:-"vagrant:vagrant@192.168.205.10"}
 
 # ssh information for nodes (comma separated string).
-NODE_SSH_INFO="vagrant:vagrant@192.168.205.11"
+NODE_SSH_INFO=${NODE_SSH_INFO:-"vagrant:vagrant@192.168.205.11"}
 
 # Name of the cluster. This is used for constructing the prefix of resource IDs
 # in anchnet. The same name needs to be specified when running kube-down to
@@ -56,11 +56,6 @@ DOCKER_VERSION=${DOCKER_VERSION:-"1.8.3"}
 # To indicate if the execution status needs to be reported back to caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
-
-# Anchnet config file to use. All user clusters will be created under one
-# anchnet account (register@caicloud.io) using sub-account, so this file
-# rarely changes.
-ANCHNET_CONFIG_FILE=${ANCHNET_CONFIG_FILE:-"$HOME/.anchnet/config"}
 
 # Daocloud registry accelerator. Before implementing our own registry (or registry
 # mirror), use this accelerator to make pulling image faster. The variable is a
@@ -161,7 +156,7 @@ function calculate-default {
   # If KUBE_USER is specified, set the path to save per user k8s config file;
   # otherwise, use default one from k8s.
   if [[ ! -z ${KUBE_USER-} ]]; then
-    KUBECONFIG="$HOME/.kube/config_${KUBE_USER}"
+    KUBECONFIG="$HOME/.kube/config_${CLUSTER_NAME}"
   fi
 
   # Master IP and node IPs.

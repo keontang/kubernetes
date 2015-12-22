@@ -140,6 +140,20 @@ KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-push.sh
 
 * `CAICLOUD_KUBE_VERSION`: Which version to deploy.
 
+
+## Add node to a cluster
+
+In case we want to add node(s) to a running cluster, we can run:
+```
+CLUSTER_NAME=kube-default MASTER_EIP=103.21.116.147 NUM_MINIONS=1 KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-add-node.sh
+```
+
+#### Options:
+
+* `INSTANCE_USER`: Instance user of the master (e.g. ubuntu). This will also be used to create new nodes
+
+* `KUBE_INSTANCE_PASSWORD`: Instance password of the master (e.g. caicloud2015ABC). This will also be used to create new nodes
+
 ## Test
 
 ### Unit Test

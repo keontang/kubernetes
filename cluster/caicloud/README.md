@@ -94,3 +94,11 @@ These are individual files we have to change in order to meet our requirements:
 Cluster upgrade is done using `kube-push.sh` script, which pushes new binaries and configurations to running cluster (The ultimate goal in kubernetes
 is self-hosting and do rolling upgrade on cluster components). Note all configurations will be pushed to cluster except certs, credentials, etc. See
 respective cloudprovider documentation about how to use the script.
+
+## Cluster resize
+
+#### Scale up
+
+Cluster scale up is done using `kube-add-node.sh` script, which add node(s) to a running cluster. This script will use binaries kept at master to
+bring up a new cluster node (One caveat is that older versions of cluster don't have binaries stored at master node). Currently we only support adding
+ nodes to caicloud-anchnet cluster.

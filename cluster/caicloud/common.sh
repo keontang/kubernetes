@@ -34,11 +34,6 @@
 # Addon yaml files are copied from cluster/addons, with slight modifications to
 # fit into caicloud environment.
 #
-# TODO: Make deploy addons robust.
-#
-# Input:
-#   $1 Master ssh info, e.g. root:password@43.254.54.58
-#
 # Assumed vars:
 #   KUBE_TEMP
 #   KUBE_ROOT
@@ -47,6 +42,7 @@
 #   ELASTICSEARCH_REPLICAS
 #   KIBANA_REPLICAS
 #   KUBE_UI_REPLICAS
+#   MASTER_SSH_EXTERNAL
 function deploy-addons {
   log "+++++ Start deploying caicloud addons"
   # Replace placeholder with our configuration for dns rc/svc.
@@ -90,12 +86,12 @@ function deploy-addons {
   # registry rc/svc
   cp ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-svc.yaml \
      ${KUBE_TEMP}/addons/registry
-  scp-to-instance-expect "${1}" \
+  scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
     "${KUBE_TEMP}/addons ${KUBE_ROOT}/cluster/caicloud/addons/namespace.yaml ${KUBE_ROOT}/cluster/caicloud/addons/addons-start.sh" \
     "~/kube"
 
   # Call 'addons-start.sh' to start addons.
-  ssh-to-instance-expect "${1}" \
+  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
     "sudo SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE} \
           ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} \
           ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} \
@@ -120,10 +116,6 @@ function deploy-addons {
 #  - kubelet
 #  - kubectl
 #
-# Input:
-#  $1 Master internal IP
-#  $2 Master external IP, leave empty if there is no external IP
-#
 # Assumed vars
 #   KUBE_ROOT
 #   KUBE_TEMP
@@ -131,6 +123,8 @@ function deploy-addons {
 #   MASTER_SECURE_PORT
 #   DNS_DOMAIN
 #   SERVICE_CLUSTER_IP_RANGE
+#   MASTER_IIP *
+#   MASTER_EIP *
 #
 # Vars set:
 #   KUBELET_TOKEN
@@ -171,13 +165,13 @@ function create-certs-and-credentials {
   local octects=($(echo "${SERVICE_CLUSTER_IP_RANGE}" | sed -e 's|/.*||' -e 's/\./ /g'))
   ((octects[3]+=1))
   local service_ip=$(echo "${octects[*]}" | sed 's/ /./g')
-  local sans="IP:${1},IP:${service_ip}"
+  local sans="IP:${MASTER_IIP},IP:${service_ip}"
   # Add external IP if provided.
-  if [[ "${2:-}" != "" ]]; then
-    sans="${sans},IP:${2}"
-    master_ip="${2}"
+  if [[ "${MASTER_EIP:-}" != "" ]]; then
+    sans="${sans},IP:${MASTER_EIP}"
+    master_ip="${MASTER_EIP}"
   else
-    master_ip="${1}"
+    master_ip="${MASTER_IIP}"
   fi
   sans="${sans},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc"
   sans="${sans},DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME},DNS:master"
@@ -346,13 +340,13 @@ EOF
 # Start a kubernetes cluster. The function assumes that master and nodes have
 # already been setup correctly.
 #
-# Input:
-#   $1 Master ssh info, e.g. root:password@43.254.54.58
-#   $2 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+# Assumed vars:
+#   MASTER_SSH_EXTERNAL
+#   NODE_SSH_EXTERNAL
 function start-kubernetes {
   local pids=""
-  IFS=',' read -ra node_ssh_info <<< "${2}"
-  ssh-to-instance-expect "${1}" "sudo ./kube/master-start.sh" & pids="${pids} $!"
+  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
+  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo ./kube/master-start.sh" & pids="${pids} $!"
   for ssh_info in "${node_ssh_info[@]}"; do
     ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
   done
@@ -362,11 +356,11 @@ function start-kubernetes {
 # Start kubernetes component only on nodes. The function assumes that nodes have
 # already been setup correctly.
 #
-# Input:
-#   $1 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+# Assumed vars:
+#   NODE_SSH_EXTERNAL
 function start-node-kubernetes {
   local pids=""
-  IFS=',' read -ra node_ssh_info <<< "${1}"
+  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   for ssh_info in "${node_ssh_info[@]}"; do
     ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
   done
@@ -500,9 +494,9 @@ function fetch-and-extract-tarball {
 
 # Install binaries from local directory.
 #
-# Inputs:
-#   $1 Master ssh info, e.g. "root:password@43.254.54.59"
-#   $2 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+# Assumed vars:
+#   MASTER_SSH_EXTERNAL
+#   NODE_SSH_EXTERNAL
 function install-binaries-from-local {
   # Get the caicloud kubernetes release tarball.
   fetch-and-extract-tarball
@@ -517,10 +511,10 @@ function install-binaries-from-local {
      ${KUBE_TEMP}/caicloud-kube/kube-scheduler \
      ${KUBE_TEMP}/caicloud-kube/kube-controller-manager \
      ${KUBE_TEMP}/kube/master
-  scp-to-instance-expect "${1}" "${KUBE_TEMP}/kube" "~"
+  scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/kube" "~"
   # Copy binaries to nodes.
   rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/node
-  IFS=',' read -ra node_ssh_info <<< "${2}"
+  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
     cp -r ${KUBE_TEMP}/caicloud-kube/etcd \
        ${KUBE_TEMP}/caicloud-kube/etcdctl \
@@ -534,10 +528,10 @@ function install-binaries-from-local {
 
 # Fetch tarball in master instance.
 #
-# Inputs:
-#   $1 Master external ssh info, e.g. "root:password@43.254.54.59"
+# Assumed vars:
+#   MASTER_SSH_EXTERNAL
 function fetch-tarball-in-master {
-  command-exec-and-retry "fetch-tarball-in-master-internal ${1}" 2 "false"
+  command-exec-and-retry "fetch-tarball-in-master-internal ${MASTER_SSH_EXTERNAL}" 2 "false"
 }
 function fetch-tarball-in-master-internal {
   log "+++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}."
@@ -552,30 +546,27 @@ sudo chmod go-rwx /etc/caicloud"
 # have binaires in ~/kube/master and ~/kube/node. Note, we MUST be able to ssh
 # to master without using password.
 #
-# Inputs:
-#   $1 Master external ssh info, e.g. "root:password@43.254.54.59"
-#   $2 Node external ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
-#   $3 Node internal ssh info, e.g. "root:password@10.0.0.0,root:password@10.0.0.1".
-#      Since we distribute tarball from master to nodes, it's better to use internal
-#      address. Leave empty if no internal address is available.
-#
 # Assumed vars:
 #   KUBE_INSTANCE_LOGDIR
 #   CAICLOUD_TARBALL_URL
+#   MASTER_SSH_EXTERNAL *
+#   NODE_SSH_EXTERNAL *
+#   NODE_SSH_INTERNAL *
+#   INSTANCE_SSH_EXTERNAL *
 function install-binaries-from-master {
-  command-exec-and-retry "install-binaries-from-master-internal ${1} ${2} ${3}" 2 "false"
+  command-exec-and-retry "install-binaries-from-master-internal" 2 "false"
 }
 function install-binaries-from-master-internal {
   local pids=""
   local fail=0
 
   # Distribute tarball from master to nodes. Use internal address if possible.
-  if [[ -z "${3:-}" ]]; then
-    IFS=',' read -ra node_ssh_info <<< "${2}"
+  if [[ -z "${NODE_SSH_INTERNAL:-}" ]]; then
+    IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   else
-    IFS=',' read -ra node_ssh_info <<< "${3}"
+    IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_INTERNAL}"
   fi
-  IFS=':@' read -ra master_ssh_info <<< "${1}"
+  IFS=':@' read -ra master_ssh_info <<< "${MASTER_SSH_EXTERNAL}"
   for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
     IFS=':@' read -ra ssh_info <<< "${node_ssh_info[$i]}"
     expect <<EOF &
@@ -606,7 +597,7 @@ EOF
 
   # Extract and install tarball for all instances.
   pids=""
-  IFS=',' read -ra instance_ssh_info <<< "${1},${2}"
+  IFS=',' read -ra instance_ssh_info <<< "${INSTANCE_SSH_EXTERNAL}"
   for (( i = 0; i < ${#instance_ssh_info[*]}; i++ )); do
     ssh-to-instance-expect "${instance_ssh_info[$i]}" "\
 tar xvzf caicloud-kube.tar.gz && mkdir -p ~/kube/master && \
@@ -719,19 +710,19 @@ EOF
 function clean-up-working-dir {
   # Only do cleanups on success
   [[ "$?" == "0" ]] || return 1
-  command-exec-and-retry "clean-up-working-dir-internal ${1} ${2}" 3 "false"
+  command-exec-and-retry "clean-up-working-dir-internal" 3 "false"
 }
 # This function simply remove the ~/kube directory from instances
 #
-# Input:
-#   $1 Master external ssh info, e.g. "root:password@43.254.54.59"
-#   $2 Node external ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+# Assumed vars:
+#   MASTER_SSH_EXTERNAL
+#   NODE_SSH_EXTERNAL
 function clean-up-working-dir-internal {
   local pids=""
   log "+++++ Start cleaning working dir. "
-  ssh-to-instance "${1}" "sudo rm -rf ~/kube" & pids="${pids} $!"
+  ssh-to-instance "${MASTER_SSH_EXTERNAL}" "sudo rm -rf ~/kube" & pids="${pids} $!"
 
-  IFS=',' read -ra node_ssh_info <<< "${2}"
+  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   for ssh_info in "${node_ssh_info[@]}"; do
     ssh-to-instance "${ssh_info}" "sudo rm -rf ~/kube" & pids="${pids} $!"
   done
@@ -750,17 +741,6 @@ function clean-up-working-dir-internal {
   fi
 }
 
-# Create a temp dir that'll be deleted at the end of bash session.
-#
-# Vars set:
-#   KUBE_TEMP
-function ensure-temp-dir {
-  if [[ -z ${KUBE_TEMP-} ]]; then
-    KUBE_TEMP=$(mktemp -d -t kubernetes.XXXXXX)
-    trap-add 'rm -rf "${KUBE_TEMP}"' EXIT
-  fi
-}
-
 # Timestamped log, e.g. log "cluster created".
 #
 # Input:
@@ -775,6 +755,17 @@ function log {
 #   $1 Log string.
 function log-oneline {
   echo -en "[`TZ=Asia/Shanghai date`] ${1}"
+}
+
+# Create a temp dir that'll be deleted at the end of bash session.
+#
+# Vars set:
+#   KUBE_TEMP
+function ensure-temp-dir {
+  if [[ -z ${KUBE_TEMP-} ]]; then
+    KUBE_TEMP=$(mktemp -d -t kubernetes.XXXXXX)
+    trap-add 'rm -rf "${KUBE_TEMP}"' EXIT
+  fi
 }
 
 # Create ~/.ssh/id_rsa.pub if it doesn't exist, and make it is added to
@@ -805,6 +796,25 @@ function ensure-ssh-agent {
   fi
 }
 
+# Make sure log directory exists.
+#
+# Assumed vars
+#   KUBE_INSTANCE_LOGDIR
+function ensure-log-dir {
+  if [[ ! -z ${KUBE_INSTANCE_LOGDIR-} ]]; then
+    mkdir -p ${KUBE_INSTANCE_LOGDIR}
+  fi
+}
+
+# Make sure ~/kube exists on the master/node. This is used in kube-push
+# because we now clean up ~/kube directory once the cluster is up and running.
+#
+# Input:
+#   $1 instance external IP
+function ensure-working-dir {
+  ssh-to-instance "${1}" "mkdir -p ~/kube/master ~/kube/node"
+}
+
 # Ensure that we have a password created for validating to the master. Note
 # the username/password here is used to login to kubernetes cluster, not for
 # ssh into machines.
@@ -821,31 +831,12 @@ function get-password {
   fi
 }
 
-# Make sure log directory exists.
-#
-# Assumed vars
-#   KUBE_INSTANCE_LOGDIR
-function ensure-log-dir {
-  if [[ ! -z ${KUBE_INSTANCE_LOGDIR-} ]]; then
-    mkdir -p ${KUBE_INSTANCE_LOGDIR}
-  fi
-}
-
-# Make sure ~/kube exists on the master/node. This is used in kube-push
-# because we now clean up ~/kube directory once the cluster is up and running.
-#
-# Input:
-#   $1 EIP of the instance
-function ensure-working-dir {
-  ssh-to-instance "${1}" "mkdir -p ~/kube/master ~/kube/node"
-}
-
 # Add trap cmd to signal(s). Since there is no better way of setting multiple
 # trap cmds on a signal, we are just appending new command to the current trap cmd.
 #
 # Input:
 #   $1  trap cmd to add
-#   $2- signals to add cmd to
+#   $2 signals to add cmd to
 function trap-add {
   local trap_add_cmd=$1; shift
   local new_cmd=""
@@ -1020,8 +1011,6 @@ function wait-pids {
 
 # Randomly choose one daocloud accelerator.
 #
-# TODO: Use our own registry.
-#
 # Assumed vars:
 #   DAOCLOUD_ACCELERATORS
 #
@@ -1037,9 +1026,6 @@ function find-registry-mirror {
 # to fix if the provision host is running in mainland China; it is fixed in
 # k8s-replace.sh.
 function caicloud-build-release {
-  if [[ `uname` == "Darwin" ]]; then
-    boot2docker start
-  fi
   cd ${KUBE_ROOT}
   hack/caicloud/k8s-replace.sh
   trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
@@ -1049,13 +1035,19 @@ function caicloud-build-release {
 
 # Like build release, but only build server binary (linux amd64).
 function caicloud-build-server {
-  if [[ `uname` == "Darwin" ]]; then
-    boot2docker start
-  fi
   cd ${KUBE_ROOT}
   hack/caicloud/k8s-replace.sh
   trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
   build/run.sh hack/build-go.sh
+  cd -
+}
+
+# Build cross platform binaries. Use DOCKER_HOST if docker is running elsewhere.
+function caicloud-build-cross {
+  cd ${KUBE_ROOT}
+  hack/caicloud/k8s-replace.sh
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+  ./build/run.sh hack/build-cross.sh
   cd -
 }
 
@@ -1182,9 +1174,4 @@ function command-exec-and-retry {
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
-}
-
-# Remove kube directory on remote hosts.
-function clean-kube-up {
-  echo
 }

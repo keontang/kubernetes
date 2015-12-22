@@ -72,7 +72,7 @@ fi
 
 # DO NOT CHANGE. Derived variables for tarball building.
 CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_VERSION}.tar.gz"
-CAICLOUD_KUBE_EXECUTOR_PKG="caicloud-kube-executor-${CAICLOUD_VERSION}.tar.gz"
+CAICLOUD_KUBE_SCRIPT_PKG="caicloud-kube-script-${CAICLOUD_VERSION}.tar.gz"
 
 # -----------------------------------------------------------------------------
 # Start building tarball from current code base.

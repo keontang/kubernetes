@@ -91,3 +91,6 @@ These are individual files we have to change in order to meet our requirements:
 
 ## Cluster Upgrade
 
+Cluster upgrade is done using `kube-push.sh` script, which pushes new binaries and configurations to running cluster (The ultimate goal in kubernetes
+is self-hosting and do rolling upgrade on cluster components). Note all configurations will be pushed to cluster except certs, credentials, etc. See
+respective cloudprovider documentation about how to use the script.

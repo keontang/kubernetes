@@ -98,7 +98,7 @@ INITIAL_DEPOSIT=${INITIAL_DEPOSIT:-"1"}
 # will be installed/provisioned concurrently; if we just send logs to stdout,
 # stdout will mess up. Therefore, we specify a directory to hold instance specific
 # logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
-KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
+KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/caicloud-kube-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
 # URL path of the server hosting caicloud kubernetes release.
 CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}
@@ -301,6 +301,9 @@ SYSTEM_NAMESPACE="kube-system"
 # Extra options to set on the Docker command line.  This is useful for setting
 # --insecure-registry for local registries.
 DOCKER_OPTS=""
+
+# Provider name used internally.
+CAICLOUD_PROVIDER="anchnet"
 
 
 # -----------------------------------------------------------------------------

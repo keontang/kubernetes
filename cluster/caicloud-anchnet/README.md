@@ -134,7 +134,11 @@ KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-push.sh
 
 #### Options:
 
-Same options as deleting a cluster.
+* `CLUSTER_NAME`: Delete cluster with given name.
+
+* `PROJECT_ID`: Delete cluster from sub-account with given id.
+
+* `CAICLOUD_KUBE_VERSION`: Which version to deploy.
 
 ## Test
 

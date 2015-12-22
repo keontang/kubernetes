@@ -64,9 +64,15 @@ func (an *Anchnet) NodeAddresses(name string) ([]api.NodeAddress, error) {
 	// Find public IP address.
 	response, err := an.describeInstance(name)
 	if err != nil {
-		return nil, err
+		if address, ok := an.constAddressCache[name]; !ok {
+			return nil, err
+		} else {
+			addresses = append(addresses, api.NodeAddress{Type: api.NodeExternalIP, Address: address})
+		}
+	} else {
+		an.constAddressCache[name] = response.ItemSet[0].EIP.EipAddr
+		addresses = append(addresses, api.NodeAddress{Type: api.NodeExternalIP, Address: response.ItemSet[0].EIP.EipAddr})
 	}
-	addresses = append(addresses, api.NodeAddress{Type: api.NodeExternalIP, Address: response.ItemSet[0].EIP.EipAddr})
 
 	// Find private IP address (private SDN). Note it's not possbile to find private IP
 	// address for instance other than self, i.e. to find private IP, the function must

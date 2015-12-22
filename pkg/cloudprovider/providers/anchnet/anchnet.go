@@ -46,7 +46,7 @@ const (
 	RetryIntervalOnWait = 3 * time.Second
 
 	// TTL for API call cache.
-	cacheTTL = 6 * time.Hour
+	cacheTTL = 3 * time.Hour
 )
 
 // Anchnet is the implementation of kubernetes cloud plugin.
@@ -56,6 +56,14 @@ type Anchnet struct {
 
 	// An address cache used to cache NodeAddresses.
 	addressCache cache.Store
+
+	// A constant address cache used to cache NodeAddresses. Ideally, we should
+	// just use addressCache above, but anchnet is busty. If API is unavailabe
+	// while addressCache expires, we'll end up evict all pods. This constant
+	// address cache never changes, so in case of such API unavailability, we
+	// use this const cache. In all normal cases, the timed address cache will
+	// be used.
+	constAddressCache map[string]string
 }
 
 // An entry in addressCache.
@@ -86,8 +94,9 @@ func newAnchnet(config io.Reader) (cloudprovider.Interface, error) {
 		return entry.name, nil
 	}
 	return &Anchnet{
-		client:       client,
-		addressCache: cache.NewTTLStore(keyFunc, cacheTTL),
+		client:            client,
+		addressCache:      cache.NewTTLStore(keyFunc, cacheTTL),
+		constAddressCache: make(map[string]string),
 	}, nil
 }
 

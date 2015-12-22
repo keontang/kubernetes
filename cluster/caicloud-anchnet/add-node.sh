@@ -26,13 +26,14 @@ source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 # TODO: This could be different for other distros
 PRIVATE_SDN_INTERFACE="eth1"
 
+
 function kube-add-nodes {
   log "+++++ Running kube-add-nodes ..."
   (set -o posix; set)
 
-  # Get info about all instances in current cluster
-  # NOTE: some of the vars, like nodes/instances related vars, will be reset afterwards
-  # in create-new-nodes and compute-new-node-iips
+  # Get info about all instances in current cluster.
+  # NOTE: some of the vars, like nodes/instances related vars, will be reset
+  # afterwards in create-new-nodes and compute-new-node-iips.
   find-instance-and-eip-resouces "running"
 
   # Make sure we have:
@@ -44,7 +45,6 @@ function kube-add-nodes {
   ensure-log-dir
 
   # Create nodes from scratch.
-  # create-new-nodes
   create-node-instances "${NUM_MINIONS}"
 
   # Clean up created node if we failed after new nodes are created.
@@ -78,7 +78,7 @@ function kube-add-nodes {
     "${NODE_SSH_EXTERNAL}" & pids="$pids $!"
   wait $pids
 
-  # Place kubelet-kubeconfig and kube-proxy-kubeconfig in working dir
+  # Place kubelet-kubeconfig and kube-proxy-kubeconfig in working dir.
   ssh-to-instance \
     "${MASTER_SSH_EXTERNAL}" \
     "sudo cp /etc/caicloud/kubelet-kubeconfig /etc/caicloud/kube-proxy-kubeconfig ~/kube"
@@ -109,7 +109,7 @@ function report-new-nodes {
 #   NODE_EIP_IDS
 function clean-up-failed-nodes {
   # Only do cleanups when we failed to add node to cluster.
-  if [[ $? == 0 ]]; then
+  if [[ "$?" == "0" ]]; then
     return
   fi
   if [[ ! -z "${NODE_INSTANCE_IDS}" ]]; then

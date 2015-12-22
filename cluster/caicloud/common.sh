@@ -184,7 +184,7 @@ function create-certs-and-credentials {
 
   # Create cluster certificates.
   (
-    cp "${KUBE_ROOT}/cluster/caicloud/easy-rsa.tar.gz" "${KUBE_TEMP}"
+    cp "${KUBE_ROOT}/cluster/caicloud/tools/easy-rsa.tar.gz" "${KUBE_TEMP}"
     cd "${KUBE_TEMP}"
     tar xzf easy-rsa.tar.gz > /dev/null 2>&1
     cd easy-rsa-master/easyrsa3
@@ -379,8 +379,8 @@ function start-node-kubernetes {
 #
 # Assumed vars:
 #   NODE_IIP_RANGE
-#   NUM_RUNNING_MINIONS
 #   NUM_MINIONS
+#   NUM_RUNNING_MINIONS
 #
 # Vars set:
 #   NODE_IIPS
@@ -498,6 +498,132 @@ function fetch-and-extract-tarball {
   cd - > /dev/null
 }
 
+# Install binaries from local directory.
+#
+# Inputs:
+#   $1 Master ssh info, e.g. "root:password@43.254.54.59"
+#   $2 Node ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+function install-binaries-from-local {
+  # Get the caicloud kubernetes release tarball.
+  fetch-and-extract-tarball
+  # Copy binaries to master
+  rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/master
+  cp -r ${KUBE_TEMP}/caicloud-kube/etcd \
+     ${KUBE_TEMP}/caicloud-kube/etcdctl \
+     ${KUBE_TEMP}/caicloud-kube/flanneld \
+     ${KUBE_TEMP}/caicloud-kube/kubectl \
+     ${KUBE_TEMP}/caicloud-kube/kubelet \
+     ${KUBE_TEMP}/caicloud-kube/kube-apiserver \
+     ${KUBE_TEMP}/caicloud-kube/kube-scheduler \
+     ${KUBE_TEMP}/caicloud-kube/kube-controller-manager \
+     ${KUBE_TEMP}/kube/master
+  scp-to-instance-expect "${1}" "${KUBE_TEMP}/kube" "~"
+  # Copy binaries to nodes.
+  rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/node
+  IFS=',' read -ra node_ssh_info <<< "${2}"
+  for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
+    cp -r ${KUBE_TEMP}/caicloud-kube/etcd \
+       ${KUBE_TEMP}/caicloud-kube/etcdctl \
+       ${KUBE_TEMP}/caicloud-kube/flanneld \
+       ${KUBE_TEMP}/caicloud-kube/kubelet \
+       ${KUBE_TEMP}/caicloud-kube/kube-proxy \
+       ${KUBE_TEMP}/kube/node
+    scp-to-instance-expect "${node_ssh_info[$i]}" "${KUBE_TEMP}/kube" "~"
+  done
+}
+
+# Fetch tarball in master instance.
+#
+# Inputs:
+#   $1 Master external ssh info, e.g. "root:password@43.254.54.59"
+function fetch-tarball-in-master {
+  command-exec-and-retry "fetch-tarball-in-master-internal ${1}" 2 "false"
+}
+function fetch-tarball-in-master-internal {
+  log "+++++ Start fetching and installing tarball from: ${CAICLOUD_TARBALL_URL}."
+
+  # Fetch tarball for master node.
+  ssh-to-instance-expect "${1}" "wget ${CAICLOUD_TARBALL_URL} -O ~/caicloud-kube.tar.gz && \
+sudo mkdir -p /etc/caicloud && sudo cp ~/caicloud-kube.tar.gz /etc/caicloud && \
+sudo chmod go-rwx /etc/caicloud"
+}
+
+# Distribute tarball from master to nodes. After installation, each node will
+# have binaires in ~/kube/master and ~/kube/node. Note, we MUST be able to ssh
+# to master without using password.
+#
+# Inputs:
+#   $1 Master external ssh info, e.g. "root:password@43.254.54.59"
+#   $2 Node external ssh info, e.g. "root:password@43.254.54.59,root:password@43.254.54.60"
+#   $3 Node internal ssh info, e.g. "root:password@10.0.0.0,root:password@10.0.0.1".
+#      Since we distribute tarball from master to nodes, it's better to use internal
+#      address. Leave empty if no internal address is available.
+#
+# Assumed vars:
+#   KUBE_INSTANCE_LOGDIR
+#   CAICLOUD_TARBALL_URL
+function install-binaries-from-master {
+  command-exec-and-retry "install-binaries-from-master-internal ${1} ${2} ${3}" 2 "false"
+}
+function install-binaries-from-master-internal {
+  local pids=""
+  local fail=0
+
+  # Distribute tarball from master to nodes. Use internal address if possible.
+  if [[ -z "${3:-}" ]]; then
+    IFS=',' read -ra node_ssh_info <<< "${2}"
+  else
+    IFS=',' read -ra node_ssh_info <<< "${3}"
+  fi
+  IFS=':@' read -ra master_ssh_info <<< "${1}"
+  for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
+    IFS=':@' read -ra ssh_info <<< "${node_ssh_info[$i]}"
+    expect <<EOF &
+set timeout -1
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${master_ssh_info[0]}@${master_ssh_info[2]} \
+"sudo cp /etc/caicloud/caicloud-kube.tar.gz ~/ && \
+scp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ~/caicloud-kube.tar.gz ${ssh_info[0]}@${ssh_info[2]}:~/caicloud-kube.tar.gz"
+
+expect {
+  "*?assword*" {
+    send -- "${ssh_info[1]}\r"
+    exp_continue
+  }
+  "?ommand failed" {exit 1}
+  "lost connection" { exit 1 }
+  eof {}
+}
+EOF
+    pids="$pids $!"
+  done
+
+  wait-pids "${pids}" "+++++ Wait for tarball to be distributed to all nodes"
+  if [[ "$?" != "0" ]]; then
+    return 1
+  fi
+
+  # Extract and install tarball for all instances.
+  pids=""
+  IFS=',' read -ra instance_ssh_info <<< "${1},${2}"
+  for (( i = 0; i < ${#instance_ssh_info[*]}; i++ )); do
+    ssh-to-instance-expect "${instance_ssh_info[$i]}" "\
+tar xvzf caicloud-kube.tar.gz && mkdir -p ~/kube/master && \
+cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kube-apiserver \
+  caicloud-kube/kube-controller-manager caicloud-kube/kubectl caicloud-kube/kube-scheduler \
+  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/master && \
+mkdir -p ~/kube/node && \
+cp caicloud-kube/etcd caicloud-kube/etcdctl caicloud-kube/flanneld caicloud-kube/kubectl \
+  caicloud-kube/kubelet caicloud-kube/kube-proxy ~/kube/node && \
+rm -rf caicloud-kube.tar.gz caicloud-kube || \
+echo 'Command failed installing tarball binaries on remote host ${instance_ssh_info[$i]}'" &
+    pids="$pids $!"
+  done
+
+  wait-pids "${pids}" "+++++ Wait for all instances to install tarball"
+}
+
 # Ask for a password which will be used for all instances.
 #
 # Vars set:
@@ -525,7 +651,8 @@ SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=q
 # 2. Also, if username is not 'root', we setup sudoer for the user so that we do
 #    not need to feed in password when executing commands.
 # 3. Create login user without sudo privilege so that actual user won't have access
-#    to stuff like anchnet api keys.
+#    to stuff like anchnet api keys. The login user will be handed over to caicloud
+#    user.
 #
 # Input:
 #   $1 Instance external IP address
@@ -592,10 +719,8 @@ EOF
 function clean-up-working-dir {
   # Only do cleanups on success
   [[ "$?" == "0" ]] || return 1
-
   command-exec-and-retry "clean-up-working-dir-internal ${1} ${2}" 3 "false"
 }
-
 # This function simply remove the ~/kube directory from instances
 #
 # Input:
@@ -652,7 +777,8 @@ function log-oneline {
   echo -en "[`TZ=Asia/Shanghai date`] ${1}"
 }
 
-# Create ~/.ssh/id_rsa.pub if it doesn't exist.
+# Create ~/.ssh/id_rsa.pub if it doesn't exist, and make it is added to
+# ssh-agent.
 function ensure-ssh-agent {
   if [[ ! -f ${HOME}/.ssh/id_rsa.pub ]]; then
     log "+++++++++ Create public/private key pair in ~/.ssh/id_rsa"

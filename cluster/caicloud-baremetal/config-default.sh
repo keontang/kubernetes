@@ -39,15 +39,6 @@ CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.5.0"}
 # cluster, and will be used to create kubeconfig file.
 KUBE_USER=${KUBE_USER:-""}
 
-# Directory for holding kubeup instance specific logs. During kube-up, instances
-# will be installed/provisioned concurrently; if we just send logs to stdout,
-# stdout will mess up. Therefore, we specify a directory to hold instance specific
-# logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
-KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
-
-# URL path of the server hosting caicloud kubernetes release.
-CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}
-
 # Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
 # there is no easy to enforce docker version in caicloud kubernetes release,
 # so we define it here separately.
@@ -56,6 +47,19 @@ DOCKER_VERSION=${DOCKER_VERSION:-"1.8.3"}
 # To indicate if the execution status needs to be reported back to caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
+
+#
+# Following params in the section should rarely change.
+#
+
+# Directory for holding kubeup instance specific logs. During kube-up, instances
+# will be installed/provisioned concurrently; if we just send logs to stdout,
+# stdout will mess up. Therefore, we specify a directory to hold instance specific
+# logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
+KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
+
+# URL path of the server hosting caicloud kubernetes release.
+CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}
 
 # Daocloud registry accelerator. Before implementing our own registry (or registry
 # mirror), use this accelerator to make pulling image faster. The variable is a
@@ -71,6 +75,7 @@ http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"}
 # Ubuntu/Debian apt mirrors. In case of installation errors from any of the mirrors,
 # we switch to a backup.
 APT_MIRRORS="http://mirrors.163.com/ubuntu/,http://ftp.sjtu.edu.cn/ubuntu/"
+
 
 # -----------------------------------------------------------------------------
 # Parameter from executor for cluster addons.
@@ -108,8 +113,8 @@ HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
 SERVICE_CLUSTER_IP_RANGE=10.254.0.0/16  # formerly PORTAL_NET
 
 # Define the IP range used for flannel overlay network, should not conflict
-# with above SERVICE_CLUSTER_IP_RANGE.
-# TODO: This is for jinjiang and allow only three machines right now.
+# with above SERVICE_CLUSTER_IP_RANGE. Note, below config only allows three
+# machines.
 FLANNEL_NET=172.24.60.0/22
 FLANNEL_SUBNET_LEN=24
 FLANNEL_SUBNET_MIN=172.24.61.0
@@ -129,6 +134,7 @@ MASTER_INSECURE_PORT="8080"
 MASTER_SECURE_ADDRESS="0.0.0.0"
 MASTER_SECURE_PORT="443"
 KUBELET_PORT="10250"
+
 
 # -----------------------------------------------------------------------------
 # Misc static configurations.

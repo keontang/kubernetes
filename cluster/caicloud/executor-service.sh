@@ -119,7 +119,7 @@ function report-eip-ids {
 function report-project-id {
   if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
     if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${KUBE_USER-}" ]]; then
-      send-request-with-retry "$EXECUTOR_HOST_NAME/report_project_id?uid=${SUB_ACCOUNT_USER}&projectid=$1"
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_project_id?uid=${PROJECT_USER}&projectid=$1"
     else
       echo "EXECUTOR_HOST_NAME or KUBE_USER is not set up. report-project-id failed."
     fi

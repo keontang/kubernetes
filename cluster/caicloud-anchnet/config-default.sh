@@ -50,29 +50,17 @@ CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 # two different versions avoid overriding existing release.
 BUILD_TARBALL=${BUILD_TARBALL:-"N"}
 
-# The version of newly built release during kube-up.
-BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
-
 # The version of caicloud release to use if building release is not required.
 # E.g. v1.0.2, 2015-09-09-15-30-30, etc.
 CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.5.0"}
 
-# SUB_ACCOUNT_USER uniquely identifies a caicloud user. This is the user that owns the
-# cluster, and will be used to create kubeconfig file.
-SUB_ACCOUNT_USER=${SUB_ACCOUNT_USER:-""}
-
-# Project ID actually stands for anchnet sub-account. If PROJECT_ID and KUBE_USER
+# Project ID actually stands for anchnet sub-account. If PROJECT_ID and PROJECT_USER
 # are not set, all the subsequent anchnet calls will use main account in anchnet.
 PROJECT_ID=${PROJECT_ID:-""}
 
-# Directory for holding kubeup instance specific logs. During kube-up, instances
-# will be installed/provisioned concurrently; if we just send logs to stdout,
-# stdout will mess up. Therefore, we specify a directory to hold instance specific
-# logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
-KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
-
-# URL path of the server hosting caicloud kubernetes release.
-CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}
+# PROJECT_USER uniquely identifies a caicloud user. This is the user that owns the
+# cluster, and will be used to create kubeconfig file.
+PROJECT_USER=${PROJECT_USER:-""}
 
 # Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
 # there is no easy to enforce docker version in caicloud kubernetes release,
@@ -91,7 +79,7 @@ RAW_BASE_IMAGE=${RAW_BASE_IMAGE:-"trustysrvx64c"}
 INSTANCE_USER=${INSTANCE_USER:-"ubuntu"}
 KUBE_INSTANCE_PASSWORD=${KUBE_INSTANCE_PASSWORD:-"caicloud2015ABC"}
 
-# The user & password without sudo privilege
+# The user & password without sudo privilege for accessing cluster machines.
 LOGIN_USER=${LOGIN_USER:-"caicloud"}
 LOGIN_PWD=${LOGIN_PWD:-"caiyun12345678"}
 
@@ -101,6 +89,22 @@ REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
 
 # Money transferred to sub account upon its creation.
 INITIAL_DEPOSIT=${INITIAL_DEPOSIT:-"1"}
+
+#
+# Following params in the section should rarely change.
+#
+
+# Directory for holding kubeup instance specific logs. During kube-up, instances
+# will be installed/provisioned concurrently; if we just send logs to stdout,
+# stdout will mess up. Therefore, we specify a directory to hold instance specific
+# logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
+KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
+
+# URL path of the server hosting caicloud kubernetes release.
+CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}
+
+# The version of newly built release during kube-up.
+BUILD_VERSION=${BUILD_VERSION:-"`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
 # The IP Group used for new instances. 'eipg-98dyd0aj' is China Telecom and
 # 'eipg-00000000' is anchnet's own BGP. Usually, we just use BGP.
@@ -221,6 +225,7 @@ NODE_MEM=${NODE_MEM:-1024}
 # The number of CPUs of a node.
 NODE_CPU_CORES=${NODE_CPU_CORES:-1}
 
+
 # -----------------------------------------------------------------------------
 # Params from executor for kube-down.
 # -----------------------------------------------------------------------------
@@ -260,7 +265,7 @@ FLANNEL_SUBNET_MIN=172.16.0.0
 FLANNEL_SUBNET_MAX=172.31.0.0
 FLANNEL_TYPE="udp"
 
-# The IP address for the Kubelet to serve on
+# The IP address for the Kubelet to serve on.
 KUBELET_IP_ADDRESS=0.0.0.0
 
 # Define the internal IPs for instances in private SDN network.
@@ -278,6 +283,7 @@ MASTER_INSECURE_PORT="8080"
 MASTER_SECURE_ADDRESS="0.0.0.0"
 MASTER_SECURE_PORT="443"
 KUBELET_PORT="10250"
+
 
 # -----------------------------------------------------------------------------
 # Misc static configurations.
@@ -316,9 +322,11 @@ function calculate-default {
     FINAL_VERSION=${CAICLOUD_KUBE_VERSION}
   fi
 
-  # If SUB_ACCOUNT_USER is specified, set the path to save per cluster k8s config file;
-  # otherwise, use default one from k8s.
-  if [[ ! -z ${SUB_ACCOUNT_USER-} ]]; then
+  # If PROJECT_USER is specified, set the path to save per cluster k8s config file;
+  # otherwise, use default one from k8s. The path is set to config_${CLUSTER_NAME}
+  # instead of config_${PROJECT_USER} because user can create multiple cluster and
+  # we don't want to have multiple kube context in a single config file.
+  if [[ ! -z ${PROJECT_USER-} ]]; then
     KUBECONFIG="$HOME/.kube/config_${CLUSTER_NAME}"
   fi
 

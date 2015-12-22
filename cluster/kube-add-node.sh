@@ -14,16 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Add new node(s) to a running kubernetes cluster
-# This script assumes that master already stores necessary files/packages to bring
-# up a new node. To be specific, the following should exist on master:
+# Add new node(s) to a running kubernetes cluster. This script assumes that
+# master already stores necessary files/packages to bring up a new node. To
+# be specific, the following should exist on master:
 #
 #   /etc/caicloud/caicloud-kube.tar.gz    -- caicloud kubernetes related binaries.
 #   /etc/caicloud/kubelet-kubeconfig      -- config needed by kubelet to access master
 #   /etc/caicloud/kube-proxy-kubeconfig   -- config needed by kube-proxy to access master
 #
-# New versions of kube-up will place these files at the right location during kube-up.
-# The binaries should also be updated when we are upgrading cluster.
+# The number of new nodes to add equals to ${NUM_MINIONS}.
+#
+# New versions of kube-up will place these files at the right location during
+# kube-up. The binaries tarball should also be updated when we upgrade cluster.
 set -o nounset
 set -o pipefail
 

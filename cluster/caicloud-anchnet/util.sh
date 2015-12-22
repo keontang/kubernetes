@@ -19,7 +19,7 @@
 set +o errexit
 
 # Path of kubernetes root directory.
-KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
+KUBE_ROOT="$(dirname ${BASH_SOURCE})/../.."
 
 # Get cluster configuration parameters from config-default, and retrieve
 # executor related methods from executor-service.sh. Note KUBE_DISTRO will
@@ -79,7 +79,7 @@ function kube-up {
   log "+++++ Running kube-up with variables"
   (set -o posix; set)
 
-  # Build tarball if BUILD_TARBALL=Y; version is based on date/time.
+  # Build tarball if required.
   if [[ "${BUILD_TARBALL}" = "Y" ]]; then
     log "+++++ Building tarball"
     caicloud-build-tarball "${FINAL_VERSION}"
@@ -140,6 +140,7 @@ function kube-up {
   # Setup host, including hostname, private SDN network, etc.
   setup-anchnet-hosts
 
+  # After kube-up, we'll need to remove "~/.kube" working directory.
   trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
 
   # Install binaries and packages concurrently. If we are to use image mode,
@@ -587,7 +588,7 @@ function create-resource-variables {
 
 # Create an anchnet project if PROJECT_ID is not specified, and report it back
 # to executor. Note that we do not create anchnet project if neither PROJECT_ID
-# nor SUB_ACCOUNT_USER is specified, this is primarily used for development.
+# nor PROJECT_USER is specified, this is primarily used for development.
 #
 # Assumed vars:
 #   INITIAL_DEPOSIT
@@ -595,47 +596,45 @@ function create-resource-variables {
 # Vars set:
 #   PROJECT_ID
 function create-project {
-  if [[ ! -z "${PROJECT_ID-}" && ! -z "${SUB_ACCOUNT_USER-}" ]]; then
-    # If both PROJECT_ID and SUB_ACCOUNT_USER are given, make sure the project
+  if [[ ! -z "${PROJECT_ID-}" && ! -z "${PROJECT_USER-}" ]]; then
+    # If both PROJECT_ID and PROJECT_USER are given, make sure the project
     # actually belongs to the user.
     anchnet-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
     PROJECT_NAME=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_name']")
-    if [[ "${PROJECT_NAME}" != "${SUB_ACCOUNT_USER}" ]]; then
-      log "+++++ ${color_red}project_id ${PROJECT_ID} doesn't belong to user ${SUB_ACCOUNT_USER}${color_norm}"
+    if [[ "${PROJECT_NAME}" != "${PROJECT_USER}" ]]; then
+      log "+++++ ${color_red}project_id ${PROJECT_ID} doesn't belong to user ${PROJECT_USER}${color_norm}"
       kube-up-complete N
       exit 1
     fi
-  elif [[ -z "${PROJECT_ID-}" && ! -z "${SUB_ACCOUNT_USER-}" ]]; then
-    # If SUB_ACCOUNT_USER is given but PROJECT_ID is empyt, then we might need
+  elif [[ -z "${PROJECT_ID-}" && ! -z "${PROJECT_USER-}" ]]; then
+    # If PROJECT_USER is given but PROJECT_ID is empty, then we might need
     # to create a project in anchnet. First, we query anchnet to see if we've
-    # already created project for the SUB_ACCOUNT_USER.
-    anchnet-exec-and-retry "${ANCHNET_CMD} searchuserproject ${SUB_ACCOUNT_USER}"
+    # already created project for the PROJECT_USER.
+    anchnet-exec-and-retry "${ANCHNET_CMD} searchuserproject ${PROJECT_USER}"
     PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_id']")
     if [[ -z "${PROJECT_ID-}" ]]; then
-      # If PROJECT_ID is still empty, we create anchnet project (sub account).
-      log "+++++ Create new anchnet sub account for ${SUB_ACCOUNT_USER}"
-      anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${SUB_ACCOUNT_USER}"
+      # If PROJECT_ID is still empty, we create anchnet project (sub-account).
+      log "+++++ Create new anchnet sub-account for ${PROJECT_USER}"
+      anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${PROJECT_USER}"
       anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
       PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
-      # Get the userId of the sub account. Note the userId here is used internally
-      # by anchnet which will be used to tranfer money.
+      # Get the userid of the sub account. Note the userid here is used internally
+      # by anchnet which is used to tranfer money.
       anchnet-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
-      SUB_ACCOUNT_UID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['userid']")
+      PROJECT_INTERNAL_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['userid']")
       # Transfer money from main account to sub-account. We need at least $INITIAL_DEPOSIT
       # to create resources in sub-account.
       log "+++++ Transfer balance to sub account"
-      anchnet-exec-and-retry "${ANCHNET_CMD} transfer ${SUB_ACCOUNT_UID} ${INITIAL_DEPOSIT}"
+      anchnet-exec-and-retry "${ANCHNET_CMD} transfer ${PROJECT_INTERNAL_ID} ${INITIAL_DEPOSIT}"
       report-project-id ${PROJECT_ID}
     else
-      log "+++++ Reuse existing project ID ${PROJECT_ID} for ${SUB_ACCOUNT_USER}"
+      log "+++++ Reuse existing project ID ${PROJECT_ID} for ${PROJECT_USER}"
       report-project-id ${PROJECT_ID}
     fi
   fi
 }
 
 # Create a single master instance from anchnet.
-#
-# TODO: Investigate HA master setup.
 #
 # Assumed vars:
 #   KUBE_ROOT
@@ -1006,7 +1005,10 @@ function setup-anchnet-hosts-internal {
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
     echo ""
     echo "config-hostname ${MASTER_INSTANCE_ID}"
-    # Make sure master is able to find nodes using node hostname.
+    # Make sure master is able to find nodes using node hostname. In anchnet,
+    # instances can't find each other using their hostname, but this is required
+    # in kubernetes where master uses node hostname to collect node's data, e.g.
+    # logs.
     for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
       echo "add-hosts-entry ${NODE_INSTANCE_IDS_ARR[$i]} ${NODE_IIPS_ARR[$i]}"
     done
@@ -1045,7 +1047,7 @@ sudo ./kube/node${i}-host-setup.sh || \
 echo 'Command failed setting up remote host'" & pids="${pids} $!"
   done
 
-  wait-pids "${pids}" "+++++ Wait for all instances to be setup"
+  wait-pids "${pids}" "+++++ Wait for all instances to setup"
 }
 
 # A helper function that executes an anchnet command, and retries on failure.

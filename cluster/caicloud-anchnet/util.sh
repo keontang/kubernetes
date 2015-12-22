@@ -33,7 +33,7 @@ source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 # -----------------------------------------------------------------------------
 # Cluster specific library utility functions.
 # -----------------------------------------------------------------------------
-# Step1 of cluster bootstrapping: verify cluster prerequisites.
+# Verify cluster prerequisites.
 function verify-prereqs {
   if [[ "$(which anchnet)" == "" ]]; then
     log "Can't find anchnet cli binary in PATH, please fix and retry."
@@ -62,6 +62,12 @@ function verify-prereqs {
       exit 1
     fi
   fi
+  cd ${KUBE_ROOT}
+  ./cluster/kubectl.sh > /dev/null 2>&1
+  if [[ "$?" != "0" ]]; then
+    caicloud-build-local
+  fi
+  cd - > /dev/null
   if [[ ! -f "${ANCHNET_CONFIG_FILE}" ]]; then
     log "Can't find anchnet config file ${ANCHNET_CONFIG_FILE}, please fix and retry."
     log "Anchnet config file contains credentials used to access anchnet API."
@@ -77,7 +83,7 @@ function verify-prereqs {
 function kube-up {
   # Print all environment and local variables at this point.
   log "+++++ Running kube-up with variables"
-  (set -o posix; set)
+  KUBE_UP=Y && (set -o posix; set)
 
   # Build tarball if required.
   if [[ "${BUILD_TARBALL}" = "Y" ]]; then
@@ -96,8 +102,8 @@ function kube-up {
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
     # For dev, set to existing instance IDs for master and nodes. Other variables
     # will be calculated based on the IDs.
-    MASTER_INSTANCE_ID="i-K64QAG7T"
-    NODE_INSTANCE_IDS="i-0ZTQ6ACY,i-PR1DCP5K"
+    MASTER_INSTANCE_ID="i-MDV9B512"
+    NODE_INSTANCE_IDS="i-OBM6FXE3,i-IGY0O3YZ"
     # To mimic actual kubeup process, we create vars to match create-master-instance
     # create-node-instances, etc. We also override NUM_MINIONS.
     create-dev-variables
@@ -133,55 +139,33 @@ function kube-up {
   create-resource-variables
 
   # Create certificates and credentials to secure cluster communication.
-  create-certs-and-credentials \
-    "${MASTER_IIP}" \
-    "${MASTER_EIP}"
+  create-certs-and-credentials
 
   # Setup host, including hostname, private SDN network, etc.
   setup-anchnet-hosts
 
   # After kube-up, we'll need to remove "~/.kube" working directory.
-  trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
+  trap-add 'clean-up-working-dir' EXIT
 
   # Install binaries and packages concurrently. If we are to use image mode,
   # everything should already be installed so there is no need to install tarball
   # and packages.
   if [[ "${KUBE_UP_MODE}" != "image" ]]; then
     local pids=""
-    fetch-tarball-in-master "${MASTER_SSH_EXTERNAL}" && \
-    install-binaries-from-master \
-      "${MASTER_SSH_EXTERNAL}" \
-      "${NODE_SSH_EXTERNAL}" \
-      "${NODE_SSH_INTERNAL}" & pids="$pids $!"
-    install-packages \
-      "${INSTANCE_SSH_EXTERNAL}" & pids="$pids $!"
+    fetch-tarball-in-master && install-binaries-from-master & pids="$pids $!"
+    install-packages & pids="$pids $!"
     wait ${pids}
   fi
 
-  # Add project_id to cloud config.
-  cp "${ANCHNET_CONFIG_FILE}" ${KUBE_TEMP}/anchnet-config
-  json_add_field ${KUBE_TEMP}/anchnet-config "projectid" "${PROJECT_ID}"
+  # Create anchnet cloud config.
+  create-anchnet-config
 
-  # Configure master/nodes instances.
-  send-master-startup-config-files \
-    "${MASTER_SSH_EXTERNAL}" \
-    "${PRIVATE_SDN_INTERFACE}" \
-    "anchnet" \
-    "${KUBE_TEMP}/anchnet-config"
-
-  send-node-startup-config-files \
-    "${MASTER_SSH_EXTERNAL}" \
-    "${NODE_SSH_EXTERNAL}" \
-    "${MASTER_IIP}" \
-    "${PRIVATE_SDN_INTERFACE}" \
-    "${NODE_INSTANCE_IDS}" \
-    "anchnet" \
-    "${KUBE_TEMP}/anchnet-config"
+  # Send configurations to master/nodes instances.
+  send-master-startup-config-files "${KUBE_TEMP}/anchnet-config"
+  send-node-startup-config-files "${KUBE_TEMP}/anchnet-config"
 
   # Now start kubernetes.
-  start-kubernetes \
-    "${MASTER_SSH_EXTERNAL}" \
-    "${NODE_SSH_EXTERNAL}"
+  start-kubernetes
 
   # After everything's done, we re-apply firewall to make sure it works.
   ensure-firewall
@@ -209,11 +193,15 @@ function validate-cluster {
   "${KUBE_ROOT}/cluster/validate-cluster.sh"
 
   echo "... calling deploy-addons" >&2
-  deploy-addons "${MASTER_SSH_EXTERNAL}"
+  deploy-addons
 }
 
-# Update a kubernetes cluster with latest source.
+# Update a kubernetes cluster.
 function kube-push {
+  # Print all environment and local variables at this point.
+  log "+++++ Running kube-push with variables"
+  KUBE_UP=N && (set -o posix; set)
+
   # Find all instances and eips.
   find-instance-and-eip-resouces "running"
   if [[ "$?" != "0" ]]; then
@@ -221,50 +209,54 @@ function kube-push {
     exit 1
   fi
 
-  # Prepare for restarting cluster. PRIVATE_SDN_INTERFACE is a hack, just like
-  # in kube-up - there is no easy to find which interface serves private SDN.
-  KUBE_INSTANCE_LOGDIR="/tmp/kubepush-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"
+  # Build tarball if required.
+  if [[ "${BUILD_TARBALL}" = "Y" ]]; then
+    log "+++++ Building tarball"
+    caicloud-build-tarball "${FINAL_VERSION}"
+  fi
+
+  # PRIVATE_SDN_INTERFACE is a hack, just like in kube-up - there is no easy
+  # to find which interface serves private SDN.
   PRIVATE_SDN_INTERFACE="eth1"
+
+  # Make sure we have:
+  #  1. a staging area
+  #  2. ssh capability
+  #  3. log directory
   ensure-temp-dir
+  ensure-ssh-agent
   ensure-log-dir
 
-  # Build client and server binaries.
-  make-clean
-  caicloud-build-local
-  caicloud-build-server
-
-  # Populate ssh info needed by clean-ups.
+  # Populate ssh info needed.
+  # TODO: We can't depend on create-node-internal-ips-variable for NODE_IIP.
+  NUM_RUNNING_MINIONS=0
   create-node-internal-ips-variable
   create-resource-variables
 
-  # Clean up working directory once we are done updating.
-  trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
-
-  # Push new binaries to master.
-  log "+++++ Push binaries to master ..."
+  # Make sure we have working directories.
   ensure-working-dir "${MASTER_SSH_EXTERNAL}"
-  scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
-    "${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-controller-manager \
-     ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-apiserver \
-     ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-scheduler" \
-    "~/kube/master"
-
-  # Push new binaries to nodes.
-  log "+++++ Push binaries to nodes ..."
   IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   for ssh_info in "${node_ssh_info[@]}"; do
     ensure-working-dir "${ssh_info}"
-    scp-to-instance-expect "${ssh_info}" \
-      "${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kubelet \
-      ${KUBE_ROOT}/_output/dockerized/bin/linux/amd64/kube-proxy" \
-      "~/kube/node"
   done
+  # Clean up working directory once we are done updating.
+  trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
 
-  # Restart cluster.
-  log "+++++ Restart running cluster ..."
-  stop-cluster
-  install-configurations
-  provision-instances
+  # Now install binaries and configs.
+  local pids=""
+  fetch-tarball-in-master
+  install-binaries-from-master & pids="$pids $!"
+  wait ${pids}
+
+  # Create anchnet cloud config.
+  create-anchnet-config
+
+  # Send configurations to master/nodes instances.
+  send-master-startup-config-files "${KUBE_TEMP}/anchnet-config"
+  send-node-startup-config-files "${KUBE_TEMP}/anchnet-config"
+
+  # Now start kubernetes.
+  start-kubernetes
 }
 
 # Delete a kubernete cluster from anchnet, using CLUSTER_NAME.
@@ -307,8 +299,7 @@ function kube-down {
 function detect-master {
   local attempt=0
   while true; do
-    log "Attempt $(($attempt+1)) to detect kube master"
-    log "$MASTER_NAME"
+    log "Attempt $(($attempt+1)) to detect kube master: ${MASTER_NAME}"
     local eip=$(${ANCHNET_CMD} searchinstance ${MASTER_NAME} --project=${PROJECT_ID} | json_val '["item_set"][0]["eip"]["eip_addr"]')
     if [[ "${?}" != "0" || ! ${eip} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
       if (( attempt > 20 )); then
@@ -325,7 +316,7 @@ function detect-master {
   done
 
   KUBE_MASTER=${MASTER_NAME}
-  log "Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)"
+  log "Using master: ${KUBE_MASTER} (external IP: ${KUBE_MASTER_IP})"
 }
 
 # Get variables for development.
@@ -359,41 +350,6 @@ function create-dev-variables {
   done
   export NUM_MINIONS=${#node_instance_ids_arr[@]}
   PRIVATE_SDN_INTERFACE="eth1"
-}
-
-# Stop cluster stops a running cluster.
-function stop-cluster {
-  log "+++++ Stop master ..."
-  expect <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${MASTER_EIP} "sudo service etcd stop"
-expect {
-  "*assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-
-  log "+++++ Stop nodes ..."
-  IFS=',' read -ra node_eips_arr <<< "${NODE_EIPS}"
-  for (( i = 0; i < $(($NUM_MINIONS)); i++ )); do
-    local node_eip=${NODE_EIPS_ARR[${i}]}
-    expect <<EOF
-set timeout -1
-spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ${INSTANCE_USER}@${node_eip} "sudo service flanneld stop"
-expect {
-  "*assword*" {
-    send -- "${KUBE_INSTANCE_PASSWORD}\r"
-    exp_continue
-  }
-  eof {}
-}
-EOF
-  done
 }
 
 # Find instances and eips in anchnet via CLUSTER_NAME and PROJECT_ID. Return 1 if
@@ -970,6 +926,19 @@ function create-node-upgrade-script {
     echo "sudo service flanneld start"
   ) > "$1"
   chmod a+x "$1"
+}
+
+# Add project_id to cloud config.
+#
+# Assumed vars:
+#   KUBE_TEMP
+#   ANCHNET_CONFIG_FILE
+#
+# Output:
+#   ${KUBE_TEMP}/anchnet-config
+function create-anchnet-config {
+  cp "${ANCHNET_CONFIG_FILE}" ${KUBE_TEMP}/anchnet-config
+  json_add_field ${KUBE_TEMP}/anchnet-config "projectid" "${PROJECT_ID}"
 }
 
 # Setup anchnet hosts, including hostname, interconnection and private SDN network.

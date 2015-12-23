@@ -41,6 +41,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 		return nil, false, err
 	}
 	if exists == false {
+		glog.Infof("GetTCPLoadBalancer no loadbalancer %v found", name)
 		return nil, false, nil
 	}
 	// No external IP for the loadbalancer, shouldn't happen.
@@ -103,6 +104,7 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 	// load balancer so that the eip of a service stays the same. The justification of recreating lb
 	// rather than sync security group, listeners and backends would be that it will probably take
 	// longer to sync all of the above.
+	// TODO: Switch to fine-grainer syncing as deleting loadbalancer will introduce downtime for applications running on k8s.
 	var eip_ids []string
 	matching_lb, exists, err := an.searchLoadBalancer(name)
 	if err != nil {
@@ -437,10 +439,10 @@ func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.Descr
 			// we will have to go through the list to see if there is actually an active LB.
 			for _, item := range response.ItemSet {
 				if item.Status == anchnet_client.LoadBalancerStatusActive {
+					glog.Infof("Attempt %d: found loadbalancer %v\n", i, search_word)
 					return &item, true, nil
 				}
 			}
-			return nil, false, nil
 		} else {
 			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, search_word, err)
 		}

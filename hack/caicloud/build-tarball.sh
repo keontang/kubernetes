@@ -79,6 +79,12 @@ CAICLOUD_KUBE_SCRIPT_PKG="caicloud-kube-script-${CAICLOUD_VERSION}.tar.gz"
 # -----------------------------------------------------------------------------
 cd ${KUBE_ROOT}
 
+# Make sure we have correct version information, e.g. when using `kubectl version`,
+# we'll get caicloud kubernetes version instead of random git tree status. The
+# variables here are used in ./hack/lib/version.sh.
+export KUBE_GIT_VERSION=${CAICLOUD_VERSION}
+export KUBE_GIT_TREE_STATE="clean"
+
 # Work around mainland network connection.
 hack/caicloud/k8s-replace.sh
 trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
@@ -88,7 +94,7 @@ if [[ "$?" != "0" ]]; then
   exit 1
 fi
 
-echo "Building tarball ${CAICLOUD_KUBE_PKG} and ${CAICLOUD_KUBE_EXECUTOR_PKG}"
+echo "Building tarball ${CAICLOUD_KUBE_PKG} and ${CAICLOUD_KUBE_SCRIPT_PKG}"
 
 # Fetch non-kube binaries.
 if [[ ! -f /tmp/${ETCD_PACKAGE} ]]; then
@@ -104,7 +110,7 @@ mkdir -p flannel-linux && tar xzf /tmp/${FLANNEL_PACKAGE} -C flannel-linux --str
 # Reset output directory.
 rm -rf ${KUBE_ROOT}/_output/caicloud && mkdir -p ${KUBE_ROOT}/_output/caicloud
 
-# Make tarball '${CAICLOUD_UPLOAD_VERSION}'.
+# Make tarball caicloud-kub-${CAICLOUD_VERSION}.tar.gz
 mkdir -p caicloud-kube
 cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
    _output/dockerized/bin/linux/amd64/kube-apiserver \
@@ -117,14 +123,14 @@ cp etcd-linux/etcd etcd-linux/etcdctl flannel-linux/flanneld \
 tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_PKG} caicloud-kube
 rm -rf etcd-linux flannel-linux caicloud-kube
 
-# Make tarball '${EXECUTOR_UPLOAD_VERSION}'.
-mkdir -p caicloud-kube-executor
-cp -R hack cluster build caicloud-kube-executor
+# Make tarball caicloud-kub-script-${CAICLOUD_VERSION}.tar.gz
+mkdir -p caicloud-kube-script
+cp -R hack cluster build caicloud-kube-script
 # Preserve kubectl path since kubectl.sh assumes some locations.
-mkdir -p caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
-cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-executor/_output/dockerized/bin/linux/amd64/
-tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_EXECUTOR_PKG} caicloud-kube-executor
-rm -rf caicloud-kube-executor
+mkdir -p caicloud-kube-script/_output/dockerized/bin/linux/amd64/
+cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-script/_output/dockerized/bin/linux/amd64/
+tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_SCRIPT_PKG} caicloud-kube-script
+rm -rf caicloud-kube-script
 
 cd -
 

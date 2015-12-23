@@ -70,12 +70,8 @@ function kube-add-nodes {
   # We have the binaries stored at master during kube-up, so we just fetch
   # tarball from master.
   local pids=""
-  install-binaries-from-master \
-    "${MASTER_SSH_EXTERNAL}" \
-    "${NODE_SSH_EXTERNAL}" \
-    "${NODE_SSH_INTERNAL}" & pids="$pids $!"
-  install-packages \
-    "${NODE_SSH_EXTERNAL}" & pids="$pids $!"
+  install-binaries-from-master & pids="$pids $!"
+  install-packages & pids="$pids $!"
   wait $pids
 
   # Place kubelet-kubeconfig and kube-proxy-kubeconfig in working dir.
@@ -92,7 +88,7 @@ function kube-add-nodes {
     "anchnet" \
     "${ANCHNET_CONFIG_FILE}"
 
-  start-node-kubernetes "${NODE_SSH_EXTERNAL}"
+  start-node-kubernetes
 }
 
 # TODO: report ip/id of newly created instances. The situation is slightly different

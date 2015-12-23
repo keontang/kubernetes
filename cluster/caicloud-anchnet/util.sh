@@ -217,7 +217,11 @@ function kube-push {
 
   # PRIVATE_SDN_INTERFACE is a hack, just like in kube-up - there is no easy
   # to find which interface serves private SDN.
+  # NUM_RUNNING_MINIONS is ugly, we have to swap it with NUM_MINIONS to make
+  # kube-push work. TODO: Fix it.
   PRIVATE_SDN_INTERFACE="eth1"
+  NUM_MINIONS=${NUM_RUNNING_MINIONS}
+  NUM_RUNNING_MINIONS=0
 
   # Make sure we have:
   #  1. a staging area
@@ -228,8 +232,6 @@ function kube-push {
   ensure-log-dir
 
   # Populate ssh info needed.
-  # TODO: We can't depend on create-node-internal-ips-variable for NODE_IIP.
-  NUM_RUNNING_MINIONS=0
   create-node-internal-ips-variable
   create-resource-variables
 

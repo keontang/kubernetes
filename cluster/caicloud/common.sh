@@ -367,9 +367,15 @@ function start-node-kubernetes {
   wait ${pids}
 }
 
-# Create a comma separated string of node internal ips based on the cluster config
-# NODE_IIP_RANGE and NUM_MINIONS. E.g. if NODE_IIP_RANGE is 10.244.1.0/16 and
-# NUM_MINIONS is 2, then output is: "10.244.1.0,10.244.1.1".
+# This is used in both kube-up and kube-add-node to create a comma separated
+# string of node internal ips based on the cluster config NODE_IIP_RANGE and
+# NUM_MINIONS. E.g. if NODE_IIP_RANGE is 10.244.1.0/16 and NUM_MINIONS is 2,
+# then output is: "10.244.1.0,10.244.1.1".
+# Since the internal ip assignment is consecutive for now, we will have to
+# start from the next of the last internal ip we have already assigned.
+# For kube-up, we have 0 occupied internal ip to start with. For kube-add-node, we have
+# ${NUM_RUNNING_MINIONS} occupied internal ip.
+# One known issue: https://github.com/caicloud/caicloud-kubernetes/issues/283
 #
 # Assumed vars:
 #   NODE_IIP_RANGE

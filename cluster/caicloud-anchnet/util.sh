@@ -1218,7 +1218,7 @@ function setup-node-network-internal {
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
     echo ""
     # Make sure master is able to find nodes using node hostname.
-    for (( i = 0; i < ${NUM_NEW_NODES}; i++ )); do
+    for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
       echo "add-hosts-entry ${NODE_INSTANCE_IDS_ARR[$i]} ${NODE_IIPS_ARR[$i]}"
     done
   ) > "${KUBE_TEMP}/master-host-setup.sh"

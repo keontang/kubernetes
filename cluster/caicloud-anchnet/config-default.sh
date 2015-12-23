@@ -212,7 +212,13 @@ HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
 NUM_MINIONS=${NUM_MINIONS:-2}
 
 # Define number of nodes (minions) currently running in the cluster.
-# For kube-up, this should be 0.
+# This variable is mainly used to calculate internal ip address.
+#
+# For kube-up, this variable will not be set during kube-up, and
+# should be default to 0.
+#
+# For kube-add-node, we will search for running minions by cluster name,
+# so this variable will be set automatically.
 NUM_RUNNING_MINIONS=${NUM_RUNNING_MINIONS:-0}
 
 # The memory size of master node (in MB).

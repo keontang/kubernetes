@@ -1,3 +1,24 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Caicloud kubernetes](#caicloud-kubernetes)
+  - [Overview](#overview)
+  - [How to do a release](#how-to-do-a-release)
+  - [Maintenance](#maintenance)
+    - [Rebase to latest public mainstream](#rebase-to-latest-public-mainstream)
+    - [Things need to be updated after rebasing](#things-need-to-be-updated-after-rebasing)
+    - [Changes relative to public mainstream](#changes-relative-to-public-mainstream)
+      - [New files or directories](#new-files-or-directories)
+      - [Changes to individual files](#changes-to-individual-files)
+      - [Depedencies](#depedencies)
+  - [Cluster resize](#cluster-resize)
+      - [Scale up](#scale-up)
+  - [Cluster upgrade](#cluster-upgrade)
+    - [Caveats](#caveats)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Caicloud kubernetes
 
 ## Overview
@@ -47,7 +68,7 @@ A couple points related to how to maintain caicloud kubernetes.
 
 ### Changes relative to public mainstream
 
-#### New files or directories:
+#### New files or directories
 
 These are brand new folders created to support our cloudprovider:
 * cluster/caicloud/
@@ -84,16 +105,10 @@ These are individual files we have to change in order to meet our requirements:
 * test/e2e/util.go
   * To use correct ssh private key & user for e2e test
 
-#### Depedencies:
+#### Depedencies
 
 * Add more dependencies in godeps:
   * Anchnet-go: SDK for anchnet API
-
-## Cluster Upgrade
-
-Cluster upgrade is done using `kube-push.sh` script, which pushes new binaries and configurations to running cluster (The ultimate goal in kubernetes
-is self-hosting and do rolling upgrade on cluster components). Note all configurations will be pushed to cluster except certs, credentials, etc. See
-respective cloudprovider documentation about how to use the script.
 
 ## Cluster resize
 
@@ -101,4 +116,37 @@ respective cloudprovider documentation about how to use the script.
 
 Cluster scale up is done using `kube-add-node.sh` script, which add node(s) to a running cluster. This script will use binaries kept at master to
 bring up a new cluster node (One caveat is that older versions of cluster don't have binaries stored at master node). Currently we only support adding
- nodes to caicloud-anchnet cluster.
+nodes to caicloud-anchnet cluster.
+
+## Cluster upgrade
+
+Cluster upgrade is done using `kube-push.sh` script, which pushes new binaries and configurations to running cluster (The ultimate goal in kubernetes
+is self-hosting and do rolling upgrade on cluster components). Note all configurations will be pushed to cluster except certs, credentials, etc. See
+respective cloudprovider documentation about how to use the script.
+
+Manually upgrade a user's kubernetes cluster is more involved, e.g.
+```
+CAICLOUD_KUBE_VERSION=v0.5.2 CLUSTER_NAME=7004de97-5aa9-495f-b443-3755463288e9 KUBERNETES_PROVIDER=caicloud-anchnet KUBE_INSTANCE_PASSWORD=fRBz6rqZ2VZODqv0 PROJECT_ID=pro-VE2200D8 ./cluster/kube-push.sh
+```
+
+### Caveats
+
+Before upgrading cluster, it's important to understand the following points:
+
+- Cluster version
+  It's important to make sure current cluster version is compatible with new cluster version. To check current cluster version, use `kubectl version`,
+  or consult cluster manager (not working yet). By convention, version x.x.X is bound to be compatible with x.x.Y, and x.X.x is mostly compatible with
+  x.Y.x. The best practice is to create a test cluster with old version, deploy sample applications, and then try upgrade to desired version. To upgrade
+  from X.x.x to Y.x.x, it's better to do a full migration.
+
+- External loadbalancer
+  Upon restart, service controller will call cloudprovider for all the services existed in the cluster (including those don't need external loadbalancer).
+  Bear in mind that this will create quit a bit burden on cloudproviders. For services without external loadbalancer, service controller will ignore and
+  simply create its cache. For services with external loadbalancer, we'll first delete the external loadbalancer and re-recreate one with the same IP
+  address. TODO: switch to full sync instead of deleting and recreating.
+
+- Existing Pod
+  Upgrading cluster involves restarting all kubernetes components as well as docker. Upon restart, kubelet will fetch its pods and sync their status.
+  Since etcd data is persistent, kubelet will see the pods initially assigned to it. Therefore, existing Pod won't be migrated or restarted by kubelet.
+  However, we'll also restart docker (e.g. upgrade docker version, change network setting, etc), in which case existing containers WILL be restarted by
+  kubelet. The best we can do is to separate docker upgrade from kubernetes upgrade, provided as an option during kube-push.

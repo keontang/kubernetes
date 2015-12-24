@@ -1,3 +1,24 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Anchnet cloudprovider](#anchnet-cloudprovider)
+  - [Background on anchnet cloudprovider](#background-on-anchnet-cloudprovider)
+  - [Create a cluster using anchnet](#create-a-cluster-using-anchnet)
+      - [Options:](#options)
+  - [Delete a cluster](#delete-a-cluster)
+      - [Options:](#options-1)
+  - [Update a cluster](#update-a-cluster)
+      - [Options:](#options-2)
+  - [Add node to a cluster](#add-node-to-a-cluster)
+      - [Options:](#options-3)
+  - [Test](#test)
+    - [Unit Test](#unit-test)
+    - [Integration Test](#integration-test)
+    - [e2e test](#e2e-test)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Anchnet cloudprovider
 
 Anchnet cloudprovider is internally supported by [caicloud.io](https://caicloud.io). It implements kubernetes cloudprovider plugin, and

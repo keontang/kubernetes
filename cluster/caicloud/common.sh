@@ -420,7 +420,7 @@ function create-node-internal-ips-variable {
     host_zeros=true
   fi
 
-  if (( NUM_RUNNING_MINIONS + NUM_MINIONS > (total_count - used_count) )); then
+  if (( ${NUM_RUNNING_MINIONS} + ${NUM_MINIONS} > (total_count - used_count) )); then
     log "Number of nodes is larger than allowed node internal IP address"
     kube-up-complete N
     exit 1
@@ -726,11 +726,11 @@ function clean-up-working-dir {
 function clean-up-working-dir-internal {
   local pids=""
   log "+++++ Start cleaning working dir. "
-  ssh-to-instance "${MASTER_SSH_EXTERNAL}" "sudo rm -rf ~/kube" & pids="${pids} $!"
+  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo rm -rf ~/kube" & pids="${pids} $!"
 
   IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   for ssh_info in "${node_ssh_info[@]}"; do
-    ssh-to-instance "${ssh_info}" "sudo rm -rf ~/kube" & pids="${pids} $!"
+    ssh-to-instance-expect "${ssh_info}" "sudo rm -rf ~/kube" & pids="${pids} $!"
   done
 
   log-oneline "+++++ Wait for all instances to clean up working dir ..."
@@ -816,9 +816,9 @@ function ensure-log-dir {
 # because we now clean up ~/kube directory once the cluster is up and running.
 #
 # Input:
-#   $1 instance external IP
+#   $1 instance external ssh information
 function ensure-working-dir {
-  ssh-to-instance "${1}" "mkdir -p ~/kube/master ~/kube/node"
+  ssh-to-instance-expect "${1}" "mkdir -p ~/kube/master ~/kube/node"
 }
 
 # Ensure that we have a password created for validating to the master. Note

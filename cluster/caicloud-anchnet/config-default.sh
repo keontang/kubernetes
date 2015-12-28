@@ -197,7 +197,7 @@ ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-true}
 KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 
 # Optional: Install cluster registry.
-ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-true}
+ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-false}
 
 # Optional: Install cluster monitoring. Disable by default, under developing.
 ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
@@ -298,7 +298,7 @@ KUBELET_PORT="10250"
 ADMISSION_CONTROL=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota
 
 # The infra container used for every Pod.
-POD_INFRA_CONTAINER="caicloudgcr/pause:1.0"
+POD_INFRA_CONTAINER="index.caicloud.io/caicloudgcr/google_containers_pause:1.0"
 
 # Namespace used to create cluster wide services, e.g. logging, dns, etc.
 # The name is from upstream and shouldn't be changed.

@@ -177,7 +177,7 @@ EOF
     echo -n " --hostname-override=${hostname} " >> ~/kube/configs/kubelet
   fi
   if [[ "${7:-}" != "" ]]; then
-    echo -n " --api-servers=https://${7}:${MASTER_SECURE_PORT} " >> ~/kube/configs/kubelet
+    echo -n " --api-servers=http://${7}:${MASTER_INSECURE_PORT} " >> ~/kube/configs/kubelet
   fi
   if [[ "${8:-}" != "" ]]; then
     echo -n " --cloud-provider=${8} " >> ~/kube/configs/kubelet
@@ -189,11 +189,10 @@ EOF
 }
 
 # Create kube-proxy options, used to start proxy on master or node.
-#
-# Input:
-#   $1 Whether running on "master" or "node.
-#   $2 If running on node, this is the API server address, typically
-#      master internal IP address.
+# Communication between kube-proxy and master will through http not https
+# because we use verified cert (*.caicloudapp.com) for apiserver which
+# does not have IP SAN, kube-proxy cannot access master using something
+# like https://10.244.0.1. This applies to kubelet as well.
 #
 # Output:
 #   A file with scheduler configs under ~/kube/configs/kube-proxy.
@@ -201,21 +200,12 @@ EOF
 # Assumed vars:
 #   MASTER_INSECURE_ADDRESS
 #   MASTER_INSECURE_PORT
-#   MASTER_SECURE_PORT
 function create-kube-proxy-opts {
-  if [[ "${1:-}" == "master" ]]; then
-    cat <<EOF > ~/kube/configs/kube-proxy
+  cat <<EOF > ~/kube/configs/kube-proxy
 KUBE_PROXY_OPTS="--logtostderr=true \
---master=http://${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} \
+--master=http://${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT}
 --kubeconfig=/etc/kubernetes/kube-proxy-kubeconfig"
 EOF
-  else
-    cat <<EOF > ~/kube/configs/kube-proxy
-KUBE_PROXY_OPTS="--logtostderr=true \
---master=https://${2}:${MASTER_SECURE_PORT}
---kubeconfig=/etc/kubernetes/kube-proxy-kubeconfig"
-EOF
-  fi
 }
 
 # Create flanneld options.

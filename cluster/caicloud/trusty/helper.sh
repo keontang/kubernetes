@@ -78,7 +78,7 @@ function send-master-startup-config-files-internal {
       echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} false \"\" \"\" \"\""
     fi
     echo "create-kube-scheduler-opts"
-    echo "create-kube-proxy-opts 'master'"
+    echo "create-kube-proxy-opts"
     echo "create-etcd-opts kubernetes-master"
     echo "create-flanneld-opts ${1} 127.0.0.1"
     # Create the system directories used to hold the final data.
@@ -130,9 +130,9 @@ function send-master-startup-config-files-internal {
     cp -r ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_conf \
        ${KUBE_TEMP}/known-tokens.csv \
        ${KUBE_TEMP}/basic-auth.csv \
-       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/ca.crt \
-       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/issued/master.crt \
-       ${KUBE_TEMP}/easy-rsa-master/easyrsa3/pki/private/master.key \
+       ${KUBE_TEMP}/certs/ca.crt \
+       ${KUBE_TEMP}/certs/master.crt \
+       ${KUBE_TEMP}/certs/master.key \
        ${KUBE_TEMP}/kubelet-kubeconfig \
        ${KUBE_TEMP}/kube-proxy-kubeconfig \
        ${KUBE_TEMP}/kube-master/kube
@@ -211,7 +211,7 @@ function send-node-startup-config-files-internal {
     else
       echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true \"${3:-}\" ${MASTER_IIP}"
     fi
-    echo "create-kube-proxy-opts 'node' ${MASTER_IIP}"
+    echo "create-kube-proxy-opts"
     echo "create-flanneld-opts ${2} ${MASTER_IIP}"
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"

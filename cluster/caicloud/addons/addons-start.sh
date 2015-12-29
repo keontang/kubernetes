@@ -30,6 +30,8 @@ ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-false}
 ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
 ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-false}
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE:-"kube-system"}
+MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS:-"127.0.0.1"}
+MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT:-"8080"}
 
 # Do retries when failing in objects creation from yaml files. It
 # is assumed kubectl exists, i.e. /opt/bin/kubectl.
@@ -45,7 +47,8 @@ function create-resource-from-file {
   delay=$3
   namespace=$4
   while [ ${tries} -gt 0 ]; do
-    /opt/bin/kubectl --namespace="${namespace}" create -f "${config_file}" && \
+    /opt/bin/kubectl --server="${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT}" \
+                     --namespace="${namespace}" create -f "${config_file}" && \
       echo "== Successfully started ${config_file} in namespace ${namespace} at $(date -Is)" && \
       return 0;
     let tries=tries-1;

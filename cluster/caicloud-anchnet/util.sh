@@ -289,6 +289,27 @@ function kube-down {
   # TODO: Find all loadbalancers. For now, Loadbalancer is not prefixed with CLUSTER_NAME.
 }
 
+# Stop a kubernetes cluster from anchnet, using CLUSTER_NAME.
+function kube-halt {
+  # Find all instances prefixed with CLUSTER_NAME.
+  find-instance-and-eip-resouces "running"
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} stopinstances ${INSTANCE_IDS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
+  fi
+}
+
+# Start a stopped kubernetes cluster from anchnet, using CLUSTER_NAME.
+function kube-restart {
+  # Find all instances prefixed with CLUSTER_NAME.
+  find-instance-and-eip-resouces "stopped"
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} startinstances ${INSTANCE_IDS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${INSTANCE_TERMINATE_WAIT_RETRY} ${INSTANCE_TERMINATE_WAIT_INTERVAL}
+  fi
+}
+
+
 # Detect name and IP for kube master.
 #
 # Assumed vars:

@@ -11,6 +11,8 @@
   - [Update a cluster](#update-a-cluster)
       - [Options:](#options-2)
   - [Add node to a cluster](#add-node-to-a-cluster)
+  - [Stop a running cluster](#stop-a-running-cluster)
+  - [Restart a cluster](#restart-a-cluster)
       - [Options:](#options-3)
   - [Test](#test)
     - [Unit Test](#unit-test)
@@ -167,6 +169,18 @@ KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-push.sh
 In case we want to add node(s) to a running cluster, we can run:
 ```
 CLUSTER_NAME=kube-default MASTER_EIP=103.21.116.147 NUM_MINIONS=1 KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-add-node.sh
+```
+
+## Stop a running cluster
+we can simply do the following to shut down a running cluster:
+```
+CLUSTER_NAME=kube-default KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-halt.sh
+```
+
+## Restart a cluster
+If we want to restart a cluster which has been stopped before, we can do:
+```
+CLUSTER_NAME=kube-default KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-restart.sh
 ```
 
 #### Options:

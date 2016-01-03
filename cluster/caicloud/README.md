@@ -80,6 +80,10 @@ These are brand new folders created to support our cloudprovider:
   * Scripts used to bring up baremetal cluster
 * cluster/kube-add-node.sh
   * A new script used to add a new node into cluster
+* cluster/kube-halt.sh
+  * A new script used to stop a running cluster
+* cluster/kube-restart.sh
+  * A new script used to start a stopped cluster
 * hack/caicloud/
   * Various tools for working with caicloud kubernetes
 * examples/caicloud/

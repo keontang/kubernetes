@@ -40,6 +40,13 @@ function verify-prereqs {
     log "See https://github.com/caicloud/anchnet-go/tree/master/anchnet"
     exit 1
   fi
+  # only check aliyun binary when we are not using self-signed cert
+  # because in this case we will generate unique A record for each cluster
+  if [[ "${USE_SELF_SIGNED_CERT}" == "false" && "$(which aliyun)" == "" ]]; then
+    log "Can't find aliyun binary in PATH, please fix and retry."
+    log "See https://github.com/caicloud/aliyun-go/tree/master/aliyun"
+    exit 1
+  fi
   if [[ "$(which curl)" == "" ]]; then
     log "Can't find curl in PATH, please fix and retry."
     log "For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
@@ -175,9 +182,10 @@ function kube-up {
   # By default, kubeconfig uses https://${KUBE_MASTER_IP}. Since we use standard
   # port 443, just assign MASTER_EIP to KUBE_MASTER_EIP. If non-standard port is
   # used, then we need to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
-  if [[ ${EXPERIMENTAL_SELF_SIGNED_CERT} == "true" ]]; then
+  if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
     KUBE_MASTER_IP="${MASTER_EIP}"
   else
+    add-dns-record
     wait-for-dns-propagation
     KUBE_MASTER_IP="${MASTER_DOMAIN_NAME}"
   fi
@@ -1414,6 +1422,18 @@ sudo ./kube/node${i}-host-setup.sh || \
 echo 'Command failed setting up remote host'" & pids="${pids} $!"
   done
   wait ${pids}
+}
+
+# Add dns A record for cluster master
+#
+# Assumed vars:
+#   MASTER_EIP
+function add-dns-record {
+  command-exec-and-retry "add-dns-record-internal" 20 "true"
+}
+function add-dns-record-internal {
+  log "+++++ Adding DNS record ${MASTER_DOMAIN_NAME}..."
+  aliyun adddomainrecord caicloudapp.com ${DNS_HOST_NAME} A ${MASTER_EIP}
 }
 
 # Wait for dns record to propagate. Otherwise in case where we are using

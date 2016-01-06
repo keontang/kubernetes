@@ -180,7 +180,7 @@ function create-certs-and-credentials {
 
   # The directory where all certs/keys will be placed at
   mkdir -p ${KUBE_TEMP}/certs
-  if [[ ${EXPERIMENTAL_SELF_SIGNED_CERT} == "true" ]]; then
+  if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
     # Create cluster certificates.
     (
       cp "${KUBE_ROOT}/cluster/caicloud/tools/easy-rsa.tar.gz" "${KUBE_TEMP}"

@@ -292,10 +292,12 @@ MASTER_SECURE_ADDRESS="0.0.0.0"
 MASTER_SECURE_PORT="443"
 KUBELET_PORT="10250"
 
-# In case we are not using self-signed certficate, we need this in kubeconfig.
-# TODO: This should be a unique domain name originated from shortened uid.
-# change this once we have *.caicloudapp.com domain.
-MASTER_DOMAIN_NAME=${MASTER_DOMAIN_NAME:-"app.caicloud.io"}
+# In case we are not using self-signed certficate we will
+# add domain name for each cluster with this format:
+# ajective-noun-4digitnumber-cluster.caicloudapp.com
+# e.g. epic-caicloud-2015-cluster.caicloudapp.com
+DNS_HOST_NAME=${DNS_HOST_NAME:-"epic-caicloud-2015-cluster"}
+BASE_DOMAIN_NAME=${BASE_DOMAIN_NAME:-"caicloudapp.com"}
 
 # -----------------------------------------------------------------------------
 # Misc static configurations.
@@ -317,10 +319,8 @@ DOCKER_OPTS=""
 # Provider name used internally.
 CAICLOUD_PROVIDER="anchnet"
 
-# -----------------------------------------------------------------------------
-# Experimental variables
-# -----------------------------------------------------------------------------
-EXPERIMENTAL_SELF_SIGNED_CERT=${EXPERIMENTAL_SELF_SIGNED_CERT:-"true"}
+# Whether we use self signed cert for apiserver
+USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT:-"true"}
 
 # -----------------------------------------------------------------------------
 # Derived params for kube-up (calculated based on above params: DO NOT CHANGE).
@@ -367,6 +367,11 @@ function calculate-default {
 
   # Final URL of caicloud tarball URL.
   CAICLOUD_TARBALL_URL="${CAICLOUD_HOST_URL}/${CAICLOUD_KUBE_PKG}"
+
+  # Domain name of the cluster
+  if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+    MASTER_DOMAIN_NAME="${DNS_HOST_NAME}.${BASE_DOMAIN_NAME}"
+  fi
 }
 
 calculate-default

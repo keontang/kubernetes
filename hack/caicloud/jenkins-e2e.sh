@@ -98,7 +98,7 @@ fi
 
 ### Run tests ###
 if [[ "${E2E_TEST}" == "true" ]]; then
-  go run ./hack/e2e.go -v --test --test_args="${GINKGO_TEST_ARGS}"
+  go run ./hack/e2e.go -v --test --test_args="${GINKGO_TEST_ARGS}" --check_version_skew=false
 fi
 
 ### Tear down

@@ -46,6 +46,14 @@ tarballs tagged with something like 2015-09-10-18-15-30.
 ./hack/caicloud/build-tarball.sh
 ```
 
+To build a cloudprovider image, run:
+
+```
+KUBERNETES_PROVIDER=caicloud-anchnet CAICLOUD_KUBE_VERSION=v1.0.1 ./hack/caicloud/build-image.sh
+```
+
+This will build an image in anchnet named "v1.0.1", which can be used in kube-up "image" mode.
+
 ## Maintenance
 
 A couple points related to how to maintain caicloud kubernetes.

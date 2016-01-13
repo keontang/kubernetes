@@ -29,30 +29,18 @@ enterprise use cases.
 
 ## How to do a release
 
-To build release, use script `hack/caicloud/build-tarball.sh`. The script will build caicloud kubernetes binaries, i.e. kubelet, apiserver, etc. It
-will also build script release, i.e. kube-up.sh, kube-down.sh etc. To see its full description, run (assuming at kubernetes root directory):
+To build release, use script `hack/caicloud/build-release.sh`. The script will build caicloud kubernetes binaries, i.e. kubelet, apiserver, etc. It
+will also build script release, i.e. kube-up.sh, kube-down.sh etc. By default, it will create two tarballs (binaries and scripts) and push to qiniu,
+it will also create cloud images, which can be used to create an image from cloudprovider directly. To see its full description, run (assuming at
+kubernetes root directory):
 ```
-./hack/caicloud/build-tarball.sh help
-```
-
-E.g. following command will build tarballs tagged with version v1.0.1, and push to Qiniu:
-```
-./hack/caicloud/build-tarball.sh v1.0.1
+./hack/caicloud/build-release.sh
 ```
 
-If running without param, the script will build images with current date/time, this is useful during development. E.g. following command will build
-tarballs tagged with something like 2015-09-10-18-15-30.
+E.g. following command will build tarballs tagged with version v1.0.1:
 ```
-./hack/caicloud/build-tarball.sh
+./hack/caicloud/build-release.sh v1.0.1
 ```
-
-To build a cloudprovider image, run:
-
-```
-KUBERNETES_PROVIDER=caicloud-anchnet CAICLOUD_KUBE_VERSION=v1.0.1 ./hack/caicloud/build-image.sh
-```
-
-This will build an image in anchnet named "v1.0.1", which can be used in kube-up "image" mode.
 
 ## Maintenance
 

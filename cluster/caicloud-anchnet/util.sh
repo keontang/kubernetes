@@ -155,6 +155,8 @@ function kube-up {
     fetch-tarball-in-master && install-binaries-from-master & pids="$pids $!"
     install-packages & pids="$pids $!"
     wait ${pids}
+  else
+    install-binaries-from-master
   fi
 
   # Create anchnet cloud config.
@@ -309,6 +311,53 @@ function kube-restart {
   fi
 }
 
+# Build an image ready to be used in 'image' mode.
+function build-instance-image {
+  # Create an instance based on master instance configuration.
+  anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${FINAL_VERSION}-image-instance \
+-p=${KUBE_INSTANCE_PASSWORD} -i=${RAW_BASE_IMAGE} -m=${MASTER_MEM} -c=${MASTER_CPU_CORES} -g=${IP_GROUP}"
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
+
+  # Get instance information.
+  local master_info=${COMMAND_EXEC_RESPONSE}
+  MASTER_INSTANCE_ID=$(echo ${master_info} | json_val '["instances"][0]')
+  MASTER_EIP_ID=$(echo ${master_info} | json_val '["eips"][0]')
+
+  get-ip-address-from-eipid "${MASTER_EIP_ID}"
+  MASTER_EIP=${EIP_ADDRESS}
+  MASTER_SSH_EXTERNAL="${INSTANCE_USER}:${KUBE_INSTANCE_PASSWORD}@${MASTER_EIP}"
+  INSTANCE_SSH_EXTERNAL="${MASTER_SSH_EXTERNAL}"
+
+  # Create a tarball.
+  caicloud-build-tarball "${FINAL_VERSION}"
+  local pids=""
+  fetch-tarball-in-master & pids="$pids $!"
+  install-packages & pids="$pids $!"
+  wait ${pids}
+
+  # Stop the instance and prepare to create image.
+  anchnet-exec-and-retry "anchnet stopinstances ${MASTER_INSTANCE_ID}"
+  anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
+
+  # Create the image.
+  anchnet-exec-and-retry "anchnet captureinstance ${FINAL_VERSION} ${MASTER_INSTANCE_ID}"
+
+  # Just print a message as anchnet doesn't return a job ID for this.
+  log "Image creation request for ${FINAL_VERSION} has been sent to anchnet. Please login to anchnet console to see the progress"
+}
+
+# Make sure image ID is accessible for the given user. Only called in image mode.
+function ensure-image {
+  if [[ ! -z "${PROJECT_USER-}" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} searchuser ${PROJECT_USER}"
+    # This ID has format like "usr-TREWP33S", which is used to share image.
+    USER_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val '["item_set"][0]["usr_id"]')
+    log "Found user ID ${USER_ID} for project user ${PROJECT_USER}"
+    if [[ ! -z "${USER_ID}" ]]; then
+      anchnet-exec-and-retry-on406 "${ANCHNET_CMD} grantimage ${IMAGEMODE_IMAGE} ${USER_ID}"
+    fi
+  fi
+}
 
 # Detect name and IP for kube master.
 #
@@ -1083,6 +1132,47 @@ function anchnet-exec-and-retry {
   done
 }
 
+# A helper function that executes an anchnet command, and retries when recevied 406
+# error. In any other cases, the script will simply return. The helper function is
+# useful to make sure a command is executed without knowing its status.
+#
+# Input:
+#   $1 command string to execute
+#   $2 number of retries, default to 20
+#
+# Output:
+#   COMMAND_EXEC_RESPONSE response from anchnet command. It is a global variable,
+#      so we can't use the function concurrently.
+function anchnet-exec-and-retry-on406 {
+  local attempt=0
+  local count=${2-20}
+  while true; do
+    COMMAND_EXEC_RESPONSE=$(eval $1)
+    return_code="$?"
+    error_code=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['code']")
+    # Exit if command succeeds but error code is 500.
+    if [[ "$return_code" != "0" && "$error_code" == "500" ]]; then
+      echo
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_red}${color_red}Unable to execute command [$1]: 500 error from anchnet ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
+      return
+    fi
+    if [[ "$return_code" != "0" && "$error_code" == "406" ]]; then
+      if (( attempt >= ${count} )); then
+        echo
+        echo -e "[`TZ=Asia/Shanghai date`] ${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
+        kube-up-complete N
+        exit 1
+      fi
+    else
+      echo -e "[`TZ=Asia/Shanghai date`] ${color_green}Command [$1] ok${color_norm}" >&2
+      break
+    fi
+    echo -e "[`TZ=Asia/Shanghai date`] ${color_yellow}Command [$1] not ok, will retry: ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
+    attempt=$(($attempt+1))
+    sleep $(($attempt*2))
+  done
+}
+
 # Wait until job finishes. If job doesn't finish within timeout, the script
 # will exit directly.
 #
@@ -1219,7 +1309,6 @@ function join-node-securitygroup {
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
   fi
 }
-
 
 # Setup anchnet hosts, including hostname, interconnection and private SDN network.
 # For SDN network, this will assign internal IP address to all newly created nodes'

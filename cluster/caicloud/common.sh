@@ -1057,13 +1057,13 @@ function caicloud-build-cross {
   cd -
 }
 
-# Build release tarball.
+# Build release tarball and push to qiniu.
 #
 # Inputs:
-#   $1 Tarbal version
+#   $1 Tarball version
 function caicloud-build-tarball {
   cd ${KUBE_ROOT}
-  ./hack/caicloud/build-tarball.sh ${1}
+  BUILD_CLOUD_IMAGE=N ./hack/caicloud/build-release.sh ${1}
   cd -
 }
 

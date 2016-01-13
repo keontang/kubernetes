@@ -311,7 +311,8 @@ function kube-restart {
   fi
 }
 
-# Build an image ready to be used in 'image' mode.
+# Build an image ready to be used in 'image' mode. Tarball should be ready
+# at this point.
 function build-instance-image {
   # Create an instance based on master instance configuration.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${FINAL_VERSION}-image-instance \
@@ -328,22 +329,23 @@ function build-instance-image {
   MASTER_SSH_EXTERNAL="${INSTANCE_USER}:${KUBE_INSTANCE_PASSWORD}@${MASTER_EIP}"
   INSTANCE_SSH_EXTERNAL="${MASTER_SSH_EXTERNAL}"
 
-  # Create a tarball.
-  caicloud-build-tarball "${FINAL_VERSION}"
   local pids=""
   fetch-tarball-in-master & pids="$pids $!"
   install-packages & pids="$pids $!"
   wait ${pids}
 
   # Stop the instance and prepare to create image.
-  anchnet-exec-and-retry "anchnet stopinstances ${MASTER_INSTANCE_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} stopinstances ${MASTER_INSTANCE_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
 
   # Create the image.
-  anchnet-exec-and-retry "anchnet captureinstance ${FINAL_VERSION} ${MASTER_INSTANCE_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} captureinstance ${KUBE_DISTRO}-${FINAL_VERSION} ${MASTER_INSTANCE_ID}"
+  echo ${COMMAND_EXEC_RESPONSE}
 
   # Just print a message as anchnet doesn't return a job ID for this.
-  log "Image creation request for ${FINAL_VERSION} has been sent to anchnet. Please login to anchnet console to see the progress"
+  log "Image creation request for ${FINAL_VERSION} has been sent to anchnet for ${ANCHNET_CONFIG_FILE}."
+  log "Please login to anchnet console to see the progress. To delete the instance, run:"
+  log " $ anchnet terminateinstance ${MASTER_INSTANCE_ID} --config-path=${ANCHNET_CONFIG_FILE}"
 }
 
 # Make sure image ID is accessible for the given user. Only called in image mode.

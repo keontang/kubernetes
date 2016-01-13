@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2014 The Kubernetes Authors All rights reserved.
+# Copyright 2015 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,14 +21,14 @@ KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 source "${KUBE_ROOT}/hack/caicloud/common.sh"
 
 # Restore 'gcr.io' images.
-grep -rl "caicloudgcr/google_containers_[^\", ]*" \
+grep -rl "index.caicloud.io/caicloudgcr/google_containers_[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
-  xargs perl -X -i -pe 's|caicloudgcr/google_containers_|gcr.io/google_containers/|g'
-grep -rl "caicloudgcr/google_samples_[^\", ]*" \
+  xargs perl -X -i -pe 's|index.caicloud.io/caicloudgcr/google_containers_|gcr.io/google_containers/|g'
+grep -rl "index.caicloud.io/caicloudgcr/google_samples_[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
-  xargs perl -X -i -pe 's|caicloudgcr/google_samples_|gcr.io/google_samples/|g'
+  xargs perl -X -i -pe 's|index.caicloud.io/caicloudgcr/google_samples_|gcr.io/google_samples/|g'
 
 # Restore 'golang.org' packages.
 perl -i -pe "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \

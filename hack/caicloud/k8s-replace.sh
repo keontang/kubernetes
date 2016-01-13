@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2014 The Kubernetes Authors All rights reserved.
+# Copyright 2015 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ source "${KUBE_ROOT}/hack/caicloud/common.sh"
 grep -rl "gcr.io/google_containers/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
-  xargs perl -X -i -pe 's|gcr.io/google_containers/|caicloudgcr/google_containers_|g'
+  xargs perl -X -i -pe 's|gcr.io/google_containers/|index.caicloud.io/caicloudgcr/google_containers_|g'
 grep -rl "gcr.io/google_samples/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
      ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
-  xargs perl -X -i -pe 's|gcr.io/google_samples/|caicloudgcr/google_samples_|g'
+  xargs perl -X -i -pe 's|gcr.io/google_samples/|index.caicloud.io/caicloudgcr/google_samples_|g'
 
 # 'golang.org' is blocked - remove it since we do not need it for building.
 perl -i -pe "s|go get golang.org/x/tools/cmd/cover github.com/tools/godep|go get github.com/tools/godep|g" \

@@ -57,6 +57,7 @@ export BUILD_TARBALL="true"
 export ENABLE_CLUSTER_LOGGING=false
 export ENABLE_CLUSTER_UI=false
 export ENABLE_CLUSTER_MONITORING=false
+export ENABLE_CLUSTER_REGISTRY=false
 
 # E2E control vars
 E2E_UP=${E2E_UP:-true}

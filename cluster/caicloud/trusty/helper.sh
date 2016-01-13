@@ -93,8 +93,12 @@ function send-master-startup-config-files-internal {
     echo "sudo cp ~/kube/configs/* /etc/default"
     echo "sudo cp ~/kube/init_conf/* /etc/init/"
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-    echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
-    echo "sudo cp ~/kube/registry-proxy.yaml /etc/kubernetes/manifest"
+    if [[ "${ENABLE_CLUSTER_LOGGING}" == "true" ]]; then
+      echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
+    fi
+    if [[ "${ENABLE_CLUSTER_REGISTRY}" == "true" ]]; then
+      echo "sudo cp ~/kube/registry-proxy.yaml /etc/kubernetes/manifest"
+    fi
     if [[ "${KUBE_UP}" == "Y" ]]; then
       echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
       echo "sudo cp ~/kube/known-tokens.csv ~/kube/basic-auth.csv /etc/kubernetes"
@@ -219,8 +223,12 @@ function send-node-startup-config-files-internal {
     echo "sudo cp ~/kube/configs/* /etc/default"
     echo "sudo cp ~/kube/init_conf/* /etc/init/"
     echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-    echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
-    echo "sudo cp ~/kube/registry-proxy.yaml /etc/kubernetes/manifest"
+    if [[ "${ENABLE_CLUSTER_LOGGING}" == "true" ]]; then
+      echo "sudo cp ~/kube/fluentd-es.yaml /etc/kubernetes/manifest"
+    fi
+    if [[ "${ENABLE_CLUSTER_REGISTRY}" == "true" ]]; then
+      echo "sudo cp ~/kube/registry-proxy.yaml /etc/kubernetes/manifest"
+    fi
     echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
     # Make sure cloud-config exists, even if not used.
     echo "touch ~/kube/cloud-config && sudo cp ~/kube/cloud-config /etc/kubernetes"

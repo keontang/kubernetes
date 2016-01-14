@@ -126,20 +126,6 @@ function report-project-id {
   fi
 }
 
-# Report if kube-up succeeds or not.
-#
-# Input:
-# $1 Y or N. Y for success and N for fail.
-function kube-up-complete {
-  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
-    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-      send-request-with-retry "$EXECUTOR_HOST_NAME/complete?id=${EXECUTION_ID}&succ=$1"
-    else
-      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. kube-up-compete failed."
-    fi
-  fi
-}
-
 # Make an log.
 #
 # Input:
@@ -164,6 +150,4 @@ function report-log-entry {
 # report-instance-ids master-instance,node-instance1,node-instance2 N
 # report-security-group-ids sg1,sg2 M
 # report-eip-ids eip1,eip2
-# kube-up-complete Y
-# kube-up-complete N
 # report-log-entry 1 msg

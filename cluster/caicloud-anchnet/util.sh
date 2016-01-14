@@ -182,10 +182,6 @@ function kube-up {
   # used, then we need to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
   KUBE_MASTER_IP="${MASTER_EIP}"
   create-kubeconfig
-
-  # Report kube-up completes. As we can't hook into validate-cluster, this is the
-  # best place to report. Executor should validate cluster itself.
-  kube-up-complete Y
 }
 
 # Validate a kubernetes cluster
@@ -633,7 +629,6 @@ function create-project {
     PROJECT_NAME=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['project_name']")
     if [[ "${PROJECT_NAME}" != "${PROJECT_USER}" ]]; then
       log "+++++ ${color_red}project_id ${PROJECT_ID} doesn't belong to user ${PROJECT_USER}${color_norm}"
-      kube-up-complete N
       exit 1
     fi
   elif [[ -z "${PROJECT_ID-}" && ! -z "${PROJECT_USER-}" ]]; then
@@ -786,7 +781,6 @@ function check-instance-status {
       if (( attempt > 20 )); then
         echo
         echo -e "[`TZ=Asia/Shanghai date`] ${color_red}instance $1 failed to start (sorry!)${color_norm}" >&2
-        kube-up-complete N
         exit 1
       fi
     else
@@ -817,7 +811,6 @@ function get-ip-address-from-eipid {
       if (( attempt > 20 )); then
         echo
         echo -e "[`TZ=Asia/Shanghai date`] ${color_red}failed to get eip address (sorry!)${color_norm}" >&2
-        kube-up-complete N
         exit 1
       fi
     else
@@ -1114,14 +1107,12 @@ function anchnet-exec-and-retry {
     if [[ "$return_code" != "0" && "$error_code" == "500" ]]; then
       echo
       echo -e "[`TZ=Asia/Shanghai date`] ${color_red}${color_red}Unable to execute command [$1]: 500 error from anchnet ${COMMAND_EXEC_RESPONSE}${color_norm}" >&2
-      kube-up-complete N
       exit 1
     fi
     if [[ "$return_code" != "0" ]]; then
       if (( attempt >= ${count} )); then
         echo
         echo -e "[`TZ=Asia/Shanghai date`] ${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
-        kube-up-complete N
         exit 1
       fi
     else
@@ -1162,7 +1153,6 @@ function anchnet-exec-and-retry-on406 {
       if (( attempt >= ${count} )); then
         echo
         echo -e "[`TZ=Asia/Shanghai date`] ${color_red}Unable to execute command [$1]: Timeout${color_norm}" >&2
-        kube-up-complete N
         exit 1
       fi
     else
@@ -1190,7 +1180,6 @@ function anchnet-wait-job {
     echo -e "${color_green}Done${color_norm}"
   else
     echo -e "${color_red}Failed${color_norm}"
-    kube-up-complete N
     exit 1
   fi
 }

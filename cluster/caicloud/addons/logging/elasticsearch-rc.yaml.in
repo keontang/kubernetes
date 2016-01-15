@@ -35,6 +35,17 @@ spec:
         volumeMounts:
         - name: es-persistent-storage
           mountPath: /data
+      - image: index.caicloud.io/caicloud/es-cron:v0.1.2
+        name: crontab-curator
+        env:
+          - name: CURATOR_TIME_UNIT
+            value: "days"
+          - name: CURATOR_OLDER_THAN
+            value: "7"
+          - name: SCHEDULE_INTERVAL
+            value: "every().day"
+          - name: HOST_ADDR
+            value: "localhost"
       volumes:
       - name: es-persistent-storage
         emptyDir: {}

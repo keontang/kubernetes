@@ -77,6 +77,7 @@ fi
 
 # DO NOT CHANGE. Derived variables for tarball building.
 CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_KUBE_VERSION}.tar.gz"
+CAICLOUD_KUBE_KUBECTL_PKG="caicloud-kubectl-${CAICLOUD_KUBE_VERSION}.tar.gz"
 CAICLOUD_KUBE_SCRIPT_PKG="caicloud-kube-script-${CAICLOUD_KUBE_VERSION}.tar.gz"
 
 # -----------------------------------------------------------------------------
@@ -136,6 +137,12 @@ mkdir -p caicloud-kube-script/_output/dockerized/bin/linux/amd64/
 cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-script/_output/dockerized/bin/linux/amd64/
 tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_SCRIPT_PKG} caicloud-kube-script
 rm -rf caicloud-kube-script
+
+# Make tarball caicloud-kubectl-${CAICLOUD_KUBE_VERSION}.tar.gz.
+mkdir -p caicloud-kubectl
+cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kubectl
+tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_KUBECTL_PKG} caicloud-kubectl
+rm -rf caicloud-kubectl
 
 cd - > /dev/null
 

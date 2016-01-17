@@ -675,6 +675,7 @@ function create-project {
 #   MASTER_EIP
 function create-master-instance {
   log "+++++ Create kubernetes master from anchnet, master name: ${MASTER_NAME}"
+  report-user-message "Creating master instances."
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
@@ -718,6 +719,7 @@ eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
 #   NODE_EIPS - comma separated string of instance external IPs
 function create-node-instances {
   log "+++++ Create kubernetes nodes from anchnet, node name prefix: ${NODE_NAME_PREFIX} ..."
+  report-user-message "Creating node instances."
 
   # Reset node related vars.
   NODE_INSTANCE_IDS=""
@@ -833,6 +835,7 @@ function get-ip-address-from-eipid {
 #   PRIVATE_SDN_INTERFACE - The interface created by the SDN network
 function create-sdn-network {
   log "+++++ Create private SDN network ..."
+  report-user-message "Setting up cluster network"
 
   # Create a private SDN network.
   anchnet-exec-and-retry "${ANCHNET_CMD} createvxnets ${CLUSTER_NAME}-${VXNET_NAME} --project=${PROJECT_ID}"
@@ -863,6 +866,7 @@ function create-sdn-network {
 #   MASTER_SG_ID
 #   NODE_SG_ID
 function create-firewall {
+  report-user-message "Setting up firewall rules"
   #
   # Master security group contains firewall for https (tcp/433) and ssh (tcp/22).
   #

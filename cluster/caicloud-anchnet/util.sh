@@ -284,7 +284,12 @@ function kube-down {
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
   fi
 
-  # TODO: Find all loadbalancers. For now, Loadbalancer is not prefixed with CLUSTER_NAME.
+  # Find all loadbalancer prefixed with CLUSTER_NAME.
+  find-loadbalancer-resources "${CLUSTER_NAME}" "active,pending,stopped,suspended"
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deleteloadbalancer ${LOADBALANCER_IDS} ${LOADBALANCER_EIP_IDS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${LB_DELETE_WAIT_RETRY} ${LB_DELETE_WAIT_INTERVAL}
+  fi
 }
 
 # Stop a kubernetes cluster from anchnet, using CLUSTER_NAME.
@@ -524,11 +529,10 @@ function find-vxnet-resources {
   done
 }
 
-# Find security group in anchnet via CLUSTER_NAME and PROJECT_ID. Return 1 if no resource is
-# found. By convention, every security group name is prefixed with CLUSTER_NAME.
+# Find security group in anchnet via $1 and PROJECT_ID. Return 1 if no resource is found.
+# By convention, every security group name is prefixed with CLUSTER_NAME.
 #
 # Assumed vars:
-#   CLUSTER_NAME
 #   PROJECT_ID
 #
 # Input vars:
@@ -553,6 +557,43 @@ function find-securitygroup-resources {
       SECURITY_GROUP_IDS="${SECURITY_GROUP_IDS},${security_group_id}"
     fi
   done
+}
+
+# Find loadbalancer resources via $1 and PROJECT_ID. Return 1 if no resource is found.
+# Kubernetes has been customized to prefix loadbalancer name with CLUSTER_NAME.
+#
+# Assumed vars:
+#   PROJECT_ID
+#
+# Input vars:
+#   $1 search keyword
+#   $2 Comma separated string of loadbalancer status to find (active, pending, stopped, suspended, deleted)
+#
+# Vars set:
+#   LOADBALANCER_IDS
+#   LOADBALANCER_EIP_IDS
+#   TOTAL_COUNT
+function find-loadbalancer-resources {
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchloadbalancer ${1} --status=${1} --project=${PROJECT_ID}"
+  TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
+  LOADBALANCER_EIP_IDS=()
+  LOADBALANCER_IDS=()
+  if [[ "${TOTAL_COUNT}" == "" ]]; then
+    return 1
+  fi
+  for i in `seq 0 $(($TOTAL_COUNT-1))`; do
+    loadbalancer_name=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['loadbalancer_name']")
+    loadbalancer_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['loadbalancer_id']")
+    echo "Found loadbalancer: ${loadbalancer_name},${loadbalancer_id}"
+    local eip_len=$(echo ${COMMAND_EXEC_RESPONSE} | json_len "['item_set'][$i]['eips']")
+    for j in `seq 0 $(($eip_len-1))`; do
+      loadbalancer_eip_id=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][$i]['eips'][$j]['eip_id']")
+      LOADBALANCER_EIP_IDS+=($loadbalancer_eip_id)
+    done
+    LOADBALANCER_IDS+=($loadbalancer_id)
+  done
+  LOADBALANCER_IDS=`join "," ${LOADBALANCER_IDS[@]}`
+  LOADBALANCER_EIP_IDS=`join "," ${LOADBALANCER_EIP_IDS[@]}`
 }
 
 # Create resource variables for follow-up functions. This is called when master

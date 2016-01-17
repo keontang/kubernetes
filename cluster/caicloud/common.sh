@@ -1149,6 +1149,15 @@ with open("'$1'", "w") as f:
 '
 }
 
+# Like python's join, e.g.
+#  ARRAY=[a b c d]
+#  JOINED=`join "," $ARRAY[@]`
+function join {
+  local IFS="$1"
+  shift
+  echo "$*"
+}
+
 # A helper function that executes a command (or shell function), and retries on
 # failure. If the command can't succeed within given attempts, the script will
 # exit directly.

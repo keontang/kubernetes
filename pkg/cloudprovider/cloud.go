@@ -54,7 +54,7 @@ type Clusters interface {
 
 // TODO(#6812): Use a shorter name that's less likely to be longer than cloud
 // providers' name length limits.
-func GetLoadBalancerName(service *api.Service) string {
+func GetLoadBalancerName(clusterName string, service *api.Service) string {
 	//GCE requires that the name of a load balancer starts with a lower case letter.
 	ret := "a" + string(service.UID)
 	ret = strings.Replace(ret, "-", "", -1)
@@ -62,6 +62,8 @@ func GetLoadBalancerName(service *api.Service) string {
 	if len(ret) > 32 {
 		ret = ret[:32]
 	}
+	// Forcibly change to "clusterName-serviceName-serviceNamespace-serviceUID", for anchnet.
+	ret = fmt.Sprintf("%s-%s-%s-%s", clusterName, service.Name, service.Namespace, ret)
 	return ret
 }
 

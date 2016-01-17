@@ -330,6 +330,12 @@ function build-instance-image {
   install-packages & pids="$pids $!"
   wait ${pids}
 
+  # Pull necessary addon images.
+  grep -IhEro "index.caicloud.io/[^\", ]*" ./cluster/caicloud/addons | sort -u |
+    while read -r image; do
+      ssh-to-instance-expect ${MASTER_SSH_EXTERNAL} "sudo docker pull $image"
+    done
+
   # Stop the instance and prepare to create image.
   anchnet-exec-and-retry "${ANCHNET_CMD} stopinstances ${MASTER_INSTANCE_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}

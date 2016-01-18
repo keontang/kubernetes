@@ -20,7 +20,7 @@ spec:
         kubernetes.io/cluster-service: "true"
     spec:
       containers:
-      - image: caicloudgcr/google_containers_elasticsearch:1.7
+      - image: index.caicloud.io/caicloudgcr/google_containers_elasticsearch:1.7
         name: elasticsearch-logging
         resources:
           limits:

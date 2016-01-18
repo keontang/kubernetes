@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: kube-ui
-        image: caicloudgcr/google_containers_kube-ui:v2
+        image: index.caicloud.io/caicloudgcr/google_containers_kube-ui:v2
         resources:
           limits:
             cpu: 100m

@@ -20,7 +20,7 @@ spec:
         kubernetes.io/cluster-service: "true"
     spec:
       containers:
-        - image: kubernetes/heapster:canary
+        - image: index.caicloud.io/kubernetes/heapster:canary
           name: heapster
           resources:
             limits:

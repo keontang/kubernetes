@@ -16,5 +16,5 @@ spec:
     spec:
       containers:
       - name: monitoring
-        image: caicloud/monitoring:v0.0.3
+        image: index.caicloud.io/caicloud/monitoring:v0.0.3
         imagePullPolicy: Always

@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: etcd
-        image: caicloudgcr/google_containers_etcd:2.0.9
+        image: index.caicloud.io/caicloudgcr/google_containers_etcd:2.0.9
         resources:
           limits:
             cpu: 100m
@@ -40,7 +40,7 @@ spec:
         - name: etcd-storage
           mountPath: /var/etcd/data
       - name: kube2sky
-        image: caicloudgcr/google_containers_kube2sky:1.11
+        image: index.caicloud.io/caicloudgcr/google_containers_kube2sky:1.11
         resources:
           limits:
             cpu: 100m
@@ -50,7 +50,7 @@ spec:
         - -domain={{ pillar['dns_domain'] }}
         - -v=2
       - name: skydns
-        image: caicloudgcr/google_containers_skydns:2015-03-11-001
+        image: index.caicloud.io/caicloudgcr/google_containers_skydns:2015-03-11-001
         resources:
           limits:
             cpu: 100m
@@ -75,7 +75,7 @@ spec:
           initialDelaySeconds: 30
           timeoutSeconds: 5
       - name: healthz
-        image: caicloudgcr/google_containers_exechealthz:1.0
+        image: index.caicloud.io/caicloudgcr/google_containers_exechealthz:1.0
         resources:
           limits:
             cpu: 10m

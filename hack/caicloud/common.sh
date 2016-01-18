@@ -15,8 +15,8 @@
 # limitations under the License.
 
 # Third-party binary versions, used to create tarball, etc.
-ETCD_VERSION=${ETCD_VERSION:-v2.2.0}
-FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.3}
+ETCD_VERSION=${ETCD_VERSION:-v2.2.4}
+FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.5}
 
 # URL of the server hosting packages.
 RELEASE_HOST_URL="http://7xli2p.dl1.z0.glb.clouddn.com"

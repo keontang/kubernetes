@@ -116,6 +116,7 @@ function report-eip-ids {
   fi
 }
 
+# Report project ID (anchnet subaccount).
 function report-project-id {
   if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
     if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${KUBE_USER-}" ]]; then
@@ -132,20 +133,22 @@ function report-project-id {
 # $1 a code of LogLevelType in execution_report_collection.go
 # $2 a message to log
 function report-log-entry {
+  message=`echo $2 | base64`
   if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
     if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
-      send-request-with-retry "$EXECUTOR_HOST_NAME/log?id=${EXECUTION_ID}&level=$1&msg=$2"
+      send-request-with-retry "$EXECUTOR_HOST_NAME/log?id=${EXECUTION_ID}&level=$1&encoded_msg=$message"
     else
       echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-log-entry failed."
     fi
   fi
 }
 
-# Make a user message log. The message will be sent to user.
+# Make a user message log. The message will be sent to end user.
 #
 # Input:
 # $1 a message to log
 function report-user-message {
+  # "1" is the log level set in executor; the level means "Info" and will be sent to end user.
   report-log-entry "1" "$1"
 }
 

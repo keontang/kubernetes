@@ -255,6 +255,11 @@ VXNET_DELETE_WAIT_INTERVAL=${VXNET_DELETE_WAIT_INTERVAL:-6}
 SG_DELETE_WAIT_RETRY=${SG_DELETE_WAIT_RETRY:-240}
 SG_DELETE_WAIT_INTERVAL=${SG_DELETE_WAIT_INTERVAL:-6}
 
+# Number of retries and interval (in second) for waiting LB delete job.
+# Adjust the value based on the number of loadbalancer created.
+LB_DELETE_WAIT_RETRY=${LB_DELETE_WAIT_RETRY:-240}
+LB_DELETE_WAIT_INTERVAL=${LB_DELETE_WAIT_INTERVAL:-6}
+
 
 # -----------------------------------------------------------------------------
 # Cluster IP address and ranges: all are static configuration values.

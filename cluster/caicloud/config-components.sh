@@ -296,7 +296,6 @@ function restart-docker {
 
   source /run/flannel/subnet.env
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
-       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$1 \
-       --insecure-registry=get.caicloud.io\" > $2
+       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$1 \" > $2
   sudo service docker start
 }

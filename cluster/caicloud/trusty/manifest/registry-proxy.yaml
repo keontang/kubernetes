@@ -6,7 +6,7 @@ metadata:
 spec:
   containers:
   - name: kube-registry-proxy
-    image: caicloudgcr/google_containers_kube-registry-proxy:0.3
+    image: index.caicloud.io/google_containers_kube-registry-proxy:0.3
     resources:
       limits:
         cpu: 100m

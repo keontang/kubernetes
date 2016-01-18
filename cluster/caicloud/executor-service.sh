@@ -141,6 +141,14 @@ function report-log-entry {
   fi
 }
 
+# Make a user message log. The message will be sent to user.
+#
+# Input:
+# $1 a message to log
+function report-user-message {
+  report-log-entry "1" "$1"
+}
+
 # Commands for testing only
 # REPORT_KUBE_STATUS="Y"
 # EXECUTOR_HOST_NAME=localhost:8765

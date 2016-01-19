@@ -87,7 +87,9 @@ function deploy-addons {
   cp ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-svc.yaml \
      ${KUBE_TEMP}/addons/registry
   scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
-    "${KUBE_TEMP}/addons ${KUBE_ROOT}/cluster/caicloud/addons/namespace.yaml ${KUBE_ROOT}/cluster/caicloud/addons/addons-start.sh" \
+    "${KUBE_TEMP}/addons \
+    ${KUBE_ROOT}/cluster/caicloud/addons/namespace.yaml \
+    ${KUBE_ROOT}/cluster/caicloud/addons/addons-start.sh" \
     "~/kube"
 
   # Call 'addons-start.sh' to start addons.

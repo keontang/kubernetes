@@ -133,6 +133,7 @@ rm -rf etcd-linux flannel-linux caicloud-kube
 # kubectl path since kubectl.sh assumes some locations.
 mkdir -p caicloud-kube-script
 cp -R hack cluster build caicloud-kube-script
+rm -rf caicloud-kube-script/cluster/caicloud/certs
 mkdir -p caicloud-kube-script/_output/dockerized/bin/linux/amd64/
 cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-script/_output/dockerized/bin/linux/amd64/
 tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_SCRIPT_PKG} caicloud-kube-script

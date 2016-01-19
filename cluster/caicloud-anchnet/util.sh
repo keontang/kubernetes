@@ -338,7 +338,11 @@ function build-instance-image {
   # Pull necessary addon images.
   grep -IhEro "index.caicloud.io/[^\", ]*" ./cluster/caicloud | sort -u |
     while read -r image; do
-      ssh-to-instance-expect ${MASTER_SSH_EXTERNAL} "sudo docker pull $image"
+      ssh-to-instance-expect ${MASTER_SSH_EXTERNAL} "sudo docker pull $image || echo 'Command failed pulling image'"
+      if [[ "$?" != 0 ]]; then
+        echo "Unable to pull image $image"
+        exit 1
+      fi
     done
 
   # Stop the instance and prepare to create image.

@@ -336,6 +336,10 @@ function build-instance-image {
   wait ${pids}
 
   # Pull necessary addon images.
+  ssh-to-instance-expect ${MASTER_SSH_EXTERNAL} "mkdir ~/.docker"
+  scp-then-execute-expect ${MASTER_SSH_EXTERNAL} \
+    ${KUBE_ROOT}/cluster/caicloud/tools/docker-config.json "~/.docker" \
+    "mv ~/.docker/docker-config.json ~/.docker/config.json"
   grep -IhEro "index.caicloud.io/[^\", ]*" ./cluster/caicloud | sort -u |
     while read -r image; do
       ssh-to-instance-expect ${MASTER_SSH_EXTERNAL} "sudo docker pull $image || echo 'Command failed pulling image'"
@@ -344,6 +348,7 @@ function build-instance-image {
         exit 1
       fi
     done
+  ssh-to-instance-expect ${MASTER_SSH_EXTERNAL} "rm -rf ~/.docker"
 
   # Stop the instance and prepare to create image.
   anchnet-exec-and-retry "${ANCHNET_CMD} stopinstances ${MASTER_INSTANCE_ID}"

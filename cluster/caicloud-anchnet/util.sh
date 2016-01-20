@@ -356,7 +356,7 @@ function build-instance-image {
   # Just print a message as anchnet doesn't return a job ID for this.
   log "Image creation request for ${FINAL_VERSION} has been sent to anchnet for ${ANCHNET_CONFIG_FILE}."
   log "Please login to anchnet console to see the progress. To delete the instance, run:"
-  log " $ anchnet terminateinstance ${MASTER_INSTANCE_ID} --config-path=${ANCHNET_CONFIG_FILE}"
+  log " $ anchnet terminateinstances ${MASTER_INSTANCE_ID} --config-path=${ANCHNET_CONFIG_FILE}"
 }
 
 # Make sure image ID is accessible for the given user. Only called in image mode.

@@ -106,6 +106,8 @@ function send-master-startup-config-files-internal {
     fi
     # Make sure cloud-config exists, even if not used.
     echo "touch ~/kube/cloud-config && sudo cp ~/kube/cloud-config /etc/kubernetes"
+    # Credential used to pull images from index.caicloud.io (kubelet credentialprovider).
+    echo "sudo mkdir -p /var/lib/kubelet && sudo cp ~/kube/docker-config.json /var/lib/kubelet/config.json"
     # Remove rwx permission on folders we don't want user to mess up with.
     echo "sudo chmod go-rwx /etc/kubernetes"
     # Finally, start kubernetes cluster. Upstart will make sure all components
@@ -122,6 +124,7 @@ function send-master-startup-config-files-internal {
      ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_scripts \
      ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/fluentd-es.yaml \
      ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/registry-proxy.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/tools/docker-config.json \
      ${KUBE_TEMP}/kube-master/kube
   if [[ "${KUBE_UP}" == "Y" ]]; then
     cp -r ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_conf \
@@ -229,6 +232,8 @@ function send-node-startup-config-files-internal {
     if [[ "${ENABLE_CLUSTER_REGISTRY}" == "true" ]]; then
       echo "sudo cp ~/kube/registry-proxy.yaml /etc/kubernetes/manifest"
     fi
+    # Credential used to pull images from index.caicloud.io (kubelet credentialprovider).
+    echo "sudo mkdir -p /var/lib/kubelet && sudo cp ~/kube/docker-config.json /var/lib/kubelet/config.json"
     echo "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/kubernetes"
     # Make sure cloud-config exists, even if not used.
     echo "touch ~/kube/cloud-config && sudo cp ~/kube/cloud-config /etc/kubernetes"
@@ -245,6 +250,7 @@ function send-node-startup-config-files-internal {
      ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/fluentd-es.yaml \
      ${KUBE_ROOT}/cluster/caicloud/trusty/manifest/registry-proxy.yaml \
      ${KUBE_ROOT}/cluster/caicloud/tools/nsenter \
+     ${KUBE_ROOT}/cluster/caicloud/tools/docker-config.json \
      ${KUBE_TEMP}/kube-node${1}/kube
   if [[ "${4:-}" != "" ]]; then
     cp ${4} ${KUBE_TEMP}/kube-node${1}/kube/cloud-config

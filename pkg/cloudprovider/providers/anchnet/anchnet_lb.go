@@ -18,6 +18,7 @@ package anchnet_cloud
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"time"
 
@@ -446,7 +447,8 @@ func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.Descr
 		} else {
 			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, search_word, err)
 		}
-		time.Sleep(time.Duration(i+1) * RetryIntervalOnWait)
+		// Searching is a frequent operation; we apply a random backoff.
+		time.Sleep(time.Duration(i+1)*RetryIntervalOnError + time.Duration(randomRange(RetryRandMin, RetryRandMax))*time.Second)
 	}
 	return nil, false, fmt.Errorf("Unable to get loadbalancer %v", search_word)
 }
@@ -652,4 +654,10 @@ func (an *Anchnet) deleteSecurityGroup(sgID string) (*anchnet_client.DeleteSecur
 		time.Sleep(time.Duration(i+1) * RetryIntervalOnError)
 	}
 	return nil, fmt.Errorf("Unable to delete security group %v", sgID)
+}
+
+// randomRange returns a random number between min, max.
+func randomRange(min, max int) int {
+	rand.Seed(time.Now().Unix())
+	return rand.Intn(max-min) + min
 }

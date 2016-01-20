@@ -87,9 +87,6 @@ LOGIN_PWD=${LOGIN_PWD:-"caiyun12345678"}
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
 
-# Money transferred to sub account upon its creation.
-INITIAL_DEPOSIT=${INITIAL_DEPOSIT:-"1"}
-
 #
 # Following params in the section should rarely change.
 #

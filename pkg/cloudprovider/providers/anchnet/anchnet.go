@@ -38,6 +38,9 @@ const (
 	// Initial interval between two retries for the above situation. Following
 	// retry interval will be doubled.
 	RetryIntervalOnError = 2 * time.Second
+	// A random sleep number applied to retry.
+	RetryRandMin = 1
+	RetryRandMax = 20
 
 	// Number of retries when waitting on resources to become desired status.
 	RetryCountOnWait = 120

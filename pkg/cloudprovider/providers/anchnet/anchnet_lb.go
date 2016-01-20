@@ -444,11 +444,13 @@ func (an *Anchnet) searchLoadBalancer(search_word string) (*anchnet_client.Descr
 					return &item, true, nil
 				}
 			}
+			return nil, false, nil
 		} else {
-			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, search_word, err)
+			// Searching is a frequent operation; we apply a random backoff.
+			sleep := time.Duration(i+1)*RetryIntervalOnError + time.Duration(randomRange(RetryRandMin, RetryRandMax))*time.Second
+			glog.Infof("Attempt %d: failed to get loadbalancer %v, will sleep %v before next retry: %v", i, search_word, sleep, err)
+			time.Sleep(sleep)
 		}
-		// Searching is a frequent operation; we apply a random backoff.
-		time.Sleep(time.Duration(i+1)*RetryIntervalOnError + time.Duration(randomRange(RetryRandMin, RetryRandMax))*time.Second)
 	}
 	return nil, false, fmt.Errorf("Unable to get loadbalancer %v", search_word)
 }
@@ -658,6 +660,6 @@ func (an *Anchnet) deleteSecurityGroup(sgID string) (*anchnet_client.DeleteSecur
 
 // randomRange returns a random number between min, max.
 func randomRange(min, max int) int {
-	rand.Seed(time.Now().Unix())
+	rand.Seed(time.Now().UnixNano())
 	return rand.Intn(max-min) + min
 }

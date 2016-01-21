@@ -699,14 +699,6 @@ function create-project {
       anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${PROJECT_USER}"
       anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
       PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
-      # Get the userid of the sub account. Note the userid here is used internally
-      # by anchnet which is used to tranfer money.
-      anchnet-exec-and-retry "${ANCHNET_CMD} describeprojects ${PROJECT_ID}"
-      PROJECT_INTERNAL_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['item_set'][0]['userid']")
-      # Transfer money from main account to sub-account. We need at least $INITIAL_DEPOSIT
-      # to create resources in sub-account.
-      log "+++++ Transfer balance to sub account"
-      anchnet-exec-and-retry "${ANCHNET_CMD} transfer ${PROJECT_INTERNAL_ID} ${INITIAL_DEPOSIT}"
       report-project-id ${PROJECT_ID}
     else
       log "+++++ Reuse existing project ID ${PROJECT_ID} for ${PROJECT_USER}"

@@ -222,12 +222,15 @@ NUM_RUNNING_MINIONS=${NUM_RUNNING_MINIONS:-0}
 MASTER_MEM=${MASTER_MEM:-1024}
 # The number of CPUs of the master.
 MASTER_CPU_CORES=${MASTER_CPU_CORES:-1}
+# The bandwidth of a node
+MASTER_BW=${MASTER_BW:-1}
 
 # The memory size of master node (in MB).
 NODE_MEM=${NODE_MEM:-1024}
 # The number of CPUs of a node.
 NODE_CPU_CORES=${NODE_CPU_CORES:-1}
-
+# The bandwidth of a node
+NODE_BW=${NODE_BW:-1}
 
 # -----------------------------------------------------------------------------
 # Params from executor for kube-down.

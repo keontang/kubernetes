@@ -100,6 +100,8 @@ function deploy-addons {
           ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} \
           ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING} \
           ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY} \
+          MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS} \
+          MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT} \
           ./kube/addons-start.sh"
 }
 
@@ -115,8 +117,6 @@ function deploy-addons {
 #
 #  - ca (the cluster's certificate authority)
 #  - server
-#  - kubelet
-#  - kubectl
 #
 # Assumed vars
 #   KUBE_ROOT
@@ -178,36 +178,43 @@ function create-certs-and-credentials {
   sans="${sans},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc"
   sans="${sans},DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME},DNS:master"
 
-  # Create cluster certificates.
-  (
-    cp "${KUBE_ROOT}/cluster/caicloud/tools/easy-rsa.tar.gz" "${KUBE_TEMP}"
-    cd "${KUBE_TEMP}"
-    tar xzf easy-rsa.tar.gz > /dev/null 2>&1
-    cd easy-rsa-master/easyrsa3
-    ./easyrsa init-pki > /dev/null 2>&1
-    ./easyrsa --batch "--req-cn=${master_ip}@$(date +%s)" build-ca nopass > /dev/null 2>&1
-    ./easyrsa --subject-alt-name="${sans}" build-server-full master nopass > /dev/null 2>&1
-    ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
-    ./easyrsa build-client-full kubectl nopass > /dev/null 2>&1
-  ) || {
-    log "${color_red}=== Failed to generate certificates: Aborting ===${color_norm}"
-    exit 2
-  }
-  CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
-  # Path to certificates, used to create kubeconfig for kubectl.
-  CA_CERT="${CERT_DIR}/pki/ca.crt"
-  KUBE_CERT="${CERT_DIR}/pki/issued/kubectl.crt"
-  KUBE_KEY="${CERT_DIR}/pki/private/kubectl.key"
-  # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
-  # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
-  CA_CERT_BASE64=$(cat "${CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')
-  MASTER_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/master.crt" | base64 | tr -d '\r\n')
-  MASTER_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/master.key" | base64 | tr -d '\r\n')
-  KUBELET_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kubelet.crt" | base64 | tr -d '\r\n')
-  KUBELET_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubelet.key" | base64 | tr -d '\r\n')
-  KUBECTL_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kubectl.crt" | base64 | tr -d '\r\n')
-  KUBECTL_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubectl.key" | base64 | tr -d '\r\n')
-
+  # The directory where all certs/keys will be placed at
+  mkdir -p ${KUBE_TEMP}/certs
+  if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
+    # Create cluster certificates.
+    (
+      cp "${KUBE_ROOT}/cluster/caicloud/tools/easy-rsa.tar.gz" "${KUBE_TEMP}"
+      cd "${KUBE_TEMP}"
+      tar xzf easy-rsa.tar.gz > /dev/null 2>&1
+      cd easy-rsa-master/easyrsa3
+      ./easyrsa init-pki > /dev/null 2>&1
+      ./easyrsa --batch "--req-cn=${master_ip}@$(date +%s)" build-ca nopass > /dev/null 2>&1
+      ./easyrsa --subject-alt-name="${sans}" build-server-full master nopass > /dev/null 2>&1
+      ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
+      ./easyrsa build-client-full kubectl nopass > /dev/null 2>&1
+    ) || {
+      log "${color_red}=== Failed to generate certificates: Aborting ===${color_norm}"
+      exit 2
+    }
+    CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
+    # Path to certificates, used to create kubeconfig for kubectl.
+    CA_CERT="${CERT_DIR}/pki/ca.crt"
+    # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
+    # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
+    CA_CERT_BASE64=$(cat "${CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')
+    MASTER_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/master.crt" | base64 | tr -d '\r\n')
+    MASTER_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/master.key" | base64 | tr -d '\r\n')
+    # organize the directory a little bit
+    cp ${CERT_DIR}/pki/ca.crt ${CERT_DIR}/pki/issued/master.crt ${CERT_DIR}/pki/private/master.key ${KUBE_TEMP}/certs
+  else
+    CERT_DIR=${CERT_DIR:-"${KUBE_ROOT}/cluster/caicloud/certs"}
+    # Path to certificates
+    CA_CERT="${CERT_DIR}/ca.crt"
+    CA_CERT_BASE64=$(cat "${CERT_DIR}/ca.crt" | base64 | tr -d '\r\n')
+    MASTER_CERT_BASE64=$(cat "${CERT_DIR}/master.crt" | base64 | tr -d '\r\n')
+    MASTER_KEY_BASE64=$(cat "${CERT_DIR}/master.key" | base64 | tr -d '\r\n')
+    cp ${CERT_DIR}/ca.crt ${CERT_DIR}/master.crt ${CERT_DIR}/master.key ${KUBE_TEMP}/certs
+  fi
   # Generate bearer tokens for this cluster. This may disappear, upstream issue:
   # https://github.com/GoogleCloudPlatform/kubernetes/issues/3168
   KUBELET_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)

@@ -286,12 +286,18 @@ NODE_IIP_RANGE=10.244.1.0/16
 # localhost, blocked by firewall, or use with nginx, etc. MASTER_SECURE_*
 # is accessed directly from outside world, serving HTTPS. Thses configs
 # should rarely change.
-MASTER_INSECURE_ADDRESS="127.0.0.1"
+MASTER_INSECURE_ADDRESS=${MASTER_IIP}
 MASTER_INSECURE_PORT="8080"
 MASTER_SECURE_ADDRESS="0.0.0.0"
 MASTER_SECURE_PORT="443"
 KUBELET_PORT="10250"
 
+# In case we are not using self-signed certficate we will
+# add domain name for each cluster with this format:
+# ajective-noun-4digitnumber-cluster.caicloudapp.com
+# e.g. epic-caicloud-2015-cluster.caicloudapp.com
+DNS_HOST_NAME=${DNS_HOST_NAME:-"epic-caicloud-2015-cluster"}
+BASE_DOMAIN_NAME=${BASE_DOMAIN_NAME:-"caicloudapp.com"}
 
 # -----------------------------------------------------------------------------
 # Misc static configurations.
@@ -313,6 +319,8 @@ DOCKER_OPTS=""
 # Provider name used internally.
 CAICLOUD_PROVIDER="anchnet"
 
+# Whether we use self signed cert for apiserver
+USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT:-"true"}
 
 # -----------------------------------------------------------------------------
 # Derived params for kube-up (calculated based on above params: DO NOT CHANGE).
@@ -359,6 +367,11 @@ function calculate-default {
 
   # Final URL of caicloud tarball URL.
   CAICLOUD_TARBALL_URL="${CAICLOUD_HOST_URL}/${CAICLOUD_KUBE_PKG}"
+
+  # Domain name of the cluster
+  if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+    MASTER_DOMAIN_NAME="${DNS_HOST_NAME}.${BASE_DOMAIN_NAME}"
+  fi
 }
 
 calculate-default

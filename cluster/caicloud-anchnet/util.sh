@@ -40,6 +40,13 @@ function verify-prereqs {
     log "See https://github.com/caicloud/anchnet-go/tree/master/anchnet"
     exit 1
   fi
+  # only check aliyun binary when we are not using self-signed cert
+  # because in this case we will generate unique A record for each cluster
+  if [[ "${USE_SELF_SIGNED_CERT}" == "false" && "$(which aliyun)" == "" ]]; then
+    log "Can't find aliyun binary in PATH, please fix and retry."
+    log "See https://github.com/caicloud/aliyun-go/tree/master/aliyun"
+    exit 1
+  fi
   if [[ "$(which curl)" == "" ]]; then
     log "Can't find curl in PATH, please fix and retry."
     log "For ubuntu/debian, if you have root access, run: sudo apt-get install curl."
@@ -172,15 +179,22 @@ function kube-up {
   # After everything's done, we re-apply firewall to make sure it works.
   ensure-firewall
 
+  # By default, kubeconfig uses https://${KUBE_MASTER_IP}. Since we use standard
+  # port 443, just assign MASTER_EIP to KUBE_MASTER_EIP. If non-standard port is
+  # used, then we need to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
+  if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
+    KUBE_MASTER_IP="${MASTER_EIP}"
+  else
+    add-dns-record
+    wait-for-dns-propagation
+    KUBE_MASTER_IP="${MASTER_DOMAIN_NAME}"
+  fi
+
   # common.sh defines create-kubeconfig, which is used to create client kubeconfig
   # for kubectl. To properly create kubeconfig, make sure to we supply it with
   # assumed vars (see comments from create-kubeconfig). In particular, KUBECONFIG
   # and CONTEXT.
   source "${KUBE_ROOT}/cluster/common.sh"
-  # By default, kubeconfig uses https://${KUBE_MASTER_IP}. Since we use standard
-  # port 443, just assign MASTER_EIP to KUBE_MASTER_EIP. If non-standard port is
-  # used, then we need to set KUBE_MASTER_IP="${MASTER_EIP}:${MASTER_SECURE_PORT}"
-  KUBE_MASTER_IP="${MASTER_EIP}"
   create-kubeconfig
 }
 
@@ -1033,7 +1047,7 @@ function create-node-upgrade-script {
     grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
     echo ""
     echo "create-kubelet-opts ${2} ${KUBELET_IP_ADDRESS} ${MASTER_IIP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
-    echo "create-kube-proxy-opts ${MASTER_IIP}"
+    echo "create-kube-proxy-opts"
     echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_IIP}"
     echo "sudo service flanneld stop"
     echo "mv ~/kube/fluentd-es.yaml ~/kube/manifest/fluentd-es.yaml 1>/dev/null 2>&1"
@@ -1408,4 +1422,30 @@ sudo ./kube/node${i}-host-setup.sh || \
 echo 'Command failed setting up remote host'" & pids="${pids} $!"
   done
   wait ${pids}
+}
+
+# Add dns A record for cluster master
+#
+# Assumed vars:
+#   MASTER_EIP
+function add-dns-record {
+  command-exec-and-retry "add-dns-record-internal" 20 "true"
+}
+function add-dns-record-internal {
+  log "+++++ Adding DNS record ${MASTER_DOMAIN_NAME}..."
+  aliyun adddomainrecord caicloudapp.com ${DNS_HOST_NAME} A ${MASTER_EIP}
+}
+
+# Wait for dns record to propagate. Otherwise in case where we are using
+# certificate like *.caicloudapp.com, we will not be able to resolve domain
+# names and validate-cluster will fail.
+#
+# Assumed vars:
+#   MASTER_DOMAIN_NAME
+function wait-for-dns-propagation {
+  command-exec-and-retry "wait-for-dns-propagation-internal" 40 "true"
+}
+function wait-for-dns-propagation-internal {
+  log "+++++ Wait for dns record ${MASTER_DOMAIN_NAME} to propagate..."
+  host ${MASTER_DOMAIN_NAME}
 }

@@ -727,7 +727,7 @@ function create-master-instance {
 
   # Create a 'raw' master instance from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${MASTER_NAME} \
--p=${KUBE_INSTANCE_PASSWORD} -i=${FINAL_IMAGE} -m=${MASTER_MEM} \
+-p=${KUBE_INSTANCE_PASSWORD} -i=${FINAL_IMAGE} -m=${MASTER_MEM} -b=${MASTER_BW} \
 -c=${MASTER_CPU_CORES} -g=${IP_GROUP} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${MASTER_WAIT_RETRY} ${MASTER_WAIT_INTERVAL}
 
@@ -776,7 +776,7 @@ function create-node-instances {
 
   # Create 'raw' node instances from anchnet, i.e. un-provisioned.
   anchnet-exec-and-retry "${ANCHNET_CMD} runinstance ${NODE_NAME_PREFIX} \
--p=${KUBE_INSTANCE_PASSWORD} -i=${FINAL_IMAGE} -m=${NODE_MEM} \
+-p=${KUBE_INSTANCE_PASSWORD} -i=${FINAL_IMAGE} -m=${NODE_MEM} -b=${NODE_BW} \
 -c=${NODE_CPU_CORES} -g=${IP_GROUP} -a=${1} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${NODES_WAIT_RETRY} ${NODES_WAIT_INTERVAL}
 

@@ -304,6 +304,11 @@ function kube-down {
     anchnet-exec-and-retry "${ANCHNET_CMD} deleteloadbalancer ${LOADBALANCER_IDS} ${LOADBALANCER_EIP_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${LB_DELETE_WAIT_RETRY} ${LB_DELETE_WAIT_INTERVAL}
   fi
+
+  # Remove dns name if we add dns name when bringing up the cluster
+  if [[ "${USE_SELF_SIGNED_CERT}" == "false" ]]; then
+    remove-dns-record
+  fi
 }
 
 # Stop a kubernetes cluster from anchnet, using CLUSTER_NAME.
@@ -1434,6 +1439,23 @@ function add-dns-record {
 function add-dns-record-internal {
   log "+++++ Adding DNS record ${MASTER_DOMAIN_NAME}..."
   aliyun adddomainrecord caicloudapp.com ${DNS_HOST_NAME} A ${MASTER_EIP}
+}
+
+# Remove dns A record for cluster
+#
+# Assumed vars:
+#   DNS_HOST_NAME
+#   BASE_DOMAIN_NAME
+function remove-dns-record {
+  command-exec-and-retry "remove-dns-record-internal" 10 "false"
+}
+function remove-dns-record-internal {
+  log "+++++ Removing DNS record ${MASTER_DOMAIN_NAME}..."
+  local response=""
+  local record_id=""
+  response=$(eval "aliyun describedomainrecord ${BASE_DOMAIN_NAME} ${DNS_HOST_NAME}")
+  record_id=$(echo ${response} | json_val '["DomainRecords"]["Record"][0]["RecordId"]')
+  aliyun deletedomainrecord ${record_id}
 }
 
 # Wait for dns record to propagate. Otherwise in case where we are using

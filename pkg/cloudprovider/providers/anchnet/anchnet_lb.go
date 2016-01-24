@@ -607,9 +607,16 @@ func (an *Anchnet) createLBSecurityGroup(name string, ports []*api.ServicePort, 
 		}
 		err := an.client.SendRequest(request, &sg_response)
 		if err == nil {
-			glog.Infof("Created security group with ID: %v", sg_response.SecurityGroupID)
-			created = true
-			break
+			// Wait until security group is created.
+			err = an.WaitJobStatus(sg_response.JobID, anchnet_client.JobStatusSuccessful)
+			if err != nil {
+				glog.Errorf("Error waiting for security group %v to be created for lb: %v", name, lbID)
+				return nil, err
+			} else {
+				glog.Infof("Created security group with ID: %v", sg_response.SecurityGroupID)
+				created = true
+				break
+			}
 		} else {
 			glog.Infof("Attempt %d: failed to create security group: %v\n", i, err)
 		}

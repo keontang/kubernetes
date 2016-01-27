@@ -276,6 +276,11 @@ FLANNEL_SUBNET_MIN=172.16.0.0
 FLANNEL_SUBNET_MAX=172.31.0.0
 FLANNEL_TYPE="vxlan"
 
+# MASTER_INSECURE_* is used to serve insecure connection. It is either
+# localhost, blocked by firewall, or use with nginx, etc.
+MASTER_INSECURE_ADDRESS="127.0.0.1"
+MASTER_INSECURE_PORT="8080"
+
 # The IP address for the Kubelet to serve on.
 KUBELET_IP_ADDRESS=0.0.0.0
 
@@ -285,14 +290,6 @@ INTERNAL_IP_MASK=255.255.0.0
 MASTER_IIP=10.244.0.1
 NODE_IIP_RANGE=10.244.1.0/16
 
-# MASTER_INSECURE_* is used to serve insecure connection. It is either
-# localhost, blocked by firewall, or use with nginx, etc. MASTER_SECURE_*
-# is accessed directly from outside world, serving HTTPS. Thses configs
-# should rarely change.
-MASTER_INSECURE_ADDRESS=${MASTER_IIP}
-MASTER_INSECURE_PORT="8080"
-MASTER_SECURE_ADDRESS="0.0.0.0"
-MASTER_SECURE_PORT="443"
 KUBELET_PORT="10250"
 
 # In case we are not using self-signed certficate we will
@@ -374,6 +371,42 @@ function calculate-default {
   # Domain name of the cluster
   if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
     MASTER_DOMAIN_NAME="${DNS_HOST_NAME}.${BASE_DOMAIN_NAME}"
+  fi
+
+  # -----------------------------------------------------------------------------
+  # There are two different setups for apiserver. We can switch between setups by
+  # setting the USE_SELF_SIGNED_CERT environment variable to "true" or "false".
+  #
+  # self signed cert (USE_SELF_SIGNED_CERT=true)
+  #
+  # In case we present a self signed cert to user, the cert will be used both
+  # externally and internally(for in cluster component like kubelet, kube-proxy or
+  # applications running inside cluster to access apiserver through https). Apiserver
+  # will serve securely on 0.0.0.0:443 and insecurely on localhost:8080. This is more
+  # of a testing use case (e.g. We only want to test kube-up script without adding
+  # dns record)
+  #
+  # ca verified cert (USE_SELF_SIGNED_CERT=false)
+  #
+  # If we present a ca verified cert to user, we will actually have two certs,
+  # verified cert is used by a nginx pod serving on 0.0.0.0:443 on master which
+  # proxies all external requests to apiserver's secure location. A self signed cert
+  # is also used by apiserver to deal with internal https requests. Apiserver will
+  # serve securely on 10.244.0.1:6443 and insecurely on localhost:8080. This setup is
+  # mostly used in production.
+  #
+  # In both cases, kubelet & kube-proxy will access master on secure location through
+  # https(except for those running on master)
+  # -----------------------------------------------------------------------------
+
+  # MASTER_SECURE_* is accessed directly from outside world, serving HTTPS.
+  # Thses configs should rarely change.
+  if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+    MASTER_SECURE_ADDRESS=${MASTER_IIP}
+    MASTER_SECURE_PORT="6443"
+  else
+    MASTER_SECURE_ADDRESS="0.0.0.0"
+    MASTER_SECURE_PORT="443"
   fi
 }
 

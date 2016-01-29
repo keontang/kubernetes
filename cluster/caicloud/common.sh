@@ -180,40 +180,39 @@ function create-certs-and-credentials {
 
   # The directory where all certs/keys will be placed at
   mkdir -p ${KUBE_TEMP}/certs
-  if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
-    # Create cluster certificates.
-    (
-      cp "${KUBE_ROOT}/cluster/caicloud/tools/easy-rsa.tar.gz" "${KUBE_TEMP}"
-      cd "${KUBE_TEMP}"
-      tar xzf easy-rsa.tar.gz > /dev/null 2>&1
-      cd easy-rsa-master/easyrsa3
-      ./easyrsa init-pki > /dev/null 2>&1
-      ./easyrsa --batch "--req-cn=${master_ip}@$(date +%s)" build-ca nopass > /dev/null 2>&1
-      ./easyrsa --subject-alt-name="${sans}" build-server-full master nopass > /dev/null 2>&1
-      ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
-      ./easyrsa build-client-full kubectl nopass > /dev/null 2>&1
-    ) || {
-      log "${color_red}=== Failed to generate certificates: Aborting ===${color_norm}"
-      exit 2
-    }
-    CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
-    # Path to certificates, used to create kubeconfig for kubectl.
-    CA_CERT="${CERT_DIR}/pki/ca.crt"
-    # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
-    # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
-    CA_CERT_BASE64=$(cat "${CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')
-    MASTER_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/master.crt" | base64 | tr -d '\r\n')
-    MASTER_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/master.key" | base64 | tr -d '\r\n')
-    # organize the directory a little bit
-    cp ${CERT_DIR}/pki/ca.crt ${CERT_DIR}/pki/issued/master.crt ${CERT_DIR}/pki/private/master.key ${KUBE_TEMP}/certs
-  else
+
+  # Create cluster certificates.
+  (
+    cp "${KUBE_ROOT}/cluster/caicloud/tools/easy-rsa.tar.gz" "${KUBE_TEMP}"
+    cd "${KUBE_TEMP}"
+    tar xzf easy-rsa.tar.gz > /dev/null 2>&1
+    cd easy-rsa-master/easyrsa3
+    ./easyrsa init-pki > /dev/null 2>&1
+    ./easyrsa --batch "--req-cn=${master_ip}@$(date +%s)" build-ca nopass > /dev/null 2>&1
+    ./easyrsa --subject-alt-name="${sans}" build-server-full master nopass > /dev/null 2>&1
+    ./easyrsa build-client-full kubelet nopass > /dev/null 2>&1
+    ./easyrsa build-client-full kubectl nopass > /dev/null 2>&1
+  ) || {
+    log "${color_red}=== Failed to generate certificates: Aborting ===${color_norm}"
+    exit 2
+  }
+  SELF_SIGNED_CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
+  # Path to certificates, used to create kubeconfig for kubectl.
+  CA_CERT="${SELF_SIGNED_CERT_DIR}/pki/ca.crt"
+  # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
+  # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
+  SELF_SIGNED_CA_CERT_BASE64=$(cat "${SELF_SIGNED_CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')
+  # organize the directory a little bit
+  cp ${SELF_SIGNED_CERT_DIR}/pki/ca.crt ${SELF_SIGNED_CERT_DIR}/pki/issued/master.crt ${SELF_SIGNED_CERT_DIR}/pki/private/master.key \
+     ${KUBE_TEMP}/certs
+
+  if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+    mkdir -p ${KUBE_TEMP}/certs/caicloudapp_certs
     CERT_DIR=${CERT_DIR:-"${KUBE_ROOT}/cluster/caicloud/certs"}
-    # Path to certificates
+    # Path to CA certificates. CA_CERT is reset to a valid CA cert(e.g. Geotrust) in case we present
+    # a CA verified cert to users since CA_CERT will be used to build kubeconfig file.
     CA_CERT="${CERT_DIR}/ca.crt"
-    CA_CERT_BASE64=$(cat "${CERT_DIR}/ca.crt" | base64 | tr -d '\r\n')
-    MASTER_CERT_BASE64=$(cat "${CERT_DIR}/master.crt" | base64 | tr -d '\r\n')
-    MASTER_KEY_BASE64=$(cat "${CERT_DIR}/master.key" | base64 | tr -d '\r\n')
-    cp ${CERT_DIR}/ca.crt ${CERT_DIR}/master.crt ${CERT_DIR}/master.key ${KUBE_TEMP}/certs
+    cp ${CERT_DIR}/ca.crt ${CERT_DIR}/master.crt ${CERT_DIR}/master.key ${KUBE_TEMP}/certs/caicloudapp_certs
   fi
   # Generate bearer tokens for this cluster. This may disappear, upstream issue:
   # https://github.com/GoogleCloudPlatform/kubernetes/issues/3168
@@ -237,7 +236,7 @@ users:
 clusters:
 - name: local
   cluster:
-    certificate-authority-data: ${CA_CERT_BASE64}
+    certificate-authority-data: ${SELF_SIGNED_CA_CERT_BASE64}
 contexts:
 - context:
     cluster: local
@@ -259,7 +258,7 @@ users:
 clusters:
 - name: local
   cluster:
-    certificate-authority-data: ${CA_CERT_BASE64}
+    certificate-authority-data: ${SELF_SIGNED_CA_CERT_BASE64}
 contexts:
 - context:
     cluster: local
@@ -324,7 +323,7 @@ clusters:
 - name: local
   cluster:
      server: ${server}
-     certificate-authority-data: ${CA_CERT_BASE64}
+     certificate-authority-data: ${SELF_SIGNED_CA_CERT_BASE64}
 contexts:
 - context:
     cluster: local
@@ -355,9 +354,13 @@ EOF
 function start-kubernetes {
   local pids=""
   IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
-  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo ./kube/master-start.sh" & pids="${pids} $!"
+  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
+    "sudo USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT} \
+          ./kube/master-start.sh" & pids="${pids} $!"
   for ssh_info in "${node_ssh_info[@]}"; do
-    ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
+    ssh-to-instance-expect "${ssh_info}" \
+      "sudo USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT} \
+            ./kube/node-start.sh" & pids="${pids} $!"
   done
   wait ${pids}
 }
@@ -371,7 +374,9 @@ function start-node-kubernetes {
   local pids=""
   IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   for ssh_info in "${node_ssh_info[@]}"; do
-    ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
+    ssh-to-instance-expect "${ssh_info}" \
+      "sudo USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT} \
+            ./kube/node-start.sh" & pids="${pids} $!"
   done
   wait ${pids}
 }

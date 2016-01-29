@@ -935,7 +935,7 @@ function create-firewall {
   log "+++++ Create master security group rules ..."
   anchnet-exec-and-retry "${ANCHNET_CMD} createsecuritygroup ${CLUSTER_NAME}-${MASTER_SG_NAME} \
 --rulename=master-ssh,master-https --priority=1,2 --action=accept,accept --protocol=tcp,tcp \
---direction=0,0 --value1=22,${MASTER_SECURE_PORT} --value2=22,${MASTER_SECURE_PORT} --project=${PROJECT_ID}"
+--direction=0,0 --value1=22,443 --value2=22,443 --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_MASTER_WAIT_RETRY} ${SG_MASTER_WAIT_INTERVAL}
 
   # Get security group information.

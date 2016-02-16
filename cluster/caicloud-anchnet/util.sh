@@ -114,6 +114,10 @@ function kube-up {
     # To mimic actual kubeup process, we create vars to match create-master-instance
     # create-node-instances, etc. We also override NUM_MINIONS.
     create-dev-variables
+    # Add dns record once we get master eip
+    if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+      add-dns-record
+    fi
   else
     # Create an anchnet project if PROJECT_ID is empty.
     create-project
@@ -122,6 +126,10 @@ function kube-up {
     #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
     #   NODE_INSTANCE_IDS,   NODE_EIP_IDS,   NODE_EIPS
     create-master-instance
+    # Add dns record once we get master eip
+    if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+      add-dns-record
+    fi
     create-node-instances "${NUM_MINIONS}"
     # Create a private SDN; then add master, nodes to it. The IP address of the
     # machines in this network will be set in setup-anchnet-hosts. The function
@@ -185,7 +193,6 @@ function kube-up {
   if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
     KUBE_MASTER_IP="${MASTER_EIP}"
   else
-    add-dns-record
     wait-for-dns-propagation
     KUBE_MASTER_IP="${MASTER_DOMAIN_NAME}"
   fi

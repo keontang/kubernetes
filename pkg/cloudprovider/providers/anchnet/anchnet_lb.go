@@ -549,6 +549,11 @@ func (an *Anchnet) waitForLoadBalancer(lbID string, status anchnet_client.LoadBa
 				} else {
 					glog.Infof("Attempt %d: loadbalancer %v not in desired %v status yet, current status: %v\n", i, lbID, status, response.ItemSet[0].Status)
 				}
+				// Anchnet also returns internal status 'ceased' for deleted loadbalancer.
+				if status == anchnet_client.LoadBalancerStatusDeleted && response.ItemSet[0].Status == "ceased" {
+					glog.Infof("Loadbalancer %v is in ceased status while waiting for deleted status\n", lbID)
+					return nil
+				}
 			}
 		} else {
 			glog.Infof("Attempt %d: failed to get loadbalancer %v: %v\n", i, lbID, err)

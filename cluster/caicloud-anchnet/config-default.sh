@@ -196,7 +196,7 @@ KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 # Optional: Install cluster registry.
 ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-false}
 
-# Optional: Install cluster monitoring. Disable by default, under developing.
+# Optional: Install cluster monitoring. Disable by default, under development.
 ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
 # TODO: config the default memory limit according to num of nodes.
 HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}

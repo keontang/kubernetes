@@ -49,6 +49,7 @@ function kube-up {
   # Print all environment and local variables at this point.
   log "+++++ Running kube-up with variables ..."
   (set -o posix; set)
+  KUBE_UP=Y && (set -o posix; set)
 
   # Make sure we have:
   #  1. a staging area
@@ -57,18 +58,18 @@ function kube-up {
   ensure-ssh-agent
 
   # Create certificates and credentials to secure cluster communication.
-  create-certs-and-credentials "${MASTER_IP}"
+  create-certs-and-credentials
 
   # Concurrently install all packages for nodes.
-  install-binaries-from-local "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}"
-  install-packages "${INSTANCE_SSH_INFO}" "false"
+  install-binaries-from-local
+  install-packages "false"
 
   # Prepare master environment.
-  send-master-startup-config-files "${MASTER_SSH_INFO}"
-  send-node-startup-config-files "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}" "${MASTER_IP}"
+  send-master-startup-config-files
+  send-node-startup-config-files
 
   # Now start kubernetes.
-  start-kubernetes "${MASTER_SSH_INFO}" "${NODE_SSH_INFO}"
+  start-kubernetes
 
   # Create config file, i.e. ~/.kube/config.
   source "${KUBE_ROOT}/cluster/common.sh"
@@ -76,7 +77,6 @@ function kube-up {
   # Also, in bare metal environment, we are deploying on master instance,
   # so we make sure it can find kubectl binary.
   export KUBE_MASTER_IP="${MASTER_IP}"
-  export KUBECTL_PATH="/opt/bin/kubectl"
   create-kubeconfig
 }
 

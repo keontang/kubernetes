@@ -151,7 +151,7 @@ function send-master-startup-config-files-internal {
     cp ${2} ${KUBE_TEMP}/kube-master/kube/cloud-config
   fi
   scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/kube-master/kube" "~"
-  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/caicloud"
+  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo mkdir -p /etc/caicloud && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/caicloud"
 }
 
 # Create node startup script and send all config files to nodes.
@@ -170,6 +170,7 @@ function send-master-startup-config-files-internal {
 #   POD_INFRA_CONTAINER
 #   REG_MIRROR
 #   MASTER_SSH_EXTERNAL
+#   CAICLOUD_PROVIDER
 #   NODE_SSH_EXTERNAL
 #   NODE_INSTANCE_IDS
 function send-node-startup-config-files {
@@ -296,6 +297,7 @@ EOF
 #   $1 report failure; if true, report failure to caicloud cluster manager.
 #
 # Assumed vars:
+#   INSTANCE_SSH_EXTERNAL
 #   APT_MIRRORS
 #   KUBE_INSTANCE_LOGDIR
 function install-packages {

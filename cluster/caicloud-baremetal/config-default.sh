@@ -33,7 +33,7 @@ CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
 
 # The version of caicloud release to use if building release is not required.
 # E.g. v1.0.2, 2015-09-09-15-30-30, etc.
-CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.5.0"}
+CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.7.0"}
 
 # KUBE_USER uniquely identifies a caicloud user. This is the user that owns the
 # cluster, and will be used to create kubeconfig file.
@@ -42,11 +42,17 @@ KUBE_USER=${KUBE_USER:-""}
 # Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
 # there is no easy to enforce docker version in caicloud kubernetes release,
 # so we define it here separately.
-DOCKER_VERSION=${DOCKER_VERSION:-"1.8.3"}
+DOCKER_VERSION=${DOCKER_VERSION:-"1.9.1"}
 
 # To indicate if the execution status needs to be reported back to caicloud
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
+
+# Whether we use self signed cert for apiserver
+USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT:-"true"}
+
+# Provider name used internally.
+CAICLOUD_PROVIDER=${CAICLOUD_PROVIDER:-""}
 
 #
 # Following params in the section should rarely change.
@@ -97,9 +103,9 @@ ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-true}
 KUBE_UI_REPLICAS=${KUBE_UI_REPLICAS:-1}
 
 # Optional: Install cluster registry.
-ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-true}
+ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-false}
 
-# Optional: Install cluster monitoring. Disable by default, under developing.
+# Optional: Install cluster monitoring. Disable by default, under development.
 ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
 # TODO: config the default memory limit according to num of nodes.
 HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
@@ -178,6 +184,10 @@ function calculate-default {
     fi
   done
 
+  # Master/node IP is also their internal IPs.
+  MASTER_IIP=${MASTER_IP}
+  NODE_IIPS=${NODE_IPS}
+
   # Create node IP address array and NUM_MINIONS.
   IFS=',' read -ra NODE_IPS_ARR <<< "${NODE_IPS}"
   export NUM_MINIONS=${#NODE_IPS_ARR[@]}
@@ -191,6 +201,9 @@ function calculate-default {
 
   # All instances' ssh info.
   INSTANCE_SSH_INFO="${MASTER_SSH_INFO},${NODE_SSH_INFO}"
+  INSTANCE_SSH_EXTERNAL="${MASTER_SSH_INFO},${NODE_SSH_INFO}"
+  MASTER_SSH_EXTERNAL="${MASTER_SSH_INFO}"
+  NODE_SSH_EXTERNAL="${NODE_SSH_INFO}"
 
   # Context to use in kubeconfig.
   CONTEXT="baremetal_${CLUSTER_NAME}"

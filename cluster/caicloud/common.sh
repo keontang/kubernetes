@@ -178,7 +178,7 @@ function create-certs-and-credentials {
   sans="${sans},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc"
   sans="${sans},DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME},DNS:master"
 
-  # The directory where all certs/keys will be placed at
+  # The directory where all certs/keys will be placed at.
   mkdir -p ${KUBE_TEMP}/certs
 
   # Create cluster certificates.
@@ -199,6 +199,8 @@ function create-certs-and-credentials {
   SELF_SIGNED_CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
   # Path to certificates, used to create kubeconfig for kubectl.
   CA_CERT="${SELF_SIGNED_CERT_DIR}/pki/ca.crt"
+  KUBE_CERT="${SELF_SIGNED_CERT_DIR}/pki/issued/kubectl.crt"
+  KUBE_KEY="${SELF_SIGNED_CERT_DIR}/pki/private/kubectl.key"
   # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
   # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
   SELF_SIGNED_CA_CERT_BASE64=$(cat "${SELF_SIGNED_CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')

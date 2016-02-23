@@ -54,7 +54,7 @@ http {
   }
 
   server {
-    listen 443;
+    listen 443 spdy;
 
     ssl on;
     ssl_certificate     /etc/nginx/ssl/master.crt;
@@ -70,6 +70,9 @@ http {
       proxy_set_header    Host       $http_host;   # pass host
       proxy_set_header    X-Real-IP  $remote_addr; # pass on real client's IP
       proxy_read_timeout  900;
+      proxy_http_version  1.1;
+      proxy_set_header    Upgrade    $http_upgrade;
+      proxy_set_header    Connection "upgrade";
     }
   }
 }

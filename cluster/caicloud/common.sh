@@ -514,40 +514,6 @@ function fetch-and-extract-tarball {
   cd - > /dev/null
 }
 
-# Install binaries from local directory.
-#
-# Assumed vars:
-#   MASTER_SSH_EXTERNAL
-#   NODE_SSH_EXTERNAL
-function install-binaries-from-local {
-  # Get the caicloud kubernetes release tarball.
-  fetch-and-extract-tarball
-  # Copy binaries to master
-  rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/master
-  cp -r ${KUBE_TEMP}/caicloud-kube/etcd \
-     ${KUBE_TEMP}/caicloud-kube/etcdctl \
-     ${KUBE_TEMP}/caicloud-kube/flanneld \
-     ${KUBE_TEMP}/caicloud-kube/kubectl \
-     ${KUBE_TEMP}/caicloud-kube/kubelet \
-     ${KUBE_TEMP}/caicloud-kube/kube-apiserver \
-     ${KUBE_TEMP}/caicloud-kube/kube-scheduler \
-     ${KUBE_TEMP}/caicloud-kube/kube-controller-manager \
-     ${KUBE_TEMP}/kube/master
-  scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/kube" "~"
-  # Copy binaries to nodes.
-  rm -rf ${KUBE_TEMP}/kube && mkdir -p ${KUBE_TEMP}/kube/node
-  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
-  for (( i = 0; i < ${#node_ssh_info[*]}; i++ )); do
-    cp -r ${KUBE_TEMP}/caicloud-kube/etcd \
-       ${KUBE_TEMP}/caicloud-kube/etcdctl \
-       ${KUBE_TEMP}/caicloud-kube/flanneld \
-       ${KUBE_TEMP}/caicloud-kube/kubelet \
-       ${KUBE_TEMP}/caicloud-kube/kube-proxy \
-       ${KUBE_TEMP}/kube/node
-    scp-to-instance-expect "${node_ssh_info[$i]}" "${KUBE_TEMP}/kube" "~"
-  done
-}
-
 # Fetch tarball in master instance.
 #
 # Assumed vars:

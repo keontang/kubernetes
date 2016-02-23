@@ -140,6 +140,9 @@ MASTER_INSECURE_PORT="8080"
 MASTER_SECURE_ADDRESS="0.0.0.0"
 MASTER_SECURE_PORT="443"
 KUBELET_PORT="10250"
+if [[ "${MASTER_SSH_INFO}" == "vagrant:vagrant@192.168.205.10" ]]; then
+  MASTER_SECURE_ADDRESS="192.168.205.10"
+fi
 
 
 # -----------------------------------------------------------------------------

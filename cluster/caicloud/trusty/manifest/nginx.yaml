@@ -6,7 +6,7 @@ spec:
   hostNetwork: true
   containers:
   - name: master-nginx
-    image: index.caicloud.io/caicloud/nginx:1.9.5
+    image: index.caicloud.io/caicloud/nginx:1.9.4
     volumeMounts:
     - name: caicloudapp-certs
       mountPath: /etc/nginx/ssl

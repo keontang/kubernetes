@@ -62,9 +62,11 @@ function kube-up {
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
 
-  # Concurrently install all packages for nodes.
-  install-binaries-from-local
-  install-packages "false"
+  # Concurrently install all binaries and packages for instances.
+  local pids=""
+  fetch-tarball-in-master && install-binaries-from-master & pids="$pids $!"
+  install-packages & pids="$pids $!"
+  wait ${pids}
 
   # Prepare master environment.
   send-master-startup-config-files

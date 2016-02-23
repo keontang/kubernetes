@@ -57,6 +57,8 @@ function kube-up {
   ensure-temp-dir
   ensure-ssh-agent
 
+  setup-instances
+
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
 

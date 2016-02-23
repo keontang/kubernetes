@@ -658,14 +658,26 @@ function prompt-instance-password {
 # -----------------------------------------------------------------------------
 SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet"
 
+# This function is a wrapper of setup-instance to setup a list of instances.
+#
+# Assumed vars:
+#   INSTANCE_SSH_EXTERNAL
+function setup-instances {
+  IFS=',' read -ra instance_ssh_info <<< "${INSTANCE_SSH_EXTERNAL}"
+  for (( i = 0; i < ${#instance_ssh_info[*]}; i++ )); do
+    IFS=':@' read -ra ssh_info <<< "${instance_ssh_info[$i]}"
+    setup-instance "${ssh_info[2]}" "${ssh_info[0]}" "${ssh_info[1]}"
+  done
+}
+
 # This function mainly does the following:
-# 1. ssh to the machine and put the host's pub key to instance's authorized_key,
+# 1. ssh to the machine and put the host's pub key to instance's authorized_keys,
 #    so future ssh commands do not require password to login.
 # 2. Also, if username is not 'root', we setup sudoer for the user so that we do
 #    not need to feed in password when executing commands.
 # 3. Create login user without sudo privilege so that actual user won't have access
 #    to stuff like anchnet api keys. The login user will be handed over to caicloud
-#    user.
+#    user. Pass empty string to disable creating login user.
 #
 # Input:
 #   $1 Instance external IP address
@@ -696,8 +708,25 @@ expect {
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
   ${2}@${1} "\
 umask 077 && mkdir -p ~/.ssh && cat ~/host_rsa.pub >> ~/.ssh/authorized_keys && rm -rf ~/host_rsa.pub && \
-sudo sh -c 'echo \"${2} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)' && \
-sudo adduser --quiet --disabled-password --gecos \"${4}\" ${4} && \
+sudo sh -c 'echo \"${2} ALL=(ALL) NOPASSWD: ALL\" | (EDITOR=\"tee -a\" visudo)'"
+
+expect {
+  "*?assword*" {
+    send -- "${3}\r"
+    exp_continue
+  }
+  "lost connection" { exit 1 }
+  timeout { exit 1 }
+  eof {}
+}
+EOF
+
+    if [[ ! -z "${4:-}" ]]; then
+      expect <<EOF
+set timeout $((($attempt+1)*3))
+spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
+  ${2}@${1} "\
+sudo adduser --quiet --disabled-password --gecos \"${4}\" ${4} &&
 echo \"${4}:${5}\" | sudo chpasswd"
 
 expect {
@@ -710,6 +739,8 @@ expect {
   eof {}
 }
 EOF
+    fi
+
     if [[ "$?" != "0" ]]; then
       # We give more attempts for setting up ssh to allow slow instance startup.
       if (( attempt > 40 )); then

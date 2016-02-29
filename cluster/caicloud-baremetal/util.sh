@@ -80,7 +80,12 @@ function kube-up {
   # create-kubeconfig assumes master ip is in the variable KUBE_MASTER_IP.
   # Also, in bare metal environment, we are deploying on master instance,
   # so we make sure it can find kubectl binary.
-  export KUBE_MASTER_IP="${MASTER_IP}"
+  if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
+    KUBE_MASTER_IP="${MASTER_EIP}"
+  else
+    KUBE_MASTER_IP="${MASTER_DOMAIN_NAME}"
+  fi
+
   create-kubeconfig
 }
 

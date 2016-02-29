@@ -144,6 +144,8 @@ if [[ "${MASTER_SSH_INFO}" == "vagrant:vagrant@192.168.205.10" ]]; then
   MASTER_SECURE_ADDRESS="192.168.205.10"
 fi
 
+DNS_HOST_NAME=${DNS_HOST_NAME:-"cluster"}
+BASE_DOMAIN_NAME=${BASE_DOMAIN_NAME:-"caicloudapp.com"}
 
 # -----------------------------------------------------------------------------
 # Misc static configurations.
@@ -216,6 +218,16 @@ function calculate-default {
 
   # Final URL of caicloud tarball URL.
   CAICLOUD_TARBALL_URL="${CAICLOUD_HOST_URL}/${CAICLOUD_KUBE_PKG}"
+
+  if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+    MASTER_DOMAIN_NAME="${DNS_HOST_NAME}.${BASE_DOMAIN_NAME}"
+  fi
+
+  if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
+    MASTER_SECURE_PORT="6443"
+  else
+    MASTER_SECURE_PORT="443"
+  fi
 }
 
 calculate-default

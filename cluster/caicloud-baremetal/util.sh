@@ -81,9 +81,13 @@ function kube-up {
   # Also, in bare metal environment, we are deploying on master instance,
   # so we make sure it can find kubectl binary.
   if [[ ${USE_SELF_SIGNED_CERT} == "true" ]]; then
-    KUBE_MASTER_IP="${MASTER_EIP}"
+    KUBE_MASTER_IP="${MASTER_IIP}"
   else
     KUBE_MASTER_IP="${MASTER_DOMAIN_NAME}"
+  fi
+
+  if [[  -x "/opt/bin/kubectl" ]]; then
+    KUBECTL_PATH="/opt/bin/kubectl"
   fi
 
   create-kubeconfig

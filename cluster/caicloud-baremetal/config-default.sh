@@ -119,12 +119,11 @@ HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
 SERVICE_CLUSTER_IP_RANGE=10.254.0.0/16  # formerly PORTAL_NET
 
 # Define the IP range used for flannel overlay network, should not conflict
-# with above SERVICE_CLUSTER_IP_RANGE. Note, below config only allows three
-# machines.
-FLANNEL_NET=172.24.60.0/22
+# with above SERVICE_CLUSTER_IP_RANGE.
+FLANNEL_NET=192.168.64.0/20
 FLANNEL_SUBNET_LEN=24
-FLANNEL_SUBNET_MIN=172.24.61.0
-FLANNEL_SUBNET_MAX=172.24.63.0
+FLANNEL_SUBNET_MIN=192.168.64.0
+FLANNEL_SUBNET_MAX=192.168.79.0
 FLANNEL_TYPE="host-gw"
 
 # The IP address for the Kubelet to serve on.

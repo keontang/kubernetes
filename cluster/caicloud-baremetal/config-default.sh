@@ -131,17 +131,11 @@ KUBELET_IP_ADDRESS=0.0.0.0
 
 # MASTER_INSECURE_* is used to serve insecure connection. It is either
 #   localhost, blocked by firewall, or use with nginx, etc.
-# MASTER_SECURE_* is accessed directly from outside world, serving HTTPS.
 # KUBELET_PORT is the port kubelet server serves on.
 # Note, the above configs should rarely change.
 MASTER_INSECURE_ADDRESS="127.0.0.1"
 MASTER_INSECURE_PORT="8080"
-MASTER_SECURE_ADDRESS="0.0.0.0"
-MASTER_SECURE_PORT="443"
 KUBELET_PORT="10250"
-if [[ "${MASTER_SSH_INFO}" == "vagrant:vagrant@192.168.205.10" ]]; then
-  MASTER_SECURE_ADDRESS="192.168.205.10"
-fi
 
 DNS_HOST_NAME=${DNS_HOST_NAME:-"cluster"}
 BASE_DOMAIN_NAME=${BASE_DOMAIN_NAME:-"caicloudapp.com"}
@@ -222,11 +216,14 @@ function calculate-default {
     MASTER_DOMAIN_NAME="${DNS_HOST_NAME}.${BASE_DOMAIN_NAME}"
   fi
 
+  # MASTER_SECURE_* is accessed directly from outside world, serving HTTPS.
   if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
     MASTER_SECURE_PORT="6443"
   else
     MASTER_SECURE_PORT="443"
   fi
+
+  MASTER_SECURE_ADDRESS=${MASTER_IIP}
 }
 
 calculate-default

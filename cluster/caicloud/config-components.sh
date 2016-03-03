@@ -49,8 +49,10 @@ EOF
 #   $1 Kubernetes cluster name.
 #   $2 Service IP range. All kubernetes services fall into the range.
 #   $3 Admmission control plugins enforced by apiserver.
-#   $4 Cloudprovider name, leave empty if running without cloudprovider.
-#   $5 Cloudprovider config file fullpath, e.g. /etc/kubernetes/caicloud-config,
+#   $4 API server address, typically master internal IP address, leave empty
+#      if the kubelet instance runs on master.
+#   $5 Cloudprovider name, leave empty if running without cloudprovider.
+#   $6 Cloudprovider config file fullpath, e.g. /etc/kubernetes/caicloud-config,
 #      leave empty if running without cloudprovider.
 #
 # Output:
@@ -59,14 +61,13 @@ EOF
 # Assumed vars:
 #   MASTER_INSECURE_ADDRESS
 #   MASTER_INSECURE_PORT
-#   MASTER_SECURE_ADDRESS
 #   MASTER_SECURE_PORT
 function create-kube-apiserver-opts {
   cat <<EOF | tr "\n" " " > ~/kube/configs/kube-apiserver
 KUBE_APISERVER_OPTS="--logtostderr=true \
 --insecure-bind-address=${MASTER_INSECURE_ADDRESS} \
 --insecure-port=${MASTER_INSECURE_PORT} \
---bind-address=${MASTER_SECURE_ADDRESS} \
+--bind-address=${4} \
 --secure-port=${MASTER_SECURE_PORT} \
 --cors-allowed-origins=.* \
 --etcd-servers=http://127.0.0.1:4001 \
@@ -79,11 +80,11 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --tls-cert-file=/etc/kubernetes/master.crt \
 --tls-private-key-file=/etc/kubernetes/master.key
 EOF
-  if [[ "${4:-}" != "" ]]; then
-    echo -n " --cloud-provider=${4}" >> ~/kube/configs/kube-apiserver
-  fi
   if [[ "${5:-}" != "" ]]; then
-    echo -n " --cloud-config=${5}" >> ~/kube/configs/kube-apiserver
+    echo -n " --cloud-provider=${5}" >> ~/kube/configs/kube-apiserver
+  fi
+  if [[ "${6:-}" != "" ]]; then
+    echo -n " --cloud-config=${6}" >> ~/kube/configs/kube-apiserver
   fi
   echo -n '"' >> ~/kube/configs/kube-apiserver
 }

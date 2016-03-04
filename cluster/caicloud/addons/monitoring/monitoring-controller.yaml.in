@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  labels:
+    name: monitoring
+  name: monitoring
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    name: monitoring
+  template:
+    metadata:
+      labels:
+        name: monitoring
+    spec:
+      containers:
+      - name: monitoring
+        image: index.caicloud.io/caicloud/monitoring:v0.0.5
+        imagePullPolicy: Always
+        env:
+          - name: K8S_IP
+            value: ""
+          - name: K8S_USER
+            value: ""
+          - name: K8S_PASS
+            value: ""
+          - name: K8S_INSECURE
+            value: ""
+          - name: PAGING_URL
+            value: paging.caicloud.io/api/page
+          - name: INFLUXDB_URL
+            value: http://monitoring-influxdb:8086
+          - name: INTERVAL
+            value: "30"	
+          - name: SERVICE_PORT
+            value: "6090"
+          - name: AUTH_REQUIRED
+            value: "Y"
+          - name: CLUSTER_ID
+            value: {{cluster_id}}
+          - name: UID
+            value: {{uid}}
+          - name: CLUSTER_TOKEN
+            value: {{cluster_token}}

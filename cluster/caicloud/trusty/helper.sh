@@ -69,11 +69,11 @@ function send-master-startup-config-files-internal {
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/configs.
     if [[ "${CAICLOUD_PROVIDER:-}" != "" ]]; then
-      echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
+      echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${MASTER_SECURE_ADDRESS} ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
       echo "create-kube-controller-manager-opts ${CLUSTER_NAME} ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
       echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} false \"\" \"\" ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
     else
-      echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL}"
+      echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${MASTER_SECURE_ADDRESS}"
       echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
       echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} false \"\" \"\" \"\""
     fi

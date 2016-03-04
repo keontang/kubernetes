@@ -87,6 +87,15 @@ LOGIN_PWD=${LOGIN_PWD:-"caiyun12345678"}
 # executor via curl. Set it to be Y if reporting is needed.
 REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
 
+# These environment vars are used by monitoring and have fake default values.
+# The default value are mainly used for getting us through the kube-up process
+# when doing kube-up by hand (e.g. deploying caicloud stack on private cloud)
+# since we don't have any real values for these env vars yet. For clusters
+# brought up by caicloud stack (user clusters), these values are passed in by cds
+CLUSTER_ID=${CLUSTER_ID:-"32793e34-79d2-432b-ac17-708b61b80e6a"}
+CLUSTER_TOKEN=${CLUSTER_TOKEN:-"eSbsyAr2eDatXBxa"}
+CAICLOUD_UID=${CAICLOUD_UID:-"110ec58a-a0f2-4ac4-8393-c866d813b8d1"}
+
 #
 # Following params in the section should rarely change.
 #

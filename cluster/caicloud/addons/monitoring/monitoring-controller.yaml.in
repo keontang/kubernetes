@@ -32,14 +32,14 @@ spec:
           - name: INFLUXDB_URL
             value: http://monitoring-influxdb:8086
           - name: INTERVAL
-            value: "30"	
+            value: "30"
           - name: SERVICE_PORT
             value: "6090"
           - name: AUTH_REQUIRED
             value: "Y"
           - name: CLUSTER_ID
-            value: {{cluster_id}}
+            value: {{ pillar['cluster_id'] }}
           - name: UID
-            value: {{uid}}
+            value: {{ pillar['caicloud_uid'] }}
           - name: CLUSTER_TOKEN
-            value: {{cluster_token}}
+            value: {{ pillar['cluster_token'] }}

@@ -1460,9 +1460,14 @@ function remove-dns-record-internal {
   log "+++++ Removing DNS record ${MASTER_DOMAIN_NAME}..."
   local response=""
   local record_id=""
+  local resource_record=""
   response=$(eval "aliyun describedomainrecord ${BASE_DOMAIN_NAME} ${DNS_HOST_NAME}")
+  resource_record=$(echo ${response} | json_val '["DomainRecords"]["Record"][0]["RR"]')
   record_id=$(echo ${response} | json_val '["DomainRecords"]["Record"][0]["RecordId"]')
-  aliyun deletedomainrecord ${record_id}
+  # Double check before we actually delete the record
+  if [[ ${resource_record} = ${DNS_HOST_NAME} ]]; then
+     aliyun deletedomainrecord ${record_id}
+  fi
 }
 
 # Wait for dns record to propagate. Otherwise in case where we are using

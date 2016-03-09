@@ -59,6 +59,10 @@ function create-resource-from-file {
 }
 
 function create-kube-system-namespace {
+  # Delete system namespace if it already exists.
+  if /opt/bin/kubectl get ns | grep ${SYSTEM_NAMESPACE}; then
+    /opt/bin/kubectl delete ns --server="${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT}" ${SYSTEM_NAMESPACE}
+  fi
   create-resource-from-file ~/kube/namespace.yaml 100 10 "default"
 }
 

@@ -180,8 +180,8 @@ function kube-up {
   create-anchnet-config
 
   # Send configurations to master/nodes instances.
-  send-master-startup-config-files "${KUBE_TEMP}/anchnet-config"
-  send-node-startup-config-files "${KUBE_TEMP}/anchnet-config"
+  send-master-files "${KUBE_TEMP}/anchnet-config"
+  send-node-files "${KUBE_TEMP}/anchnet-config"
 
   # Now start kubernetes.
   start-kubernetes

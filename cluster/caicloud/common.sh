@@ -373,6 +373,23 @@ function start-kubernetes {
   wait ${pids}
 }
 
+# Cleanup a kubernetes cluster - stop all kubernetes components and data.
+#
+# Assumed vars:
+#   MASTER_SSH_EXTERNAL
+#   NODE_SSH_EXTERNAL
+function cleanup-kubernetes {
+  local pids=""
+  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
+  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
+    "sudo ./kube/master-cleanup.sh" & pids="${pids} $!"
+  for ssh_info in "${node_ssh_info[@]}"; do
+    ssh-to-instance-expect "${ssh_info}" \
+      "sudo ./kube/node-cleanup.sh" & pids="${pids} $!"
+  done
+  wait ${pids}
+}
+
 # Start kubernetes component only on nodes. The function assumes that nodes have
 # already been setup correctly.
 #

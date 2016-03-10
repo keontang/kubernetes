@@ -57,7 +57,11 @@ function kube-up {
   ensure-temp-dir
   ensure-ssh-agent
 
+  # setup-instances is a common operations aross all cloudproviders, including
+  # baremetal, see caicloud/common.sh for a list of setups.
   setup-instances
+  # setup-baremetal-instances is baremetal specific setups for all instances.
+  setup-baremetal-instances
 
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
@@ -119,4 +123,26 @@ function detect-minion-names {
 # Get minion IP addresses and store in KUBE_MINION_IP_ADDRESSES[]
 function detect-minions {
   echo "KUBE_MINION_IP_ADDRESSES: [${KUBE_MINION_IP_ADDRESSES[*]}]" 1>&2
+}
+
+# Setup baremetal instances. Right now, the only setup is to add node hostname entry
+# into master, so that master can reach nodes via their hostname.
+function setup-baremetal-instances {
+  IFS=',' read -ra instance_ssh_info <<< "${INSTANCE_SSH_EXTERNAL}"
+  (
+    echo "#!/bin/bash"
+    grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
+    for (( i = 0; i < ${#instance_ssh_info[*]}; i++ )); do
+      INSTANCE_HOSTNAME=`ssh-to-instance "${instance_ssh_info[$i]}" "hostname"`
+      IFS=':@' read -ra ssh_info <<< "${instance_ssh_info[$i]}"
+      echo "add-hosts-entry ${INSTANCE_HOSTNAME} ${ssh_info[2]}"
+    done
+    echo ""
+  ) > "${KUBE_TEMP}/master-host-setup.sh"
+  chmod a+x "${KUBE_TEMP}/master-host-setup.sh"
+
+  scp-then-execute-expect "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/master-host-setup.sh" "~" "\
+mkdir -p ~/kube && sudo mv ~/master-host-setup.sh ~/kube && \
+sudo ./kube/master-host-setup.sh || \
+echo 'Command failed setting up master'"
 }

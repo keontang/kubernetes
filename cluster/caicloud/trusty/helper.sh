@@ -387,7 +387,8 @@ function config-hostname {
 }
 
 # Add an entry in /etc/hosts file if not already exists. This is used for master to
-# contact kubelet using hostname, as anchnet is unable to do hostname resolution.
+# contact kubelet using hostname. This is used in baremetal and cloudproviders that
+# do not support hostname resolution between instances.
 #
 # Input:
 #   $1 hostname

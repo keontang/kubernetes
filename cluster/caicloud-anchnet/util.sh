@@ -132,7 +132,7 @@ function kube-up {
     fi
     create-node-instances "${NUM_MINIONS}"
     # Create a private SDN; then add master, nodes to it. The IP address of the
-    # machines in this network will be set in setup-anchnet-hosts. The function
+    # machines in this network will be set in setup-anchnet-instances. The function
     # will create one var:
     #   PRIVATE_SDN_INTERFACE - the interface created on each machine for the sdn network.
     create-sdn-network
@@ -156,8 +156,10 @@ function kube-up {
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
 
-  # Setup host, including hostname, private SDN network, etc.
-  setup-anchnet-hosts
+  # setup-anchnet-instances is anchnet specific setups for all instances, including
+  # hostname, private SDN network, etc. Common setup is down when creating instances,
+  # see setup-instance in caicloud/common.sh.
+  setup-anchnet-instances
 
   # After kube-up, we'll need to remove "~/.kube" working directory.
   trap-add 'clean-up-working-dir' EXIT
@@ -1104,14 +1106,14 @@ function create-anchnet-config {
 #   NODE_IIPS_ARR
 #   PRIVATE_SDN_INTERFACE
 #   KUBE_INSTANCE_LOGDIR
-function setup-anchnet-hosts {
+function setup-anchnet-instances {
   # Use multiple retries since seting up sdn network is essential for follow-up
   # installations, and we ses occational errors:
   # https://github.com/caicloud/caicloud-kubernetes/issues/175
-  command-exec-and-retry "setup-anchnet-hosts-internal" 5
+  command-exec-and-retry "setup-anchnet-instances-internal" 5
 }
 # Setup hosts before installing kubernetes. This is cloudprovider specific setup.
-function setup-anchnet-hosts-internal {
+function setup-anchnet-instances-internal {
   local pids=""
 
   # Setup master instance.

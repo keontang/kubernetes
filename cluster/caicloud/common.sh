@@ -1177,6 +1177,33 @@ function join {
   echo "$*"
 }
 
+# Find kubectl binary from pre-defined locations. If found, set KUBECTL_PATH
+# variable; otherwise, do nothing. This is used for kube-up - if KUBECTL_PATH
+# is not set, kubernetes will look in the following path, which doesn't always
+# present.
+#  "${KUBE_ROOT}/_output/dockerized/bin/${host_os}/${host_arch}/kubectl"
+#  "${KUBE_ROOT}/_output/local/bin/${host_os}/${host_arch}/kubectl"
+#  "${KUBE_ROOT}/platforms/${host_os}/${host_arch}/kubectl"
+#
+# Vars set:
+#   KUBECTL_PATH
+function find-kubectl-binary {
+  # First, search from possible locations.
+  locations=("/opt/bin/kubectl" "/usr/bin/kubectl" "/usr/local/bin/kubectl" "${GOPATH}/bin/kubectl")
+  for location in ${locations[@]}; do
+    if [[ -x ${location} ]]; then
+      export KUBECTL_PATH=${location}
+      break
+    fi
+  done
+  # Second, if not found, use 'which kubectl' if it exists.
+  if [[ -z "${KUBECTL_PATH-}" ]]; then
+    if [[ -x `which kubectl` ]]; then
+      export KUBECTL_PATH=`which kubectl`
+    fi
+  fi
+}
+
 # A helper function that executes a command (or shell function), and retries on
 # failure. If the command can't succeed within given attempts, the script will
 # exit directly.

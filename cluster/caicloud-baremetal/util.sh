@@ -48,7 +48,6 @@ function verify-prereqs {
 function kube-up {
   # Print all environment and local variables at this point.
   log "+++++ Running kube-up with variables ..."
-  (set -o posix; set)
   KUBE_UP=Y && (set -o posix; set)
 
   # Make sure we have:
@@ -66,6 +65,9 @@ function kube-up {
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
 
+  # Setup instances to facilitate provision, see caicloud/common.sh.
+  setup-instances
+
   # Concurrently install all binaries and packages for instances.
   local pids=""
   fetch-tarball-in-master && install-binaries-from-master & pids="$pids $!"
@@ -73,8 +75,8 @@ function kube-up {
   wait ${pids}
 
   # Prepare master environment.
-  send-master-startup-config-files
-  send-node-startup-config-files
+  send-master-files
+  send-node-files
 
   # Now start kubernetes.
   start-kubernetes
@@ -106,7 +108,24 @@ function validate-cluster {
 
 # Delete a kubernetes cluster
 function kube-down {
-  echo "TODO: kube-down" 1>&2
+  # Print all environment and local variables at this point.
+  KUBE_UP=N && (set -o posix; set)
+
+  # Make sure we have:
+  #  1. a staging area
+  #  2. a public/private key pair used to provision instances.
+  ensure-temp-dir
+  ensure-ssh-agent
+  # Not actually used in kube-down, but call it to avoid the following
+  # non-fatal errors:
+  #  /home/vagrant/kube/kubelet-kubeconfig: No such file or directory
+  #  /home/vagrant/kube/kube-proxy-kubeconfig: No such file or directory
+  create-certs-and-credentials
+
+  send-master-files
+  send-node-files
+
+  cleanup-kubernetes
 }
 
 # Must ensure that the following ENV vars are set

@@ -87,9 +87,13 @@ DAOCLOUD_ACCELERATORS=${DAOCLOUD_ACCELERATORS:-"\
 http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
 http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"}
 
-# Ubuntu/Debian apt mirrors. In case of installation errors from any of the mirrors,
-# we switch to a backup.
-APT_MIRRORS="http://mirrors.163.com/ubuntu/,http://ftp.sjtu.edu.cn/ubuntu/"
+# Ubuntu/Debian apt mirrors. The mirros are used in their relative order - if the
+# first one failed, then switch to second one, etc. Make sure retry count is larger
+# than the list; otherwise not all of the mirrors will be used.
+APT_MIRRORS=${APT_MIRRORS:-"\
+http://mirrors.aliyun.com/ubuntu/,\
+http://mirrors.163.com/ubuntu/,\
+http://ftp.sjtu.edu.cn/ubuntu/"}
 
 
 # -----------------------------------------------------------------------------

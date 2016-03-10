@@ -86,10 +86,7 @@ function kube-up {
     KUBE_MASTER_IP="${MASTER_DOMAIN_NAME}"
   fi
 
-  if [[  -x "/opt/bin/kubectl" ]]; then
-    KUBECTL_PATH="/opt/bin/kubectl"
-  fi
-
+  find-kubectl-binary
   create-kubeconfig
 }
 

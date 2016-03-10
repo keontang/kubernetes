@@ -202,6 +202,7 @@ function kube-up {
   # assumed vars (see comments from create-kubeconfig). In particular, KUBECONFIG
   # and CONTEXT.
   source "${KUBE_ROOT}/cluster/common.sh"
+  find-kubectl-binary
   create-kubeconfig
 }
 

@@ -65,9 +65,6 @@ function kube-up {
   # Create certificates and credentials to secure cluster communication.
   create-certs-and-credentials
 
-  # Setup instances to facilitate provision, see caicloud/common.sh.
-  setup-instances
-
   # Concurrently install all binaries and packages for instances.
   local pids=""
   fetch-tarball-in-master && install-binaries-from-master & pids="$pids $!"
@@ -126,6 +123,11 @@ function kube-down {
   send-node-files
 
   cleanup-kubernetes
+}
+
+# Update a kubernetes cluster.
+function kube-push {
+	echo "TODO: kube-push" 1>&2
 }
 
 # Must ensure that the following ENV vars are set

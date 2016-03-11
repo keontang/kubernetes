@@ -79,7 +79,7 @@ function kube-add-nodes {
     "${MASTER_SSH_EXTERNAL}" \
     "sudo cp /etc/caicloud/kubelet-kubeconfig /etc/caicloud/kube-proxy-kubeconfig ~/kube"
 
-  send-node-startup-config-files \
+  send-node-files \
     "${MASTER_SSH_EXTERNAL}" \
     "${NODE_SSH_EXTERNAL}" \
     "${MASTER_IIP}" \

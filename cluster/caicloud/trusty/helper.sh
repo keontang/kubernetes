@@ -19,7 +19,7 @@
 # for ubuntu:trusty.
 #
 
-# Create master startup script and send all config files to master.
+# Create master scripts and config files, then send to master.
 #
 # Input:
 #   $1 Cloudprovider config file, leave empty if there isn't a config file.
@@ -43,7 +43,7 @@
 #     internal traffic. If not set, master internal IP address will be
 #     used.
 #   SERVICE_CLUSTER_IP_RANGE
-function send-master-startup-config-files {
+function send-master-files {
   # Randomly choose one daocloud accelerator.
   find-registry-mirror
 
@@ -53,13 +53,15 @@ function send-master-startup-config-files {
     IFS=':@' read -ra ssh_info <<< "${MASTER_SSH_EXTERNAL}"
     interface="${ssh_info[2]}"
   fi
-  send-master-startup-config-files-internal "${interface}" "${1:-}"
+  send-master-files-internal "${interface}" "${1:-}"
 }
 # Input:
 #   $1 Interface or IP address used by flanneld to send internal traffic.
 #   $2 Cloudprovider config file, leave empty if there isn't a config file.
-function send-master-startup-config-files-internal {
+function send-master-files-internal {
   mkdir -p ${KUBE_TEMP}/kube-master/kube/master
+
+  # Script to bring up master.
   (
     echo "#!/bin/bash"
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/config-components.sh"
@@ -128,6 +130,16 @@ function send-master-startup-config-files-internal {
   ) > ${KUBE_TEMP}/kube-master/kube/master-start.sh
   chmod a+x ${KUBE_TEMP}/kube-master/kube/master-start.sh
 
+  # Script to clean up master.
+  (
+    echo "#!/bin/bash"
+    echo "sudo service etcd stop"
+    echo "sudo rm -rf ~/kube /var/run/flannel /run/flannel"
+    echo "sudo rm -rf /kubernetes-master.etcd"
+    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd*"
+  ) > ${KUBE_TEMP}/kube-master/kube/master-cleanup.sh
+  chmod a+x ${KUBE_TEMP}/kube-master/kube/master-cleanup.sh
+
   local -r nginx_conf_file="${KUBE_ROOT}/cluster/caicloud/addons/nginx/nginx.conf.in"
   sed -e "s/{{ pillar\['master_secure_location'\] }}/${MASTER_SECURE_ADDRESS}/g" ${nginx_conf_file} > ${KUBE_TEMP}/nginx.conf
   cp -r ${KUBE_ROOT}/cluster/caicloud/trusty/master/init_conf \
@@ -154,7 +166,7 @@ function send-master-startup-config-files-internal {
   ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo mkdir -p /etc/caicloud && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/caicloud"
 }
 
-# Create node startup script and send all config files to nodes.
+# Create node scripts and config files, then send to nodes.
 #
 # Input:
 #   $1 Cloudprovider config file, leave empty if there isn't a config file.
@@ -173,7 +185,7 @@ function send-master-startup-config-files-internal {
 #   CAICLOUD_PROVIDER
 #   NODE_SSH_EXTERNAL
 #   NODE_INSTANCE_IDS
-function send-node-startup-config-files {
+function send-node-files {
   # Randomly choose one daocloud accelerator.
   find-registry-mirror
 
@@ -196,7 +208,7 @@ function send-node-startup-config-files {
     else
       hostname_override=""
     fi
-    send-node-startup-config-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" "${1:-}" & pids="${pids} $!"
+    send-node-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" "${1:-}" & pids="${pids} $!"
   done
   wait ${pids}
 }
@@ -205,11 +217,12 @@ function send-node-startup-config-files {
 #   $2 Interface or IP address used by flanneld to send internal traffic.
 #   $3 Hostname override
 #   $4 Cloudprovider config file, leave empty if there isn't a config file.
-function send-node-startup-config-files-internal {
+function send-node-files-internal {
   mkdir -p ${KUBE_TEMP}/kube-node${1}/kube/node
-  # Create node startup script. Note we assume the base image has necessary
-  # tools installed, e.g. docker, bridge-util, etc. The flow is similar to
-  # master startup script.
+
+  # Create node startup script. Note we assume the os has necessary tools
+  # installed, e.g. docker, bridge-util, etc. The flow is similar to master
+  # startup script.
   (
     echo "#!/bin/bash"
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/config-components.sh"
@@ -255,6 +268,15 @@ function send-node-startup-config-files-internal {
     echo "restart-docker ${REG_MIRROR} /etc/default/docker"
   ) > ${KUBE_TEMP}/kube-node${1}/kube/node-start.sh
   chmod a+x ${KUBE_TEMP}/kube-node${1}/kube/node-start.sh
+
+  # Script to clean up node.
+  (
+    echo "#!/bin/bash"
+    echo "sudo service flanneld stop"
+    echo "sudo rm -rf ~/kube /var/run/flannel /run/flannel"
+    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd*"
+  ) > ${KUBE_TEMP}/kube-node${1}/kube/node-cleanup.sh
+  chmod a+x ${KUBE_TEMP}/kube-node${1}/kube/node-cleanup.sh
 
   cp -r ${KUBE_ROOT}/cluster/caicloud/trusty/node/init_conf \
      ${KUBE_ROOT}/cluster/caicloud/trusty/node/init_scripts \

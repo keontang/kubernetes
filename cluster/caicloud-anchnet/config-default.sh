@@ -52,7 +52,7 @@ BUILD_TARBALL=${BUILD_TARBALL:-"N"}
 
 # The version of caicloud release to use if building release is not required.
 # E.g. v1.0.2, 2015-09-09-15-30-30, etc.
-CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.5.0"}
+CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.7.6"}
 
 # Project ID actually stands for anchnet sub-account. If PROJECT_ID and PROJECT_USER
 # are not set, all the subsequent anchnet calls will use main account in anchnet.
@@ -95,6 +95,9 @@ REPORT_KUBE_STATUS=${REPORT_KUBE_STATUS:-"N"}
 CLUSTER_ID=${CLUSTER_ID:-"32793e34-79d2-432b-ac17-708b61b80e6a"}
 CLUSTER_TOKEN=${CLUSTER_TOKEN:-"eSbsyAr2eDatXBxa"}
 CAICLOUD_UID=${CAICLOUD_UID:-"110ec58a-a0f2-4ac4-8393-c866d813b8d1"}
+
+# If we want to register master kubelet as a node.
+REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET:-"false"}
 
 #
 # Following params in the section should rarely change.

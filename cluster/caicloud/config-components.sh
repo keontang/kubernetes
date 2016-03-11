@@ -28,14 +28,11 @@
 # Note since we have only one master right now, the options here do not contain
 # clustering options, like initial-advertise-peer-urls, listen-peer-urls, etc.
 #
-# Input:
-#   $1 Instance name appearing to etcd. E.g. kubernetes-master, etc.
-#
 # Output:
 #   A file with etcd configs under ~/kube/configs/etcd.
 function create-etcd-opts {
   cat <<EOF > ~/kube/configs/etcd
-ETCD_OPTS="-name ${1} \
+ETCD_OPTS="-name 'kubernetes-master' \
 --listen-client-urls http://0.0.0.0:4001 \
 --advertise-client-urls http://127.0.0.1:4001"
 EOF
@@ -45,78 +42,64 @@ EOF
 # is configured to read certs, known tokens from "/etc/kubernetes" directory
 # on master host.
 #
-# Input:
-#   $1 Kubernetes cluster name.
-#   $2 Service IP range. All kubernetes services fall into the range.
-#   $3 Admmission control plugins enforced by apiserver.
-#   $4 API server address, typically master internal IP address, leave empty
-#      if the kubelet instance runs on master.
-#   $5 Cloudprovider name, leave empty if running without cloudprovider.
-#   $6 Cloudprovider config file fullpath, e.g. /etc/kubernetes/caicloud-config,
-#      leave empty if running without cloudprovider.
-#
 # Output:
 #   A file with apiserver opts under ~/kube/configs/kube-apiserver.
 #
 # Assumed vars:
+#   ADMISSION_CONTROL
+#   CAICLOUD_PROVIDER
+#   CLUSTER_NAME
 #   MASTER_INSECURE_ADDRESS
 #   MASTER_INSECURE_PORT
 #   MASTER_SECURE_PORT
+#   SERVICE_CLUSTER_IP_RANGE
 function create-kube-apiserver-opts {
   cat <<EOF | tr "\n" " " > ~/kube/configs/kube-apiserver
 KUBE_APISERVER_OPTS="--logtostderr=true \
 --insecure-bind-address=${MASTER_INSECURE_ADDRESS} \
 --insecure-port=${MASTER_INSECURE_PORT} \
---bind-address=${4} \
+--bind-address=${MASTER_SECURE_ADDRESS} \
 --secure-port=${MASTER_SECURE_PORT} \
 --cors-allowed-origins=.* \
 --etcd-servers=http://127.0.0.1:4001 \
---cluster-name=${1} \
---service-cluster-ip-range=${2} \
---admission-control=${3} \
+--cluster-name=${CLUSTER_NAME} \
+--service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE} \
+--admission-control=${ADMISSION_CONTROL} \
 --token-auth-file=/etc/kubernetes/known-tokens.csv \
 --basic-auth-file=/etc/kubernetes/basic-auth.csv \
 --client-ca-file=/etc/kubernetes/ca.crt \
 --tls-cert-file=/etc/kubernetes/master.crt \
 --tls-private-key-file=/etc/kubernetes/master.key
 EOF
-  if [[ "${5:-}" != "" ]]; then
-    echo -n " --cloud-provider=${5}" >> ~/kube/configs/kube-apiserver
-  fi
-  if [[ "${6:-}" != "" ]]; then
-    echo -n " --cloud-config=${6}" >> ~/kube/configs/kube-apiserver
+  if [[ "${CAICLOUD_PROVIDER:-}" != "" ]]; then
+    echo -n " --cloud-provider=${CAICLOUD_PROVIDER}" >> ~/kube/configs/kube-apiserver
+    echo -n " --cloud-config=/etc/kubernetes/cloud-config" >> ~/kube/configs/kube-apiserver
   fi
   echo -n '"' >> ~/kube/configs/kube-apiserver
 }
 
 # Create controller manager options. Controller manager is configured to read
-# private key, root ca from "/etc/kubernetes".
-#
-# Input:
-#   $1 Kubernetes cluster name.
-#   $2 Cloudprovider name, leave empty if running without cloudprovider.
-#   $3 Cloudprovider config file fullpath, e.g. /etc/kubernetes/caicloud-config,
-#      leave empty if running without cloudprovider.
+# private key, root CA from "/etc/kubernetes".
 #
 # Output:
 #   A file with controller manager configs under ~/kube/configs/kube-controller-manager.
 #
 # Assumed vars:
+#   CAICLOUD_PROVIDER
+#   CLUSTER_NAME
 #   MASTER_INSECURE_ADDRESS
 #   MASTER_INSECURE_PORT
 function create-kube-controller-manager-opts {
   cat <<EOF | tr "\n" " " > ~/kube/configs/kube-controller-manager
 KUBE_CONTROLLER_MANAGER_OPTS="--logtostderr=true \
 --master=${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} \
---cluster-name=${1} \
+--cluster-name=${CLUSTER_NAME} \
 --service-account-private-key-file=/etc/kubernetes/master.key \
 --root-ca-file=/etc/kubernetes/ca.crt
 EOF
-  if [[ "${2:-}" != "" ]]; then
-    echo -n " --cloud-provider=${2}" >> ~/kube/configs/kube-controller-manager
-  fi
-  if [[ "${3:-}" != "" ]]; then
-    echo -n " --cloud-config=${3}" >> ~/kube/configs/kube-controller-manager
+  if [[ "${CAICLOUD_PROVIDER:-}" != "" ]]; then
+    echo -n " --cloud-provider=${CAICLOUD_PROVIDER}" >> ~/kube/configs/kube-controller-manager
+    echo -n " --cloud-config=/etc/kubernetes/cloud-config" >> ~/kube/configs/kube-controller-manager
   fi
   echo -n '"' >> ~/kube/configs/kube-controller-manager
 }
@@ -139,52 +122,48 @@ EOF
 # Create kubelet options, used to start kubelet on master or node.
 #
 # Input:
-#   $1 The IP address for kubelet to serve on.
-#   $2 Cluster DNS IP address, should fall into service IP range.
-#   $3 Cluster search domain, e.g. cluster.local
-#   $4 Pod infra image, i.e. the pause image. Default pause image comes from
-#      gcr, which is sometimes blocked by GFW.
-#   $5 Register the kubelet to master or not.
-#   $6 Hostname override - override hostname used in kubelet, leave empty if
-#      hostname override is unnecessary.
-#   $7 API server address, typically master internal IP address, leave empty
-#      if the kubelet instance runs on master.
-#   $8 Cloudprovider name, leave empty if running without cloudprovider.
-#   $9 Cloudprovider config file fullpath, e.g. /etc/kubernetes/anchnet-config,
-#      leave empty if running without cloudprovider.
+#   $1 Whether running on "master" or "node".
+#   $2 Hostname override - override kubelet node hostname, leave empty if unnecessary.
 #
 # Output:
 #   A file with scheduler configs under ~/kube/configs/kubelet.
 #
 # Assumed vars:
+#   DNS_SERVER_IP
+#   DNS_DOMAIN
+#   MASTER_IIP
 #   MASTER_SECURE_PORT
+#   POD_INFRA_CONTAINER
+#   KUBELET_IP_ADDRESS
 #   KUBELET_PORT
+#   REGISTER_MASTER_KUBELET
 function create-kubelet-opts {
   cat <<EOF | tr "\n" " " > ~/kube/configs/kubelet
 KUBELET_OPTS="--logtostderr=true \
---address=${1} \
---cluster-dns=${2} \
---cluster-domain=${3} \
---pod-infra-container-image=${4} \
---register-node=${5} \
+--address=${KUBELET_IP_ADDRESS} \
+--cluster-dns=${DNS_SERVER_IP} \
+--cluster-domain=${DNS_DOMAIN} \
+--pod-infra-container-image=${POD_INFRA_CONTAINER} \
 --port=${KUBELET_PORT} \
 --system-container=/system \
 --cgroup-root=/ \
 --config=/etc/kubernetes/manifest \
 --kubeconfig=/etc/kubernetes/kubelet-kubeconfig
 EOF
-  if [[ "${6:-}" != "" ]]; then
-    local hostname=$(echo $6 | tr '[:upper:]' '[:lower:]') # lowercase input value
+  # If this is master and we want to register master as a node, set --api-servers flag.
+  # Register to node defaults to true if --api-servers is set.
+  if [[ "${1:-}" == "master" && "${REGISTER_MASTER_KUBELET}" == "true" ]]; then
+    echo -n " --api-servers=http://${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} " >> ~/kube/configs/kubelet
+  elif [[ "${1:-}" == "node" ]]; then
+    echo -n " --api-servers=https://${MASTER_IIP}:${MASTER_SECURE_PORT} " >> ~/kube/configs/kubelet
+  fi
+  if [[ "${2:-}" != "" ]]; then
+    local hostname=$(echo ${2} | tr '[:upper:]' '[:lower:]') # lowercase input value
     echo -n " --hostname-override=${hostname} " >> ~/kube/configs/kubelet
   fi
-  if [[ "${7:-}" != "" ]]; then
-    echo -n " --api-servers=https://${7}:${MASTER_SECURE_PORT} " >> ~/kube/configs/kubelet
-  fi
-  if [[ "${8:-}" != "" ]]; then
-    echo -n " --cloud-provider=${8} " >> ~/kube/configs/kubelet
-  fi
-  if [[ "${9:-}" != "" ]]; then
-    echo -n " --cloud-config=${9} " >> ~/kube/configs/kubelet
+  if [[ "${CAICLOUD_PROVIDER:-}" != "" ]]; then
+    echo -n " --cloud-provider=${CAICLOUD_PROVIDER} " >> ~/kube/configs/kubelet
+    echo -n " --cloud-config=/etc/kubernetes/cloud-config " >> ~/kube/configs/kubelet
   fi
   echo -n '"' >> ~/kube/configs/kubelet
 }
@@ -193,8 +172,6 @@ EOF
 #
 # Input:
 #   $1 Whether running on "master" or "node".
-#   $2 If running on node, this is the API server address, typically
-#      master internal IP address.
 #
 # Output:
 #   A file with scheduler configs under ~/kube/configs/kube-proxy.
@@ -202,6 +179,7 @@ EOF
 # Assumed vars:
 #   MASTER_INSECURE_ADDRESS
 #   MASTER_SECURE_PORT
+#   MASTER_IIP
 function create-kube-proxy-opts {
   if [[ "${1:-}" == "master" ]]; then
     cat <<EOF > ~/kube/configs/kube-proxy
@@ -212,7 +190,7 @@ EOF
   else
     cat <<EOF > ~/kube/configs/kube-proxy
 KUBE_PROXY_OPTS="--logtostderr=true \
---master=https://${2}:${MASTER_SECURE_PORT}
+--master=https://${MASTER_IIP}:${MASTER_SECURE_PORT}
 --kubeconfig=/etc/kubernetes/kube-proxy-kubeconfig"
 EOF
   fi
@@ -221,25 +199,32 @@ EOF
 # Create flanneld options.
 #
 # Input:
-#   $1 Interface or IP address used by flanneld to send internal traffic.
-#   $2 etcd service endpoint IP address, used for flanneld to read configs.
-#      For master, this is 127.0.0.1; for node, this is master internal IP
-#      address.
+#   $1 Whether running on "master" or "node".
+#
+# Assumed vars:
+#   MASTER_IIP
 function create-flanneld-opts {
-  cat <<EOF > ~/kube/configs/flanneld
-FLANNEL_OPTS="--iface=${1} --etcd-endpoints=http://${2}:4001"
+  # For master, etcd endpoint is 127.0.0.1; for node, it's master internal IP address.
+  if [[ "${1:-}" == "master" ]]; then
+    cat <<EOF > ~/kube/configs/flanneld
+FLANNEL_OPTS="--iface=${FLANNEL_INTERFACE} --etcd-endpoints=http://127.0.0.1:4001"
 EOF
+  else
+    cat <<EOF > ~/kube/configs/flanneld
+FLANNEL_OPTS="--iface=${FLANNEL_INTERFACE} --etcd-endpoints=http://${MASTER_IIP}:4001"
+EOF
+  fi
 }
 
 # Config flanneld options in etcd. The method is called from master, and
 # master should have etcdctl available.
 #
-# Input:
-#   $1 Flannel overlay network CIDR
-#   $2 Flannel subnet length
-#   $3 Flannel subnet min
-#   $4 Flannel subnet max
-#   $5 Flannel type
+# Assumed vars:
+#   FLANNEL_NET
+#   FLANNEL_SUBNET_LEN
+#   FLANNEL_SUBNET_MIN
+#   FLANNEL_SUBNET_MAX
+#   FLANNEL_TYPE
 function config-etcd-flanneld {
   attempt=0
   while true; do
@@ -254,7 +239,7 @@ function config-etcd-flanneld {
         echo "timeout waiting for network config"
         exit 2
       fi
-      /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"$1\", \"SubnetLen\":$2, \"SubnetMin\":\"$3\", \"SubnetMax\":\"$4\", \"Backend\": {\"Type\": \"$5\"}}"
+      /opt/bin/etcdctl mk "/coreos.com/network/config" "{\"Network\":\"${FLANNEL_NET}\", \"SubnetLen\":${FLANNEL_SUBNET_LEN}, \"SubnetMin\":\"${FLANNEL_SUBNET_MIN}\", \"SubnetMax\":\"${FLANNEL_SUBNET_MAX}\", \"Backend\": {\"Type\": \"$FLANNEL_TYPE\"}}"
       attempt=$((attempt+1))
       sleep 3
     fi
@@ -264,8 +249,10 @@ function config-etcd-flanneld {
 # Configure docker network settings to use flannel overlay network.
 #
 # Input:
-#   $1 Registry mirror address.
-#   $2 File to write docker config, e.g. /etc/default/docker, /etc/sysconfig/docker.
+#   $1 File to write docker config, e.g. /etc/default/docker, /etc/sysconfig/docker.
+#
+# Assumed vars:
+#   REGISTRY_MIRROR
 function restart-docker {
   # Wait for /run/flannel/subnet.env to be ready.
   attempt=0
@@ -296,6 +283,7 @@ function restart-docker {
 
   source /run/flannel/subnet.env
   echo DOCKER_OPTS=\"-H tcp://127.0.0.1:4243 -H unix:///var/run/docker.sock \
-       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} --registry-mirror=$1 \" > $2
+       --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} \
+       --registry-mirror=${REGISTRY_MIRROR} \" > ${1}
   sudo service docker start
 }

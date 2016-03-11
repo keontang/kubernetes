@@ -21,9 +21,6 @@
 
 # Create master scripts and config files, then send to master.
 #
-# Input:
-#   $1 Cloudprovider config file, leave empty if there isn't a config file.
-#
 # Assumed vars:
 #   KUBE_UP
 #   KUBE_TEMP
@@ -39,50 +36,65 @@
 #   POD_INFRA_CONTAINER
 #   KUBERNETES_PROVIDER
 #   MASTER_SSH_EXTERNAL
-#   PRIVATE_SDN_INTERFACE: Used as the interface for flanneld to send
-#     internal traffic. If not set, master internal IP address will be
-#     used.
+#   PRIVATE_SDN_INTERFACE
 #   SERVICE_CLUSTER_IP_RANGE
 function send-master-files {
   # Randomly choose one daocloud accelerator.
   find-registry-mirror
 
+  # PRIVATE_SDN_INTERFACE is used as the interface for flanneld to send
+  # internal traffic. If not set, master internal IP address will be used.
   if [[ "${PRIVATE_SDN_INTERFACE:-}" != "" ]]; then
     interface="${PRIVATE_SDN_INTERFACE}"
   else
     IFS=':@' read -ra ssh_info <<< "${MASTER_SSH_EXTERNAL}"
     interface="${ssh_info[2]}"
   fi
-  send-master-files-internal "${interface}" "${1:-}"
-}
-# Input:
-#   $1 Interface or IP address used by flanneld to send internal traffic.
-#   $2 Cloudprovider config file, leave empty if there isn't a config file.
-function send-master-files-internal {
+
+  # All files will be stored under this directory.
   mkdir -p ${KUBE_TEMP}/kube-master/kube/master
 
   # Script to bring up master.
   (
     echo "#!/bin/bash"
+    echo ""
+    # Pass environment variables to startup script as configuration.
+    echo "ADMISSION_CONTROL=${ADMISSION_CONTROL}"
+    echo "CAICLOUD_PROVIDER=${CAICLOUD_PROVIDER}"
+    echo "CLUSTER_NAME=${CLUSTER_NAME}"
+    echo "DNS_DOMAIN=${DNS_DOMAIN}"
+    echo "DNS_SERVER_IP=${DNS_SERVER_IP}"
+    echo "FLANNEL_INTERFACE=${interface}"
+    echo "FLANNEL_NET=${FLANNEL_NET}"
+    echo "FLANNEL_SUBNET_LEN=${FLANNEL_SUBNET_LEN}"
+    echo "FLANNEL_SUBNET_MIN=${FLANNEL_SUBNET_MIN}"
+    echo "FLANNEL_SUBNET_MAX=${FLANNEL_SUBNET_MAX}"
+    echo "FLANNEL_TYPE=${FLANNEL_TYPE}"
+    echo "KUBELET_IP_ADDRESS=${KUBELET_IP_ADDRESS}"
+    echo "MASTER_SECURE_ADDRESS=${MASTER_SECURE_ADDRESS}"
+    echo "MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS}"
+    echo "MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT}"
+    echo "MASTER_SSH_INFO=${MASTER_SSH_INFO:-}"
+    echo "NODE_SSH_INFO=${NODE_SSH_INFO:-}"
+    echo "POD_INFRA_CONTAINER=${POD_INFRA_CONTAINER}"
+    echo "REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET}"
+    echo "REGISTRY_MIRROR=${REGISTRY_MIRROR}"
+    echo "SERVICE_CLUSTER_IP_RANGE=${SERVICE_CLUSTER_IP_RANGE}"
+    echo "USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT}"
+    echo ""
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/config-components.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/${KUBERNETES_PROVIDER}/config-default.sh"
     echo ""
     echo "mkdir -p ~/kube/configs"
     # The following create-*-opts functions create component options (flags).
     # The flag options are stored under ~/kube/configs.
-    if [[ "${CAICLOUD_PROVIDER:-}" != "" ]]; then
-      echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${MASTER_SECURE_ADDRESS} ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
-      echo "create-kube-controller-manager-opts ${CLUSTER_NAME} ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} false \"\" \"\" ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
-    else
-      echo "create-kube-apiserver-opts ${CLUSTER_NAME} ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${MASTER_SECURE_ADDRESS}"
-      echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} false \"\" \"\" \"\""
-    fi
+    echo "create-etcd-opts"
+    echo "create-kube-apiserver-opts"
     echo "create-kube-scheduler-opts"
+    echo "create-kube-controller-manager-opts"
+    echo "create-kubelet-opts    'master'"
     echo "create-kube-proxy-opts 'master'"
-    echo "create-etcd-opts kubernetes-master"
-    echo "create-flanneld-opts ${1} 127.0.0.1"
+    echo "create-flanneld-opts   'master'"
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"
     echo "sudo mkdir -p /etc/kubernetes"
@@ -124,9 +136,9 @@ function send-master-files-internal {
     # start upon etcd start.
     echo "sudo service etcd start"
     # After starting etcd, configure flannel options.
-    echo "config-etcd-flanneld ${FLANNEL_NET}" "${FLANNEL_SUBNET_LEN}" "${FLANNEL_SUBNET_MIN}" "${FLANNEL_SUBNET_MAX}" "${FLANNEL_TYPE}"
+    echo "config-etcd-flanneld"
     # After starting flannel, configure docker network to use flannel overlay.
-    echo "restart-docker ${REG_MIRROR} /etc/default/docker"
+    echo "restart-docker /etc/default/docker"
   ) > ${KUBE_TEMP}/kube-master/kube/master-start.sh
   chmod a+x ${KUBE_TEMP}/kube-master/kube/master-start.sh
 
@@ -159,17 +171,15 @@ function send-master-files-internal {
        ${KUBE_TEMP}/kube-proxy-kubeconfig \
        ${KUBE_TEMP}/kube-master/kube
   fi
-  if [[ "${2:-}" != "" ]]; then
-    cp ${2} ${KUBE_TEMP}/kube-master/kube/cloud-config
+  if [[ "${CAICLOUD_PROVIDER:-}" != "" ]]; then
+    cp ${KUBE_TEMP}/cloud-config ${KUBE_TEMP}/kube-master/kube/cloud-config
   fi
   scp-to-instance-expect "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/kube-master/kube" "~"
-  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo mkdir -p /etc/caicloud && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/caicloud"
+  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "\
+sudo mkdir -p /etc/caicloud && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-proxy-kubeconfig /etc/caicloud"
 }
 
 # Create node scripts and config files, then send to nodes.
-#
-# Input:
-#   $1 Cloudprovider config file, leave empty if there isn't a config file.
 #
 # Assumed vars:
 #   KUBE_TEMP
@@ -177,10 +187,9 @@ function send-master-files-internal {
 #   DNS_DOMAIN
 #   DNS_SERVER_IP
 #   KUBELET_IP_ADDRESS
-#   MASTER_IIP
 #   PRIVATE_SDN_INTERFACE
 #   POD_INFRA_CONTAINER
-#   REG_MIRROR
+#   REGISTRY_MIRROR
 #   MASTER_SSH_EXTERNAL
 #   CAICLOUD_PROVIDER
 #   NODE_SSH_EXTERNAL
@@ -208,7 +217,7 @@ function send-node-files {
     else
       hostname_override=""
     fi
-    send-node-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" "${1:-}" & pids="${pids} $!"
+    send-node-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" & pids="${pids} $!"
   done
   wait ${pids}
 }
@@ -216,7 +225,6 @@ function send-node-files {
 #   $1 Node ssh info, e.g. "root:password@43.254.54.59"
 #   $2 Interface or IP address used by flanneld to send internal traffic.
 #   $3 Hostname override
-#   $4 Cloudprovider config file, leave empty if there isn't a config file.
 function send-node-files-internal {
   mkdir -p ${KUBE_TEMP}/kube-node${1}/kube/node
 
@@ -225,18 +233,34 @@ function send-node-files-internal {
   # startup script.
   (
     echo "#!/bin/bash"
+    echo ""
+    # Pass environment variables to startup script as configuration.
+    echo "ADMISSION_CONTROL=${ADMISSION_CONTROL}"
+    echo "CAICLOUD_PROVIDER=${CAICLOUD_PROVIDER}"
+    echo "CLUSTER_NAME=${CLUSTER_NAME}"
+    echo "DNS_DOMAIN=${DNS_DOMAIN}"
+    echo "DNS_SERVER_IP=${DNS_SERVER_IP}"
+    echo "FLANNEL_INTERFACE=${2}"
+    echo "KUBELET_IP_ADDRESS=${KUBELET_IP_ADDRESS}"
+    echo "MASTER_SECURE_ADDRESS=${MASTER_SECURE_ADDRESS}"
+    echo "MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS}"
+    echo "MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT}"
+    echo "MASTER_SSH_INFO=${MASTER_SSH_INFO:-}"
+    echo "NODE_SSH_INFO=${NODE_SSH_INFO:-}"
+    echo "POD_INFRA_CONTAINER=${POD_INFRA_CONTAINER}"
+    echo "REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET}"
+    echo "REGISTRY_MIRROR=${REGISTRY_MIRROR}"
+    echo "SERVICE_CLUSTER_IP_RANGE=${SERVICE_CLUSTER_IP_RANGE}"
+    echo "USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT}"
+    echo ""
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/config-components.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/${KUBERNETES_PROVIDER}/config-default.sh"
     echo ""
     echo "mkdir -p ~/kube/configs"
     # Create component options.
-    if [[ "${CAICLOUD_PROVIDER}" != "" ]]; then
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true \"${3:-}\" ${MASTER_IIP} ${CAICLOUD_PROVIDER} /etc/kubernetes/cloud-config"
-    else
-      echo "create-kubelet-opts ${KUBELET_IP_ADDRESS} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER} true \"${3:-}\" ${MASTER_IIP}"
-    fi
-    echo "create-kube-proxy-opts 'node' ${MASTER_IIP}"
-    echo "create-flanneld-opts ${2} ${MASTER_IIP}"
+    echo "create-kubelet-opts    'node' ${3}"
+    echo "create-kube-proxy-opts 'node'"
+    echo "create-flanneld-opts   'node'"
     # Create the system directories used to hold the final data.
     echo "sudo mkdir -p /opt/bin"
     echo "sudo mkdir -p /etc/kubernetes"
@@ -265,7 +289,7 @@ function send-node-files-internal {
     # start upon flannel start.
     echo "sudo service flanneld start"
     # After starting flannel, configure docker network to use flannel overlay.
-    echo "restart-docker ${REG_MIRROR} /etc/default/docker"
+    echo "restart-docker /etc/default/docker"
   ) > ${KUBE_TEMP}/kube-node${1}/kube/node-start.sh
   chmod a+x ${KUBE_TEMP}/kube-node${1}/kube/node-start.sh
 
@@ -285,8 +309,9 @@ function send-node-files-internal {
      ${KUBE_ROOT}/cluster/caicloud/tools/nsenter \
      ${KUBE_ROOT}/cluster/caicloud/tools/docker-config.json \
      ${KUBE_TEMP}/kube-node${1}/kube
-  if [[ "${4:-}" != "" ]]; then
-    cp ${4} ${KUBE_TEMP}/kube-node${1}/kube/cloud-config
+
+  if [[ "${CAICLOUD_PROVIDER:-}" != "" ]]; then
+    cp ${KUBE_TEMP}/cloud-config ${KUBE_TEMP}/kube-node${1}/kube/cloud-config
   fi
   scp-to-instance-expect "${1}" "${KUBE_TEMP}/kube-node${1}/kube" "~"
 

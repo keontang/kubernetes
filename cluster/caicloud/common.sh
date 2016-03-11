@@ -384,8 +384,7 @@ function cleanup-kubernetes {
   ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
     "sudo ./kube/master-cleanup.sh" & pids="${pids} $!"
   for ssh_info in "${node_ssh_info[@]}"; do
-    ssh-to-instance-expect "${ssh_info}" \
-      "sudo ./kube/node-cleanup.sh" & pids="${pids} $!"
+    ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-cleanup.sh" & pids="${pids} $!"
   done
   wait ${pids}
 }
@@ -399,9 +398,7 @@ function start-node-kubernetes {
   local pids=""
   IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   for ssh_info in "${node_ssh_info[@]}"; do
-    ssh-to-instance-expect "${ssh_info}" \
-      "sudo USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT} \
-            ./kube/node-start.sh" & pids="${pids} $!"
+    ssh-to-instance-expect "${ssh_info}" "sudo ./kube/node-start.sh" & pids="${pids} $!"
   done
   wait ${pids}
 }
@@ -1057,11 +1054,11 @@ function wait-pids {
 #   DAOCLOUD_ACCELERATORS
 #
 # Vars set:
-#   REG_MIRROR
+#   REGISTRY_MIRROR
 function find-registry-mirror {
   IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATORS}"
-  REG_MIRROR=${reg_mirror_arr[$(( ${RANDOM} % ${#reg_mirror_arr[*]} ))]}
-  log "Use daocloud registry mirror ${REG_MIRROR}"
+  REGISTRY_MIRROR=${reg_mirror_arr[$(( ${RANDOM} % ${#reg_mirror_arr[*]} ))]}
+  log "Use daocloud registry mirror ${REGISTRY_MIRROR}"
 }
 
 # Build all binaries using docker. Note there are some restrictions we need

@@ -109,8 +109,8 @@ function kube-up {
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
     # For dev, set to existing instance IDs for master and nodes. Other variables
     # will be calculated based on the IDs.
-    MASTER_INSTANCE_ID="i-MDV9B512"
-    NODE_INSTANCE_IDS="i-OBM6FXE3,i-IGY0O3YZ"
+    MASTER_INSTANCE_ID="i-LD6T7OD7"
+    NODE_INSTANCE_IDS="i-ETN6DSZ4,i-5XRV5UH2"
     # To mimic actual kubeup process, we create vars to match create-master-instance
     # create-node-instances, etc. We also override NUM_MINIONS.
     create-dev-variables
@@ -180,8 +180,8 @@ function kube-up {
   create-anchnet-config
 
   # Send configurations to master/nodes instances.
-  send-master-files "${KUBE_TEMP}/anchnet-config"
-  send-node-files "${KUBE_TEMP}/anchnet-config"
+  send-master-files
+  send-node-files
 
   # Now start kubernetes.
   start-kubernetes
@@ -239,8 +239,8 @@ function kube-push {
 
   # PRIVATE_SDN_INTERFACE is a hack, just like in kube-up - there is no easy
   # to find which interface serves private SDN.
-  # NUM_RUNNING_MINIONS is ugly, we have to swap it with NUM_MINIONS to make
-  # kube-push work. TODO: Fix it.
+  # TODO: NUM_RUNNING_MINIONS is ugly, we have to swap it with NUM_MINIONS to make
+  # kube-push work.
   PRIVATE_SDN_INTERFACE="eth1"
   NUM_MINIONS=${NUM_RUNNING_MINIONS}
   NUM_RUNNING_MINIONS=0
@@ -276,8 +276,8 @@ function kube-push {
   create-anchnet-config
 
   # Send configurations to master/nodes instances.
-  send-master-startup-config-files "${KUBE_TEMP}/anchnet-config"
-  send-node-startup-config-files "${KUBE_TEMP}/anchnet-config"
+  send-master-files
+  send-node-files
 
   # Now start kubernetes.
   start-kubernetes
@@ -1010,72 +1010,6 @@ netmask ${3}
 EOF
 }
 
-# Create a master upgrade script used to upgrade an existing master.
-#
-# Input:
-#   $1 File to store the script.
-#
-# Assumed vars:
-#   ADMISSION_CONTROL
-#   CLUSTER_NAME
-#   FLANNEL_NET
-#   PRIVATE_SDN_INTERFACE
-#   SERVICE_CLUSTER_IP_RANGE
-function create-master-upgrade-script {
-  (
-    echo "#!/bin/bash"
-    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
-    echo ""
-    echo "create-etcd-opts kubernetes-master"
-    echo "create-kube-apiserver-opts ${SERVICE_CLUSTER_IP_RANGE} ${ADMISSION_CONTROL} ${CLUSTER_NAME}"
-    echo "create-kube-controller-manager-opts ${CLUSTER_NAME}"
-    echo "create-kube-scheduler-opts"
-    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} 127.0.0.1"
-    echo "sudo service etcd stop"
-    echo "sudo cp ~/kube/master/* /opt/bin"
-    echo "sudo cp ~/kube/default/* /etc/default"
-    echo "sudo cp ~/kube/init_conf/* /etc/init/"
-    echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-    echo "sudo service etcd start"
-  ) > "$1"
-  chmod a+x "$1"
-}
-
-# Create a node upgrade script used to upgrade an existing node.
-#
-# Input:
-#   $1 File to store the script.
-#   $2 Instance id of the node.
-#
-# Assumed vars:
-#   DNS_DOMAIN
-#   DNS_SERVER_IP
-#   KUBELET_IP_ADDRESS
-#   MASTER_IIP
-#   PRIVATE_SDN_INTERFACE
-#   POD_INFRA_CONTAINER
-function create-node-upgrade-script {
-  (
-    echo "#!/bin/bash"
-    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-default.sh"
-    grep -v "^#" "${KUBE_ROOT}/cluster/anchnet/config-components.sh"
-    echo ""
-    echo "create-kubelet-opts ${2} ${KUBELET_IP_ADDRESS} ${MASTER_IIP} ${DNS_SERVER_IP} ${DNS_DOMAIN} ${POD_INFRA_CONTAINER}"
-    echo "create-kube-proxy-opts"
-    echo "create-flanneld-opts ${PRIVATE_SDN_INTERFACE} ${MASTER_IIP}"
-    echo "sudo service flanneld stop"
-    echo "mv ~/kube/fluentd-es.yaml ~/kube/manifest/fluentd-es.yaml 1>/dev/null 2>&1"
-    echo "sudo cp ~/kube/node/* /opt/bin"
-    echo "sudo cp ~/kube/default/* /etc/default"
-    echo "sudo cp ~/kube/init_conf/* /etc/init/"
-    echo "sudo cp ~/kube/init_scripts/* /etc/init.d/"
-    echo "sudo cp ~/kube/manifest/fluentd-es.yaml /etc/kubernetes/manifest"
-    echo "sudo service flanneld start"
-  ) > "$1"
-  chmod a+x "$1"
-}
-
 # Add project_id to cloud config.
 #
 # Assumed vars:
@@ -1083,10 +1017,10 @@ function create-node-upgrade-script {
 #   ANCHNET_CONFIG_FILE
 #
 # Output:
-#   ${KUBE_TEMP}/anchnet-config
+#   ${KUBE_TEMP}/cloud-config
 function create-anchnet-config {
-  cp "${ANCHNET_CONFIG_FILE}" ${KUBE_TEMP}/anchnet-config
-  json_add_field ${KUBE_TEMP}/anchnet-config "projectid" "${PROJECT_ID}"
+  cp "${ANCHNET_CONFIG_FILE}" ${KUBE_TEMP}/cloud-config
+  json_add_field ${KUBE_TEMP}/cloud-config "projectid" "${PROJECT_ID}"
 }
 
 # Setup anchnet hosts, including hostname, interconnection and private SDN network.

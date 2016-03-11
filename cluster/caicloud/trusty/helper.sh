@@ -334,7 +334,7 @@ EOL
 sudo sh -c 'cat > /etc/apt/sources.list.d/docker.list' << EOL
 deb \[arch=amd64\] http://get.caicloud.io/docker ubuntu-trusty main
 EOL
-sudo apt-get update && \
+sudo apt-get update
 sudo apt-get install --allow-unauthenticated -y docker-engine=${DOCKER_VERSION}-0~trusty && \
 sudo apt-get install bridge-utils socat || \
 echo 'Command failed installing packages on remote host ${ssh_info[2]}'"

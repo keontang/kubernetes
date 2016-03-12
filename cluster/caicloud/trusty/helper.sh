@@ -39,9 +39,6 @@
 #   PRIVATE_SDN_INTERFACE
 #   SERVICE_CLUSTER_IP_RANGE
 function send-master-files {
-  # Randomly choose one daocloud accelerator.
-  find-registry-mirror
-
   # PRIVATE_SDN_INTERFACE is used as the interface for flanneld to send
   # internal traffic. If not set, master internal IP address will be used.
   if [[ "${PRIVATE_SDN_INTERFACE:-}" != "" ]]; then
@@ -195,9 +192,6 @@ sudo mkdir -p /etc/caicloud && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-pro
 #   NODE_SSH_EXTERNAL
 #   NODE_INSTANCE_IDS
 function send-node-files {
-  # Randomly choose one daocloud accelerator.
-  find-registry-mirror
-
   # Get array of hostnames to override if necessary.
   if [[ "${NODE_INSTANCE_IDS:-}" != "" ]]; then
     IFS=',' read -ra hostname_arr <<< "${NODE_INSTANCE_IDS}"

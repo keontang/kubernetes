@@ -53,18 +53,20 @@ function kube-add-nodes {
   # Add newly created nodes to sdn network.
   join-sdn-network
 
-  # Add newly created nodes to security group
+  # Add newly created nodes to security group.
   join-node-securitygroup
 
-  # Set NODE_IIPS for newly created nodes
+  # Set NODE_IIPS for newly created nodes.
+  # TODO: The way internal IP is calculated is pretty static, and will not work
+  # properly in case of node join/leave.
   create-node-internal-ips-variable
 
-  # Set MASTER_INSTANCE_ID
+  # Set MASTER_INSTANCE_ID.
   create-resource-variables
 
   trap-add 'clean-up-working-dir "${MASTER_SSH_EXTERNAL}" "${NODE_SSH_EXTERNAL}"' EXIT
 
-  # Setup network
+  # Setup network.
   setup-node-network
 
   # We have the binaries stored at master during kube-up, so we just fetch
@@ -79,15 +81,8 @@ function kube-add-nodes {
     "${MASTER_SSH_EXTERNAL}" \
     "sudo cp /etc/caicloud/kubelet-kubeconfig /etc/caicloud/kube-proxy-kubeconfig ~/kube"
 
-  send-node-files \
-    "${MASTER_SSH_EXTERNAL}" \
-    "${NODE_SSH_EXTERNAL}" \
-    "${MASTER_IIP}" \
-    "${PRIVATE_SDN_INTERFACE}" \
-    "${NODE_INSTANCE_IDS}" \
-    "anchnet" \
-    "${ANCHNET_CONFIG_FILE}"
-
+  # Send node config files and start the node.
+  send-node-files
   start-node-kubernetes
 }
 

@@ -79,16 +79,8 @@ KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date
 # URL path of the server hosting caicloud kubernetes release.
 CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}
 
-# Daocloud registry accelerator. Before implementing our own registry (or registry
-# mirror), use this accelerator to make pulling image faster. The variable is a
-# comma separated list of mirror address, we randomly choose one of them.
-#   http://47178212.m.daocloud.io -> deyuan.deng@gmail.com
-#   http://dd69bd44.m.daocloud.io -> 729581241@qq.com
-#   http://9482cd22.m.daocloud.io -> dalvikbogus@gmail.com
-#   http://4a682d3b.m.daocloud.io -> 492886102@qq.com
-DAOCLOUD_ACCELERATORS=${DAOCLOUD_ACCELERATORS:-"\
-http://47178212.m.daocloud.io,http://dd69bd44.m.daocloud.io,\
-http://9482cd22.m.daocloud.io,http://4a682d3b.m.daocloud.io"}
+# Caicloud registry mirror.
+REGISTRY_MIRROR=${REGISTRY_MIRROR:-"https://docker-mirror.caicloud.io"}
 
 # Ubuntu/Debian apt mirrors. The mirros are used in their relative order - if the
 # first one failed, then switch to second one, etc. Make sure retry count is larger

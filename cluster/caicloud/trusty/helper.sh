@@ -357,7 +357,6 @@ EOF
 # Assumed vars:
 #   INSTANCE_SSH_EXTERNAL
 #   APT_MIRRORS
-#   KUBE_INSTANCE_LOGDIR
 function install-packages {
   APT_MIRROR_INDEX=0            # Used for choosing an apt mirror.
   command-exec-and-retry "install-packages-internal" 2 "${1:-}"

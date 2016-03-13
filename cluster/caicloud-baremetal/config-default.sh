@@ -20,7 +20,7 @@
 # Linux distribution of underline machines.
 KUBE_DISTRO=${KUBE_DISTRO:-"trusty"}
 
-# ssh information for master.
+# ssh information for master (comma separated string).
 MASTER_SSH_INFO=${MASTER_SSH_INFO:-"vagrant:vagrant@192.168.205.10"}
 
 # ssh information for nodes (comma separated string).
@@ -69,12 +69,6 @@ REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET:-"true"}
 #
 # Following params in the section should rarely change.
 #
-
-# Directory for holding kubeup instance specific logs. During kube-up, instances
-# will be installed/provisioned concurrently; if we just send logs to stdout,
-# stdout will mess up. Therefore, we specify a directory to hold instance specific
-# logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
-KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/kubeup-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
 
 # URL path of the server hosting caicloud kubernetes release.
 CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}

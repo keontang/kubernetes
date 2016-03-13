@@ -1048,19 +1048,6 @@ function wait-pids {
   fi
 }
 
-# Randomly choose one daocloud accelerator.
-#
-# Assumed vars:
-#   DAOCLOUD_ACCELERATORS
-#
-# Vars set:
-#   REGISTRY_MIRROR
-function find-registry-mirror {
-  IFS=',' read -ra reg_mirror_arr <<< "${DAOCLOUD_ACCELERATORS}"
-  REGISTRY_MIRROR=${reg_mirror_arr[$(( ${RANDOM} % ${#reg_mirror_arr[*]} ))]}
-  log "Use daocloud registry mirror ${REGISTRY_MIRROR}"
-}
-
 # Build all binaries using docker. Note there are some restrictions we need
 # to fix if the provision host is running in mainland China; it is fixed in
 # k8s-replace.sh.

@@ -553,7 +553,6 @@ sudo chmod go-rwx /etc/caicloud"
 # to master without using password.
 #
 # Assumed vars:
-#   KUBE_INSTANCE_LOGDIR
 #   CAICLOUD_TARBALL_URL
 #   MASTER_SSH_EXTERNAL *
 #   NODE_SSH_EXTERNAL *
@@ -830,16 +829,6 @@ function ensure-ssh-agent {
     echo "Could not find or add an SSH identity."
     echo "Please start ssh-agent, add your identity, and retry."
     exit 1
-  fi
-}
-
-# Make sure log directory exists.
-#
-# Assumed vars
-#   KUBE_INSTANCE_LOGDIR
-function ensure-log-dir {
-  if [[ ! -z ${KUBE_INSTANCE_LOGDIR-} ]]; then
-    mkdir -p ${KUBE_INSTANCE_LOGDIR}
   fi
 }
 

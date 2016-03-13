@@ -104,20 +104,12 @@ used in kube-up. For a full list of options, consult the file.
 * `BUILD_VERSION`: The version to build during kube-up (for development mainly). Default value is current date and time, i.e.
   `$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M)`.
 
-* `KUBE_INSTANCE_LOGDIR`: Directory for holding kubeup instance specific logs. During kube-up, instances will be installed/provisioned
-  concurrently; if we just send logs to stdout, stdout will mess up. Therefore, we specify a directory to hold instance specific logs.
-  All other logs will be sent to stdout. Default value is "`/tmp/kubeup-$(TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S)`". The log directory
-  looks like:
-  ```
-  $ ls /tmp/kubeup-2015-09-12-01-00-48
-  $ i-6TDSS52U i-ALCWC66X i-JZ9EDO70 i-THBJ0VCD i-UAAE4SUG
-  ```
-  where 'i-6TDSS52U' is instance id. Note the variable only catches logs for concurrent instance provisioning; all other logs, like
-  creating instances from anchnet, will be send to stdout. One common pattern is to set `KUBE_INSTANCE_LOGDIR` and redirect stdout to
-  `${KUBE_INSTANCE_LOGDIR}/common-logs`.
-
 * `ANCHNET_CONFIG_FILE`: The config file supplied to `anchnet` SDK CLI. Default value is `~/.anchnet/config`. Usually, you don't have
   to change the value, unless you want to create cluster under another anchnet account (NOT sub-account).
+
+* `KUBE_DISTRO`: The Linux distribution of underline OS, currently only ubuntu:trusty is supported.
+
+* `REGISTER_MASTER_KUBELET`: The flag controls whether we registry master as a node, this is true by default.
 
 * `ENABLE_CLUSTER_DNS`: Decide if cluster dns addon needs to be created, default to true. DNS addon is essential and should always be true.
 
@@ -131,9 +123,8 @@ used in kube-up. For a full list of options, consult the file.
 
 ## Delete a cluster
 
-Deleting a cluster will delete everything associated with the cluster, including instances, vxnet, external ips, firewalls, etc. (TODO:
-delete loadbalancer, see [issue](https://github.com/caicloud/caicloud-kubernetes/issues/101)). To bring down a cluster, run:
-
+Deleting a cluster will delete everything associated with the cluster, including instances, vxnet, external ips, firewalls, etc. To bring
+down a cluster, run:
 ```
 KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-down.sh
 ```
@@ -163,7 +154,6 @@ KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-push.sh
 
 * `CAICLOUD_KUBE_VERSION`: Which version to deploy.
 
-
 ## Add node to a cluster
 
 In case we want to add node(s) to a running cluster, we can run:
@@ -171,13 +161,17 @@ In case we want to add node(s) to a running cluster, we can run:
 CLUSTER_NAME=kube-default MASTER_EIP=103.21.116.147 NUM_MINIONS=1 KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-add-node.sh
 ```
 
+Note this is not working as of now.
+
 ## Stop a running cluster
+
 we can simply do the following to shut down a running cluster:
 ```
 CLUSTER_NAME=kube-default KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-halt.sh
 ```
 
 ## Restart a cluster
+
 If we want to restart a cluster which has been stopped before, we can do:
 ```
 CLUSTER_NAME=kube-default KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-restart.sh

@@ -24,7 +24,7 @@ KUBE_DISTRO=${KUBE_DISTRO:-"trusty"}
 MASTER_SSH_INFO=${MASTER_SSH_INFO:-"vagrant:vagrant@192.168.205.10"}
 
 # ssh information for nodes (comma separated string).
-NODE_SSH_INFO=${NODE_SSH_INFO:-"vagrant:vagrant@192.168.205.11,vagrant:vagrant@192.168.205.12"}
+NODE_SSH_INFO=${NODE_SSH_INFO:-"vagrant:vagrant@192.168.205.11"}
 
 # Name of the cluster. This is used for constructing the prefix of resource IDs
 # in anchnet. The same name needs to be specified when running kube-down to

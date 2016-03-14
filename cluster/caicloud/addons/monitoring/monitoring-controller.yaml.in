@@ -28,7 +28,7 @@ spec:
           - name: K8S_INSECURE
             value: ""
           - name: PAGING_URL
-            value: https://canary-paging.caicloud.io/api/page
+            value: https://paging-canary.caicloud.io/api/page
           - name: INFLUXDB_URL
             value: http://monitoring-influxdb:8086
           - name: INTERVAL

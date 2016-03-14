@@ -87,6 +87,7 @@ function deploy-addons {
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/grafana-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-service.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/monitoring-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-grafana-controller.yaml \
      ${KUBE_TEMP}/addons/monitoring
   # registry rc/svc

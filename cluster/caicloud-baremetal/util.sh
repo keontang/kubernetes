@@ -113,11 +113,6 @@ function kube-down {
   #  2. a public/private key pair used to provision instances.
   ensure-temp-dir
   ensure-ssh-agent
-  # Not actually used in kube-down, but call it to avoid the following
-  # non-fatal errors:
-  #  /home/vagrant/kube/kubelet-kubeconfig: No such file or directory
-  #  /home/vagrant/kube/kube-proxy-kubeconfig: No such file or directory
-  create-certs-and-credentials
 
   send-master-files
   send-node-files

@@ -90,6 +90,14 @@ http://mirrors.aliyun.com/ubuntu/,\
 http://mirrors.163.com/ubuntu/,\
 http://ftp.sjtu.edu.cn/ubuntu/"}
 
+# The IP address or interface for kubelet to serve on. Note kubelet only accepts
+# an IP address, we add the ability to use interface as well. E.g. use 0.0.0.0
+# to have kubelet listen on all interfaces; use 'eth1' to listen on eth1 interface.
+if [[ "${MASTER_SSH_INFO}" =~ "vagrant" ]]; then
+  KUBELET_ADDRESS="eth1"
+else
+  KUBELET_ADDRESS=0.0.0.0
+fi
 
 # -----------------------------------------------------------------------------
 # Parameter from executor for cluster addons.
@@ -133,9 +141,6 @@ FLANNEL_SUBNET_LEN=24
 FLANNEL_SUBNET_MIN=192.168.64.0
 FLANNEL_SUBNET_MAX=192.168.79.0
 FLANNEL_TYPE="host-gw"
-
-# The IP address for the Kubelet to serve on.
-KUBELET_IP_ADDRESS=0.0.0.0
 
 # MASTER_INSECURE_* is used to serve insecure connection. It is either
 #   localhost, blocked by firewall, or use with nginx, etc.

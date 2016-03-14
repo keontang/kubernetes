@@ -35,6 +35,7 @@
 #   CAICLOUD_PROVIDER
 #   POD_INFRA_CONTAINER
 #   KUBERNETES_PROVIDER
+#   KUBELET_ADDRESS
 #   MASTER_SSH_EXTERNAL
 #   PRIVATE_SDN_INTERFACE
 #   SERVICE_CLUSTER_IP_RANGE
@@ -46,6 +47,13 @@ function send-master-files {
   else
     IFS=':@' read -ra ssh_info <<< "${MASTER_SSH_EXTERNAL}"
     interface="${ssh_info[2]}"
+  fi
+
+  if [[ ! ${KUBELET_ADDRESS} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    kubelet_ip_address=`ssh-to-instance "${MASTER_SSH_EXTERNAL}" \
+"ifconfig | grep -A 1 ${KUBELET_ADDRESS} | tail -1 | cut -d ':' -f 2 | cut -d ' ' -f 1" | tr -d " \t\n\r"`
+  else
+    kubelet_ip_address=${KUBELET_ADDRESS}
   fi
 
   # All files will be stored under this directory.
@@ -67,7 +75,7 @@ function send-master-files {
     echo "FLANNEL_SUBNET_MIN=${FLANNEL_SUBNET_MIN}"
     echo "FLANNEL_SUBNET_MAX=${FLANNEL_SUBNET_MAX}"
     echo "FLANNEL_TYPE=${FLANNEL_TYPE}"
-    echo "KUBELET_IP_ADDRESS=${KUBELET_IP_ADDRESS}"
+    echo "KUBELET_IP_ADDRESS=${kubelet_ip_address}"
     echo "MASTER_SECURE_ADDRESS=${MASTER_SECURE_ADDRESS}"
     echo "MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS}"
     echo "MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT}"
@@ -143,9 +151,8 @@ function send-master-files {
   (
     echo "#!/bin/bash"
     echo "sudo service etcd stop"
-    echo "sudo rm -rf ~/kube /var/run/flannel /run/flannel"
-    echo "sudo rm -rf /kubernetes-master.etcd"
-    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd*"
+    echo "sudo rm -rf ~/kube ~/caicloud-kube* /var/run/flannel /run/flannel /etc/kubernetes"
+    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd* /var/log/upstart/kube*"
   ) > ${KUBE_TEMP}/kube-master/kube/master-cleanup.sh
   chmod a+x ${KUBE_TEMP}/kube-master/kube/master-cleanup.sh
 
@@ -183,7 +190,7 @@ sudo mkdir -p /etc/caicloud && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-pro
 #   KUBE_ROOT
 #   DNS_DOMAIN
 #   DNS_SERVER_IP
-#   KUBELET_IP_ADDRESS
+#   KUBELET_ADDRESS
 #   PRIVATE_SDN_INTERFACE
 #   POD_INFRA_CONTAINER
 #   REGISTRY_MIRROR
@@ -206,19 +213,29 @@ function send-node-files {
       IFS=':@' read -ra ssh_info <<< "${node_ssh_info[$i]}"
       interface="${ssh_info[2]}"
     fi
+
     if [[ "${NODE_INSTANCE_IDS:-}" != "" ]]; then
       hostname_override="${hostname_arr[$i]}"
     else
       hostname_override=""
     fi
-    send-node-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" & pids="${pids} $!"
+
+    if [[ ! ${KUBELET_ADDRESS} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+      kubelet_ip_address=`ssh-to-instance "${node_ssh_info[$i]}" \
+"ifconfig | grep -A 1 ${KUBELET_ADDRESS} | tail -1 | cut -d ':' -f 2 | cut -d ' ' -f 1" | tr -d " \t\n\r"`
+    else
+      kubelet_ip_address=${KUBELET_ADDRESS}
+    fi
+
+    send-node-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" "${kubelet_ip_address}" & pids="${pids} $!"
   done
   wait ${pids}
 }
 # Input:
 #   $1 Node ssh info, e.g. "root:password@43.254.54.59"
-#   $2 Interface or IP address used by flanneld to send internal traffic.
+#   $2 Interface or IP address used by flanneld to send internal traffic
 #   $3 Hostname override
+#   $4 Kubelet bind IP address
 function send-node-files-internal {
   mkdir -p ${KUBE_TEMP}/kube-node${1}/kube/node
 
@@ -235,7 +252,7 @@ function send-node-files-internal {
     echo "DNS_DOMAIN=${DNS_DOMAIN}"
     echo "DNS_SERVER_IP=${DNS_SERVER_IP}"
     echo "FLANNEL_INTERFACE=${2}"
-    echo "KUBELET_IP_ADDRESS=${KUBELET_IP_ADDRESS}"
+    echo "KUBELET_IP_ADDRESS=${4}"
     echo "MASTER_SECURE_ADDRESS=${MASTER_SECURE_ADDRESS}"
     echo "MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS}"
     echo "MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT}"
@@ -291,8 +308,8 @@ function send-node-files-internal {
   (
     echo "#!/bin/bash"
     echo "sudo service flanneld stop"
-    echo "sudo rm -rf ~/kube /var/run/flannel /run/flannel"
-    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd*"
+    echo "sudo rm -rf ~/kube ~/caicloud-kube* /var/run/flannel /run/flannel /etc/kubernetes"
+    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd* /var/log/upstart/kube*"
   ) > ${KUBE_TEMP}/kube-node${1}/kube/node-cleanup.sh
   chmod a+x ${KUBE_TEMP}/kube-node${1}/kube/node-cleanup.sh
 

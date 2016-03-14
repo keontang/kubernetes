@@ -363,12 +363,10 @@ function start-kubernetes {
   local pids=""
   IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
   ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
-    "sudo USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT} \
-          ./kube/master-start.sh" & pids="${pids} $!"
+    "sudo ./kube/master-start.sh" & pids="${pids} $!"
   for ssh_info in "${node_ssh_info[@]}"; do
     ssh-to-instance-expect "${ssh_info}" \
-      "sudo USE_SELF_SIGNED_CERT=${USE_SELF_SIGNED_CERT} \
-            ./kube/node-start.sh" & pids="${pids} $!"
+      "sudo ./kube/node-start.sh" & pids="${pids} $!"
   done
   wait ${pids}
 }

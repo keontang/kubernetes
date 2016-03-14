@@ -289,8 +289,11 @@ FLANNEL_TYPE="vxlan"
 MASTER_INSECURE_ADDRESS="127.0.0.1"
 MASTER_INSECURE_PORT="8080"
 
-# The IP address for the Kubelet to serve on.
-KUBELET_IP_ADDRESS=0.0.0.0
+# The IP address or interface for kubelet to serve on. Note kubelet only accepts
+# an IP address, we add the ability to use interface as well. E.g. use 0.0.0.0
+# to have kubelet listen on all interfaces; use 'eth1' to listen on eth1 interface.
+KUBELET_ADDRESS=0.0.0.0
+KUBELET_PORT="10250"
 
 # Define the internal IPs for instances in private SDN network.
 INTERNAL_IP_RANGE=10.244.0.0/16
@@ -298,11 +301,8 @@ INTERNAL_IP_MASK=255.255.0.0
 MASTER_IIP=10.244.0.1
 NODE_IIP_RANGE=10.244.1.0/16
 
-KUBELET_PORT="10250"
-
-# In case we are not using self-signed certficate we will
-# add domain name for each cluster with this format:
-# ajective-noun-4digitnumber-cluster.caicloudapp.com
+# In case we are not using self-signed certficate we will add domain name for
+# each cluster with this format: ajective-noun-4digitnumber-cluster.caicloudapp.com
 # e.g. epic-caicloud-2015-cluster.caicloudapp.com
 DNS_HOST_NAME=${DNS_HOST_NAME:-"epic-caicloud-2015-cluster"}
 BASE_DOMAIN_NAME=${BASE_DOMAIN_NAME:-"caicloudapp.com"}

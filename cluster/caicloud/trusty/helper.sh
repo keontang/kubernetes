@@ -152,7 +152,7 @@ function send-master-files {
     echo "#!/bin/bash"
     echo "sudo service etcd stop"
     echo "sudo rm -rf ~/kube ~/caicloud-kube* /var/run/flannel /run/flannel /etc/kubernetes"
-    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd* /var/log/upstart/kube*"
+    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd* /var/log/upstart/kube* /tmp/kube*"
   ) > ${KUBE_TEMP}/kube-master/kube/master-cleanup.sh
   chmod a+x ${KUBE_TEMP}/kube-master/kube/master-cleanup.sh
 
@@ -309,7 +309,7 @@ function send-node-files-internal {
     echo "#!/bin/bash"
     echo "sudo service flanneld stop"
     echo "sudo rm -rf ~/kube ~/caicloud-kube* /var/run/flannel /run/flannel /etc/kubernetes"
-    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd* /var/log/upstart/kube*"
+    echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd* /var/log/upstart/kube* /tmp/kube*"
   ) > ${KUBE_TEMP}/kube-node${1}/kube/node-cleanup.sh
   chmod a+x ${KUBE_TEMP}/kube-node${1}/kube/node-cleanup.sh
 

@@ -20,7 +20,7 @@ spec:
         kubernetes.io/cluster-service: "true"
     spec:
       containers:
-        - image: index.caicloud.io/kubernetes/heapster_influxdb:v0.5
+        - image: index.caicloud.io/tutum/influxdb:0.9
           name: influxdb
           resources:
             limits:
@@ -34,7 +34,7 @@ spec:
           volumeMounts:
           - name: influxdb-persistent-storage
             mountPath: /data
-        - image: index.caicloud.io/caicloud/monitoring-grafana:v0.0.3
+        - image: index.caicloud.io/caicloud/monitoring-grafana:v0.1.1
           name: grafana
           env:
           resources:

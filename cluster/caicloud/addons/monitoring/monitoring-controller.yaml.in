@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: monitoring
-        image: index.caicloud.io/caicloud/monitoring:v0.0.5
+        image: index.caicloud.io/caicloud/monitoring:v0.1.0
         imagePullPolicy: Always
         env:
           - name: K8S_IP

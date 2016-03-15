@@ -71,6 +71,9 @@ function kube-up {
   install-packages & pids="$pids $!"
   wait ${pids}
 
+  # After kube-up, we'll need to remove "~/.kube" working directory.
+  trap-add 'clean-up-working-dir' EXIT
+
   # Prepare master environment.
   send-master-files
   send-node-files

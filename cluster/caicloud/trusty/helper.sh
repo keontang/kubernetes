@@ -151,6 +151,7 @@ function send-master-files {
   (
     echo "#!/bin/bash"
     echo "sudo service etcd stop"
+    echo "sudo rm -rf /kubernetes-master.etcd"
     echo "sudo rm -rf ~/kube ~/caicloud-kube* /var/run/flannel /run/flannel /etc/kubernetes"
     echo "sudo rm -rf /opt/bin/kube* /opt/bin/flanneld /opt/bin/etcd* /var/log/upstart/kube* /tmp/kube*"
   ) > ${KUBE_TEMP}/kube-master/kube/master-cleanup.sh

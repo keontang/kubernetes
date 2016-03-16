@@ -101,10 +101,8 @@ function kube-up {
   # Make sure we have:
   #  1. a staging area
   #  2. ssh capability
-  #  3. log directory
   ensure-temp-dir
   ensure-ssh-agent
-  ensure-log-dir
 
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
     # For dev, set to existing instance IDs for master and nodes. Other variables
@@ -1039,7 +1037,6 @@ function create-anchnet-config {
 #   NODE_INSTANCE_IDS_ARR
 #   NODE_IIPS_ARR
 #   PRIVATE_SDN_INTERFACE
-#   KUBE_INSTANCE_LOGDIR
 function setup-anchnet-instances {
   # Use multiple retries since seting up sdn network is essential for follow-up
   # installations, and we ses occational errors:

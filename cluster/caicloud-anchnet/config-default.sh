@@ -103,12 +103,6 @@ REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET:-"false"}
 # Following params in the section should rarely change.
 #
 
-# Directory for holding kubeup instance specific logs. During kube-up, instances
-# will be installed/provisioned concurrently; if we just send logs to stdout,
-# stdout will mess up. Therefore, we specify a directory to hold instance specific
-# logs. All other logs will be sent to stdout, e.g. create instances from anchnet.
-KUBE_INSTANCE_LOGDIR=${KUBE_INSTANCE_LOGDIR:-"/tmp/caicloud-kube-`TZ=Asia/Shanghai date +%Y-%m-%d-%H-%M-%S`"}
-
 # URL path of the server hosting caicloud kubernetes release.
 CAICLOUD_HOST_URL=${CAICLOUD_HOST_URL:-"http://7xli2p.dl1.z0.glb.clouddn.com"}
 

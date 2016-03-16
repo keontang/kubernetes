@@ -101,15 +101,15 @@ function deploy-addons {
 
   # Call 'addons-start.sh' to start addons.
   ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" \
-    "sudo SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE} \
-          ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} \
-          ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} \
-          ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} \
-          ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING} \
-          ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY} \
-          MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS} \
-          MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT} \
-          ./kube/addons-start.sh"
+    "SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE} \
+     ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS} \
+     ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING} \
+     ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI} \
+     ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING} \
+     ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY} \
+     MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS} \
+     MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT} \
+     ./kube/addons-start.sh"
 }
 
 # Create certificate pairs and credentials for the cluster.
@@ -554,7 +554,6 @@ sudo chmod go-rwx /etc/caicloud"
 # to master without using password.
 #
 # Assumed vars:
-#   KUBE_INSTANCE_LOGDIR
 #   CAICLOUD_TARBALL_URL
 #   MASTER_SSH_EXTERNAL *
 #   NODE_SSH_EXTERNAL *
@@ -834,16 +833,6 @@ function ensure-ssh-agent {
   fi
 }
 
-# Make sure log directory exists.
-#
-# Assumed vars
-#   KUBE_INSTANCE_LOGDIR
-function ensure-log-dir {
-  if [[ ! -z ${KUBE_INSTANCE_LOGDIR-} ]]; then
-    mkdir -p ${KUBE_INSTANCE_LOGDIR}
-  fi
-}
-
 # Make sure ~/kube exists on the master/node. This is used in kube-push
 # because we now clean up ~/kube directory once the cluster is up and running.
 #
@@ -870,10 +859,11 @@ function get-password {
 }
 
 # Add trap cmd to signal(s). Since there is no better way of setting multiple
-# trap cmds on a signal, we are just appending new command to the current trap cmd.
+# trap cmds on a signal, we are just appending new command to the current trap
+# cmd.
 #
 # Input:
-#   $1  trap cmd to add
+#   $1 trap cmd to add
 #   $2 signals to add cmd to
 function trap-add {
   local trap_add_cmd=$1; shift
@@ -889,7 +879,7 @@ function trap-add {
     fi
 
     # Assign the test
-    trap   "${new_cmd}" "${trap_add_name}" || \
+    trap "${new_cmd}" "${trap_add_name}" || \
       echo "unable to add to trap ${trap_add_name}"
   done
 }
@@ -1189,7 +1179,7 @@ function join {
 #   KUBECTL_PATH
 function find-kubectl-binary {
   # First, search from possible locations.
-  locations=("/opt/bin/kubectl" "/usr/bin/kubectl" "/usr/local/bin/kubectl" "${GOPATH}/bin/kubectl")
+  locations=("/opt/bin/kubectl" "/usr/bin/kubectl" "/usr/local/bin/kubectl" "${GOPATH:-}/bin/kubectl")
   for location in ${locations[@]}; do
     if [[ -x ${location} ]]; then
       export KUBECTL_PATH=${location}

@@ -30,8 +30,8 @@ source "${KUBE_ROOT}/hack/build-go.sh"
 
 
 function InstallPackages {
-  sudo apt-get install lxc-docker-${DOCKER_VERSION}
-  sudo apt-get install bridge-utils
+  sudo apt-get install -y lxc-docker-${DOCKER_VERSION}
+  sudo apt-get install -y bridge-utils
 }
 
 

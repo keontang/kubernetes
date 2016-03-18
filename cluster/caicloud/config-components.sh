@@ -32,7 +32,7 @@
 #   A file with etcd configs under ~/kube/configs/etcd.
 function create-etcd-opts {
   cat <<EOF > ~/kube/configs/etcd
-ETCD_OPTS="-name 'kubernetes-master' \
+ETCD_OPTS="-name kubernetes-master \
 --listen-client-urls http://0.0.0.0:4001 \
 --advertise-client-urls http://127.0.0.1:4001"
 EOF

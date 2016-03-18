@@ -67,7 +67,7 @@ function main {
     echo "sudo sh -c \"echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list\""
     echo "sudo apt-get update"
     echo "sudo apt-get install -y --force-yes lxc-docker-${DOCKER_VERSION}"
-    echo "sudo apt-get install bridge-utils"
+    echo "sudo apt-get install -y bridge-utils"
   ) > ${KUBE_TEMP}/install.sh
   chmod a+x ${KUBE_TEMP}/install.sh
 

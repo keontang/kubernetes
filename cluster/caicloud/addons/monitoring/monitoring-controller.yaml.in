@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: monitoring
-        image: index.caicloud.io/caicloud/monitoring:v0.1.1
+        image: index.caicloud.io/caicloud/monitoring:v0.1.3
         imagePullPolicy: Always
         env:
           - name: K8S_IP
@@ -43,3 +43,5 @@ spec:
             value: {{ pillar['caicloud_uid'] }}
           - name: CLUSTER_TOKEN
             value: {{ pillar['cluster_token'] }}
+          - name: CLUSTER_NAME
+            value: {{ pillar['cluster_name'] }}

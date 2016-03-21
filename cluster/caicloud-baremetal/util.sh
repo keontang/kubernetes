@@ -144,10 +144,13 @@ function detect-minions {
   echo "KUBE_MINION_IP_ADDRESSES: [${KUBE_MINION_IP_ADDRESSES[*]}]" 1>&2
 }
 
-# Setup baremetal instances. Right now, the only setup is to add node hostname entry
-# into master, so that master can reach nodes via their hostname.
+# Setup baremetal instances. Right now, the setup includes:
+# - add node hostname into master, so that master can reach nodes via their hostname
+# - make sure instance can ping itself via hostname (rarely needed)
 function setup-baremetal-instances {
   IFS=',' read -ra instance_ssh_info <<< "${INSTANCE_SSH_EXTERNAL}"
+
+  # Get hostname of all instances and add them to master's setup script.
   (
     echo "#!/bin/bash"
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
@@ -159,9 +162,22 @@ function setup-baremetal-instances {
     echo ""
   ) > "${KUBE_TEMP}/master-host-setup.sh"
   chmod a+x "${KUBE_TEMP}/master-host-setup.sh"
-
   scp-then-execute-expect "${MASTER_SSH_EXTERNAL}" "${KUBE_TEMP}/master-host-setup.sh" "~" "\
 mkdir -p ~/kube && sudo mv ~/master-host-setup.sh ~/kube && \
 sudo ./kube/master-host-setup.sh || \
 echo 'Command failed setting up master'"
+
+  # Make sure instance can ping itself via hostname.
+  for (( i = 0; i < ${#instance_ssh_info[*]}; i++ )); do
+    (
+      echo "#!/bin/bash"
+      grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
+      echo "add-hosts-entry \`hostname\` 127.0.0.1"
+    ) > "${KUBE_TEMP}/instance-host-setup.sh"
+    chmod a+x "${KUBE_TEMP}/instance-host-setup.sh"
+    scp-then-execute-expect "${instance_ssh_info[$i]}" "${KUBE_TEMP}/instance-host-setup.sh" "~" "\
+mkdir -p ~/kube && sudo mv ~/instance-host-setup.sh ~/kube && \
+sudo ./kube/instance-host-setup.sh || \
+echo 'Command failed setting up master'"
+  done
 }

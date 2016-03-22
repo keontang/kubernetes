@@ -48,11 +48,8 @@ import (
 	"k8s.io/kubernetes/pkg/volume/persistent_claim"
 	"k8s.io/kubernetes/pkg/volume/rbd"
 	"k8s.io/kubernetes/pkg/volume/secret"
-<<<<<<< HEAD
+
 	// Cloud providers
-=======
-	//Cloud providers
->>>>>>> b4e5d39... Fix rebasing caicloud master to upstream HEAD
 	_ "k8s.io/kubernetes/pkg/cloudprovider/providers"
 )
 

@@ -406,18 +406,7 @@ func validateVolumes(volumes []api.Volume, fldPath *field.Path) (sets.String, fi
 
 func validateVolumeSource(source *api.VolumeSource, fldPath *field.Path) field.ErrorList {
 	numVolumes := 0
-<<<<<<< HEAD
 	allErrs := field.ErrorList{}
-=======
-	allErrs := errs.ValidationErrorList{}
-	if source.AnchnetPersistentDisk != nil {
-		numVolumes++
-	}
-	if source.HostPath != nil {
-		numVolumes++
-		allErrs = append(allErrs, validateHostPathVolumeSource(source.HostPath).Prefix("hostPath")...)
-	}
->>>>>>> b5f8263... Support persistent volume in anchnet
 	if source.EmptyDir != nil {
 		numVolumes++
 		// EmptyDirs have nothing to validate

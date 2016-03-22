@@ -73,6 +73,14 @@ func deepCopy_v1_AWSElasticBlockStoreVolumeSource(in v1.AWSElasticBlockStoreVolu
 	return nil
 }
 
+func deepCopy_v1_AnchnetPersistentDiskVolumeSource(in v1.AnchnetPersistentDiskVolumeSource, out *v1.AnchnetPersistentDiskVolumeSource, c *conversion.Cloner) error {
+	out.VolumeID = in.VolumeID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
 func deepCopy_v1_AzureFileVolumeSource(in v1.AzureFileVolumeSource, out *v1.AzureFileVolumeSource, c *conversion.Cloner) error {
 	out.SecretName = in.SecretName
 	out.ShareName = in.ShareName
@@ -844,6 +852,14 @@ func deepCopy_v1_VolumeMount(in v1.VolumeMount, out *v1.VolumeMount, c *conversi
 }
 
 func deepCopy_v1_VolumeSource(in v1.VolumeSource, out *v1.VolumeSource, c *conversion.Cloner) error {
+	if in.AnchnetPersistentDisk != nil {
+		out.AnchnetPersistentDisk = new(v1.AnchnetPersistentDiskVolumeSource)
+		if err := deepCopy_v1_AnchnetPersistentDiskVolumeSource(*in.AnchnetPersistentDisk, out.AnchnetPersistentDisk, c); err != nil {
+			return err
+		}
+	} else {
+		out.AnchnetPersistentDisk = nil
+	}
 	if in.HostPath != nil {
 		out.HostPath = new(v1.HostPathVolumeSource)
 		if err := deepCopy_v1_HostPathVolumeSource(*in.HostPath, out.HostPath, c); err != nil {
@@ -1171,6 +1187,7 @@ func init() {
 		deepCopy_unversioned_Time,
 		deepCopy_unversioned_TypeMeta,
 		deepCopy_v1_AWSElasticBlockStoreVolumeSource,
+		deepCopy_v1_AnchnetPersistentDiskVolumeSource,
 		deepCopy_v1_AzureFileVolumeSource,
 		deepCopy_v1_Capabilities,
 		deepCopy_v1_CephFSVolumeSource,

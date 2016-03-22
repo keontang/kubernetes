@@ -195,7 +195,6 @@ func DeepCopy_api_AWSElasticBlockStoreVolumeSource(in AWSElasticBlockStoreVolume
 	return nil
 }
 
-<<<<<<< HEAD
 func DeepCopy_api_Affinity(in Affinity, out *Affinity, c *conversion.Cloner) error {
 	if in.NodeAffinity != nil {
 		in, out := in.NodeAffinity, &out.NodeAffinity
@@ -212,23 +211,12 @@ func DeepCopy_api_Affinity(in Affinity, out *Affinity, c *conversion.Cloner) err
 func DeepCopy_api_AzureFileVolumeSource(in AzureFileVolumeSource, out *AzureFileVolumeSource, c *conversion.Cloner) error {
 	out.SecretName = in.SecretName
 	out.ShareName = in.ShareName
-=======
-func deepCopy_api_AnchnetPersistentDiskVolumeSource(in AnchnetPersistentDiskVolumeSource, out *AnchnetPersistentDiskVolumeSource, c *conversion.Cloner) error {
-	out.VolumeID = in.VolumeID
-	out.FSType = in.FSType
-	out.Partition = in.Partition
->>>>>>> b5f8263... Support persistent volume in anchnet
 	out.ReadOnly = in.ReadOnly
 	return nil
 }
 
-<<<<<<< HEAD
 func DeepCopy_api_Binding(in Binding, out *Binding, c *conversion.Cloner) error {
 	if err := DeepCopy_unversioned_TypeMeta(in.TypeMeta, &out.TypeMeta, c); err != nil {
-=======
-func deepCopy_api_Binding(in Binding, out *Binding, c *conversion.Cloner) error {
-	if err := deepCopy_unversioned_TypeMeta(in.TypeMeta, &out.TypeMeta, c); err != nil {
->>>>>>> b5f8263... Support persistent volume in anchnet
 		return err
 	}
 	if err := DeepCopy_api_ObjectMeta(in.ObjectMeta, &out.ObjectMeta, c); err != nil {
@@ -1766,19 +1754,7 @@ func DeepCopy_api_PersistentVolumeList(in PersistentVolumeList, out *PersistentV
 	return nil
 }
 
-<<<<<<< HEAD
 func DeepCopy_api_PersistentVolumeSource(in PersistentVolumeSource, out *PersistentVolumeSource, c *conversion.Cloner) error {
-=======
-func deepCopy_api_PersistentVolumeSource(in PersistentVolumeSource, out *PersistentVolumeSource, c *conversion.Cloner) error {
-	if in.AnchnetPersistentDisk != nil {
-		out.AnchnetPersistentDisk = new(AnchnetPersistentDiskVolumeSource)
-		if err := deepCopy_api_AnchnetPersistentDiskVolumeSource(*in.AnchnetPersistentDisk, out.AnchnetPersistentDisk, c); err != nil {
-			return err
-		}
-	} else {
-		out.AnchnetPersistentDisk = nil
-	}
->>>>>>> b5f8263... Support persistent volume in anchnet
 	if in.GCEPersistentDisk != nil {
 		in, out := in.GCEPersistentDisk, &out.GCEPersistentDisk
 		*out = new(GCEPersistentDiskVolumeSource)
@@ -2851,19 +2827,7 @@ func DeepCopy_api_VolumeMount(in VolumeMount, out *VolumeMount, c *conversion.Cl
 	return nil
 }
 
-<<<<<<< HEAD
 func DeepCopy_api_VolumeSource(in VolumeSource, out *VolumeSource, c *conversion.Cloner) error {
-=======
-func deepCopy_api_VolumeSource(in VolumeSource, out *VolumeSource, c *conversion.Cloner) error {
-	if in.AnchnetPersistentDisk != nil {
-		out.AnchnetPersistentDisk = new(AnchnetPersistentDiskVolumeSource)
-		if err := deepCopy_api_AnchnetPersistentDiskVolumeSource(*in.AnchnetPersistentDisk, out.AnchnetPersistentDisk, c); err != nil {
-			return err
-		}
-	} else {
-		out.AnchnetPersistentDisk = nil
-	}
->>>>>>> b5f8263... Support persistent volume in anchnet
 	if in.HostPath != nil {
 		in, out := in.HostPath, &out.HostPath
 		*out = new(HostPathVolumeSource)
@@ -3085,7 +3049,6 @@ func DeepCopy_unversioned_GroupVersionKind(in unversioned.GroupVersionKind, out 
 	return nil
 }
 
-<<<<<<< HEAD
 func DeepCopy_unversioned_GroupVersionResource(in unversioned.GroupVersionResource, out *unversioned.GroupVersionResource, c *conversion.Cloner) error {
 	out.Group = in.Group
 	out.Version = in.Version
@@ -3103,137 +3066,4 @@ func DeepCopy_unversioned_TypeMeta(in unversioned.TypeMeta, out *unversioned.Typ
 	out.Kind = in.Kind
 	out.APIVersion = in.APIVersion
 	return nil
-=======
-func init() {
-	err := Scheme.AddGeneratedDeepCopyFuncs(
-		deepCopy_api_AWSElasticBlockStoreVolumeSource,
-		deepCopy_api_AnchnetPersistentDiskVolumeSource,
-		deepCopy_api_Binding,
-		deepCopy_api_Capabilities,
-		deepCopy_api_CephFSVolumeSource,
-		deepCopy_api_CinderVolumeSource,
-		deepCopy_api_ComponentCondition,
-		deepCopy_api_ComponentStatus,
-		deepCopy_api_ComponentStatusList,
-		deepCopy_api_Container,
-		deepCopy_api_ContainerPort,
-		deepCopy_api_ContainerState,
-		deepCopy_api_ContainerStateRunning,
-		deepCopy_api_ContainerStateTerminated,
-		deepCopy_api_ContainerStateWaiting,
-		deepCopy_api_ContainerStatus,
-		deepCopy_api_DaemonEndpoint,
-		deepCopy_api_DeleteOptions,
-		deepCopy_api_DownwardAPIVolumeFile,
-		deepCopy_api_DownwardAPIVolumeSource,
-		deepCopy_api_EmptyDirVolumeSource,
-		deepCopy_api_EndpointAddress,
-		deepCopy_api_EndpointPort,
-		deepCopy_api_EndpointSubset,
-		deepCopy_api_Endpoints,
-		deepCopy_api_EndpointsList,
-		deepCopy_api_EnvVar,
-		deepCopy_api_EnvVarSource,
-		deepCopy_api_Event,
-		deepCopy_api_EventList,
-		deepCopy_api_EventSource,
-		deepCopy_api_ExecAction,
-		deepCopy_api_FCVolumeSource,
-		deepCopy_api_FlockerVolumeSource,
-		deepCopy_api_GCEPersistentDiskVolumeSource,
-		deepCopy_api_GitRepoVolumeSource,
-		deepCopy_api_GlusterfsVolumeSource,
-		deepCopy_api_HTTPGetAction,
-		deepCopy_api_Handler,
-		deepCopy_api_HostPathVolumeSource,
-		deepCopy_api_ISCSIVolumeSource,
-		deepCopy_api_Lifecycle,
-		deepCopy_api_LimitRange,
-		deepCopy_api_LimitRangeItem,
-		deepCopy_api_LimitRangeList,
-		deepCopy_api_LimitRangeSpec,
-		deepCopy_api_List,
-		deepCopy_api_ListOptions,
-		deepCopy_api_LoadBalancerIngress,
-		deepCopy_api_LoadBalancerStatus,
-		deepCopy_api_LocalObjectReference,
-		deepCopy_api_NFSVolumeSource,
-		deepCopy_api_Namespace,
-		deepCopy_api_NamespaceList,
-		deepCopy_api_NamespaceSpec,
-		deepCopy_api_NamespaceStatus,
-		deepCopy_api_Node,
-		deepCopy_api_NodeAddress,
-		deepCopy_api_NodeCondition,
-		deepCopy_api_NodeDaemonEndpoints,
-		deepCopy_api_NodeList,
-		deepCopy_api_NodeSpec,
-		deepCopy_api_NodeStatus,
-		deepCopy_api_NodeSystemInfo,
-		deepCopy_api_ObjectFieldSelector,
-		deepCopy_api_ObjectMeta,
-		deepCopy_api_ObjectReference,
-		deepCopy_api_PersistentVolume,
-		deepCopy_api_PersistentVolumeClaim,
-		deepCopy_api_PersistentVolumeClaimList,
-		deepCopy_api_PersistentVolumeClaimSpec,
-		deepCopy_api_PersistentVolumeClaimStatus,
-		deepCopy_api_PersistentVolumeClaimVolumeSource,
-		deepCopy_api_PersistentVolumeList,
-		deepCopy_api_PersistentVolumeSource,
-		deepCopy_api_PersistentVolumeSpec,
-		deepCopy_api_PersistentVolumeStatus,
-		deepCopy_api_Pod,
-		deepCopy_api_PodAttachOptions,
-		deepCopy_api_PodCondition,
-		deepCopy_api_PodExecOptions,
-		deepCopy_api_PodList,
-		deepCopy_api_PodLogOptions,
-		deepCopy_api_PodProxyOptions,
-		deepCopy_api_PodSpec,
-		deepCopy_api_PodStatus,
-		deepCopy_api_PodStatusResult,
-		deepCopy_api_PodTemplate,
-		deepCopy_api_PodTemplateList,
-		deepCopy_api_PodTemplateSpec,
-		deepCopy_api_Probe,
-		deepCopy_api_RBDVolumeSource,
-		deepCopy_api_RangeAllocation,
-		deepCopy_api_ReplicationController,
-		deepCopy_api_ReplicationControllerList,
-		deepCopy_api_ReplicationControllerSpec,
-		deepCopy_api_ReplicationControllerStatus,
-		deepCopy_api_ResourceQuota,
-		deepCopy_api_ResourceQuotaList,
-		deepCopy_api_ResourceQuotaSpec,
-		deepCopy_api_ResourceQuotaStatus,
-		deepCopy_api_ResourceRequirements,
-		deepCopy_api_SELinuxOptions,
-		deepCopy_api_Secret,
-		deepCopy_api_SecretList,
-		deepCopy_api_SecretVolumeSource,
-		deepCopy_api_SecurityContext,
-		deepCopy_api_SerializedReference,
-		deepCopy_api_Service,
-		deepCopy_api_ServiceAccount,
-		deepCopy_api_ServiceAccountList,
-		deepCopy_api_ServiceList,
-		deepCopy_api_ServicePort,
-		deepCopy_api_ServiceSpec,
-		deepCopy_api_ServiceStatus,
-		deepCopy_api_TCPSocketAction,
-		deepCopy_api_Volume,
-		deepCopy_api_VolumeMount,
-		deepCopy_api_VolumeSource,
-		deepCopy_resource_Quantity,
-		deepCopy_unversioned_ListMeta,
-		deepCopy_unversioned_Time,
-		deepCopy_unversioned_TypeMeta,
-		deepCopy_util_IntOrString,
-	)
-	if err != nil {
-		// if one of the deep copy functions is malformed, detect it immediately.
-		panic(err)
-	}
->>>>>>> b5f8263... Support persistent volume in anchnet
 }

@@ -25,24 +25,25 @@ import (
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/cloudprovider"
+	"k8s.io/kubernetes/pkg/types"
 
 	anchnet_client "github.com/caicloud/anchnet-go"
 )
 
 //
-// Following methods implement Cloudprovider.TCPLoadBalancer.
+// Following methods implement Cloudprovider.LoadBalancer.
 //
-var _ cloudprovider.TCPLoadBalancer = (*Anchnet)(nil)
+var _ cloudprovider.LoadBalancer = (*Anchnet)(nil)
 
-// GetTCPLoadBalancer returns whether the specified load balancer exists,
+// GetLoadBalancer returns whether the specified load balancer exists,
 // and if so, what its status is.
-func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBalancerStatus, exists bool, err error) {
+func (an *Anchnet) GetLoadBalancer(name, region string) (status *api.LoadBalancerStatus, exists bool, err error) {
 	matching_lb, exists, err := an.searchLoadBalancer(name)
 	if err != nil {
 		return nil, false, err
 	}
 	if exists == false {
-		glog.Infof("GetTCPLoadBalancer no loadbalancer %v found", name)
+		glog.Infof("GetLoadBalancer no loadbalancer %v found", name)
 		return nil, false, nil
 	}
 	// No external IP for the loadbalancer, shouldn't happen.
@@ -64,7 +65,7 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 	return status, true, nil
 }
 
-// EnsureTCPLoadBalancer creates a new tcp load balancer, or updates an existing one. Returns
+// EnsureLoadBalancer creates a new tcp load balancer, or updates an existing one. Returns
 // the status of the balancer.
 // 'region' is returned from Zone interface and is not used here, since anchnet only supports
 // one zone. If it starts supporting multiple zones, we just need to update the request.
@@ -76,10 +77,12 @@ func (an *Anchnet) GetTCPLoadBalancer(name, region string) (status *api.LoadBala
 // 4. add backends for each listener;
 // 5. create a security group for loadbalancer, number of rules = number of service ports;
 // 6. apply above changes.
-func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net.IP, ports []*api.ServicePort, hosts []string, affinityType api.ServiceAffinity) (*api.LoadBalancerStatus, error) {
-	glog.Infof("EnsureTCPLoadBalancer(%v, %v, %v, %v, %v)", name, region, loadBalancerIP, ports, hosts)
+func (an *Anchnet) EnsureLoadBalancer(
+	name, region string, loadBalancerIP net.IP, ports []*api.ServicePort, hosts []string,
+	serviceName types.NamespacedName, affinityType api.ServiceAffinity, annotations map[string]string) (*api.LoadBalancerStatus, error) {
+	glog.Infof("EnsureLoadBalancer(%v, %v, %v, %v, %v)", name, region, loadBalancerIP, ports, hosts)
 
-	// Anchnet doesn't support UDP (k8s doesn't support neither).
+	// Anchnet doesn't support UDP.
 	for i := range ports {
 		port := ports[i]
 		if port.Protocol != api.ProtocolTCP {
@@ -112,14 +115,14 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 		return nil, fmt.Errorf("error checking if anchnet load balancer %v already exists: %v", name, err)
 	}
 	if exists {
-		glog.Infof("EnsureTCPLoadBalancer found existing loadbalancer %v; deleting now", name)
+		glog.Infof("EnsureLoadBalancer found existing loadbalancer %v; deleting now", name)
 		eip_ids = append(eip_ids, matching_lb.Eips[0].EipID)
-		err := an.EnsureTCPLoadBalancerDeletedHelper(name, region, true)
+		err := an.EnsureLoadBalancerDeletedHelper(name, region, true)
 		if err != nil {
 			return nil, fmt.Errorf("error deleting existing anchnet load balancer: %v", err)
 		}
 	} else {
-		glog.Infof("EnsureTCPLoadBalancer no loadbalancer %v found", name)
+		glog.Infof("EnsureLoadBalancer no loadbalancer %v found", name)
 		// Create a public IP address resource. The externalIP field is thus ignored.
 		ip_response, err := an.allocateEIP()
 		if err != nil {
@@ -227,12 +230,12 @@ func (an *Anchnet) EnsureTCPLoadBalancer(name, region string, loadBalancerIP net
 	return status, nil
 }
 
-// UpdateTCPLoadBalancer updates hosts under the specified load balancer.
-func (an *Anchnet) UpdateTCPLoadBalancer(name, region string, hosts []string) error {
+// UpdateLoadBalancer updates hosts under the specified load balancer.
+func (an *Anchnet) UpdateLoadBalancer(name, region string, hosts []string) error {
 	return nil
 }
 
-// EnsureTCPLoadBalancerDeleted deletes the specified load balancer if it
+// EnsureLoadBalancerDeleted deletes the specified load balancer if it
 // exists, returning nil if the load balancer specified either didn't exist or
 // was successfully deleted.
 // This construction is useful because many cloud providers' load balancers
@@ -242,11 +245,11 @@ func (an *Anchnet) UpdateTCPLoadBalancer(name, region string, hosts []string) er
 // 1. external ip allocated to loadbalancer;
 // 2. loadbalancer itself (including listeners);
 // 3. security group for loadbalancer;
-func (an *Anchnet) EnsureTCPLoadBalancerDeleted(name, region string) error {
-	return an.EnsureTCPLoadBalancerDeletedHelper(name, region, false)
+func (an *Anchnet) EnsureLoadBalancerDeleted(name, region string) error {
+	return an.EnsureLoadBalancerDeletedHelper(name, region, false)
 }
 
-func (an *Anchnet) EnsureTCPLoadBalancerDeletedHelper(name, region string, preserve_ip bool) error {
+func (an *Anchnet) EnsureLoadBalancerDeletedHelper(name, region string, preserve_ip bool) error {
 	// Delete external ip and load balancer.
 	matching_lb, exists, err := an.searchLoadBalancer(name)
 	if err != nil {

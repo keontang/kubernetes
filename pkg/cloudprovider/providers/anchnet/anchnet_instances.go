@@ -131,6 +131,11 @@ func (an *Anchnet) InstanceID(name string) (string, error) {
 	return convertToInstanceID(name), nil
 }
 
+// InstanceType returns the type of the specified instance.
+func (an *Anchnet) InstanceType(name string) (string, error) {
+	return "", nil
+}
+
 // List is an implementation of Instances.List.
 // TODO: Figure out how this works.
 func (an *Anchnet) List(filter string) ([]string, error) {

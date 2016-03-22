@@ -19,25 +19,16 @@
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 source "${KUBE_ROOT}/hack/caicloud/common.sh"
 
-# 'gcr.io' is blocked - replace all gcr.io images to ones we uploaded to docker
-# hub caicloudgcr account.
+# 'gcr.io' is blocked - replace all gcr.io images to ones we uploaded to
+# index.caicloud.io/caicloudgcr account.
 grep -rl "gcr.io/google_containers/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build |
   xargs perl -X -i -pe 's|gcr.io/google_containers/|index.caicloud.io/caicloudgcr/google_containers_|g'
 grep -rl "gcr.io/google_samples/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build |
   xargs perl -X -i -pe 's|gcr.io/google_samples/|index.caicloud.io/caicloudgcr/google_samples_|g'
-
-# 'golang.org' is blocked - remove it since we do not need it for building.
-perl -i -pe "s|go get golang.org/x/tools/cmd/cover github.com/tools/godep|go get github.com/tools/godep|g" \
-     ${KUBE_ROOT}/build/build-image/Dockerfile
-
-# Accessing 'github.com' is slow, replace it with our hosted files.
-perl -i -pe "s|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|${ETCD_URL}|g" \
-     ${KUBE_ROOT}/build/build-image/Dockerfile
-perl -i -pe "s|v2.0.0|${ETCD_VERSION}|g" ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Our cloudprovider supports following e2e tests.
 perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws")\E|SkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")|g' \

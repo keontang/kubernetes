@@ -36,12 +36,13 @@ function sync_image {
 #  -> index.caicloud.io/caicloudgcr/google_containers_cloudsql-authenticator
 grep -IhEro "gcr.io/google_containers/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs | sort -u |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build | sort -u |
   while read -r gcr_image ; do
     image=${gcr_image#"gcr.io/google_containers/"}
     caicloud_image="index.caicloud.io/caicloudgcr/google_containers_$image"
-    echo "++++++++++ Processing $gcr_image, image: $image"
+    echo "++++++++++ Pulling image ${gcr_image} from gcr.io, and push to ${caicloud_image}"
     sync_image "$gcr_image" "$caicloud_image"
+    echo ""
   done
 
 # Sync images in gcr.io/google_samples.
@@ -49,10 +50,11 @@ grep -IhEro "gcr.io/google_containers/[^\", ]*" \
 #  -> index.caicloud.io/caicloudgcr/google_samples_gb-frontend:v3
 grep -IhEro "gcr.io/google_samples/[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs | sort -u |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build | sort -u |
   while read -r gcr_image ; do
     image=${gcr_image#"gcr.io/google_samples/"}
     caicloud_image="index.caicloud.io/caicloudgcr/google_samples_$image"
-    echo "++++++++++ Processing $gcr_image, image: $image"
+    echo "++++++++++ Pulling image $gcr_image from gcr.io , image: $image"
     sync_image "$gcr_image" "$caicloud_image"
+    echo ""
   done

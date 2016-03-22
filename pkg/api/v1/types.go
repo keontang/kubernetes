@@ -665,7 +665,7 @@ type AnchnetPersistentDiskVolumeSource struct {
 	ReadOnly bool `json:"readOnly,omitempty"`
 }
 
-// GCEPersistentDiskVolumeSource represents a Persistent Disk resource in Google Compute Engine.
+// Represents a Persistent Disk resource in Google Compute Engine.
 //
 // A GCE PD must exist before mounting to a container. The disk must
 // also be in the same GCE project and zone as the kubelet. A GCE PD

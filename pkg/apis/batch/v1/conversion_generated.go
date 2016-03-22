@@ -44,6 +44,21 @@ func Convert_api_AWSElasticBlockStoreVolumeSource_To_v1_AWSElasticBlockStoreVolu
 	return autoConvert_api_AWSElasticBlockStoreVolumeSource_To_v1_AWSElasticBlockStoreVolumeSource(in, out, s)
 }
 
+func autoConvert_api_AnchnetPersistentDiskVolumeSource_To_v1_AnchnetPersistentDiskVolumeSource(in *api.AnchnetPersistentDiskVolumeSource, out *v1.AnchnetPersistentDiskVolumeSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*api.AnchnetPersistentDiskVolumeSource))(in)
+	}
+	out.VolumeID = in.VolumeID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_api_AnchnetPersistentDiskVolumeSource_To_v1_AnchnetPersistentDiskVolumeSource(in *api.AnchnetPersistentDiskVolumeSource, out *v1.AnchnetPersistentDiskVolumeSource, s conversion.Scope) error {
+	return autoConvert_api_AnchnetPersistentDiskVolumeSource_To_v1_AnchnetPersistentDiskVolumeSource(in, out, s)
+}
+
 func autoConvert_api_AzureFileVolumeSource_To_v1_AzureFileVolumeSource(in *api.AzureFileVolumeSource, out *v1.AzureFileVolumeSource, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*api.AzureFileVolumeSource))(in)
@@ -1099,6 +1114,15 @@ func autoConvert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*api.VolumeSource))(in)
 	}
+	// unable to generate simple pointer conversion for api.AnchnetPersistentDiskVolumeSource -> v1.AnchnetPersistentDiskVolumeSource
+	if in.AnchnetPersistentDisk != nil {
+		out.AnchnetPersistentDisk = new(v1.AnchnetPersistentDiskVolumeSource)
+		if err := Convert_api_AnchnetPersistentDiskVolumeSource_To_v1_AnchnetPersistentDiskVolumeSource(in.AnchnetPersistentDisk, out.AnchnetPersistentDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.AnchnetPersistentDisk = nil
+	}
 	// unable to generate simple pointer conversion for api.HostPathVolumeSource -> v1.HostPathVolumeSource
 	if in.HostPath != nil {
 		out.HostPath = new(v1.HostPathVolumeSource)
@@ -1340,6 +1364,21 @@ func autoConvert_v1_AWSElasticBlockStoreVolumeSource_To_api_AWSElasticBlockStore
 
 func Convert_v1_AWSElasticBlockStoreVolumeSource_To_api_AWSElasticBlockStoreVolumeSource(in *v1.AWSElasticBlockStoreVolumeSource, out *api.AWSElasticBlockStoreVolumeSource, s conversion.Scope) error {
 	return autoConvert_v1_AWSElasticBlockStoreVolumeSource_To_api_AWSElasticBlockStoreVolumeSource(in, out, s)
+}
+
+func autoConvert_v1_AnchnetPersistentDiskVolumeSource_To_api_AnchnetPersistentDiskVolumeSource(in *v1.AnchnetPersistentDiskVolumeSource, out *api.AnchnetPersistentDiskVolumeSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*v1.AnchnetPersistentDiskVolumeSource))(in)
+	}
+	out.VolumeID = in.VolumeID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_v1_AnchnetPersistentDiskVolumeSource_To_api_AnchnetPersistentDiskVolumeSource(in *v1.AnchnetPersistentDiskVolumeSource, out *api.AnchnetPersistentDiskVolumeSource, s conversion.Scope) error {
+	return autoConvert_v1_AnchnetPersistentDiskVolumeSource_To_api_AnchnetPersistentDiskVolumeSource(in, out, s)
 }
 
 func autoConvert_v1_AzureFileVolumeSource_To_api_AzureFileVolumeSource(in *v1.AzureFileVolumeSource, out *api.AzureFileVolumeSource, s conversion.Scope) error {
@@ -2401,6 +2440,15 @@ func autoConvert_v1_VolumeSource_To_api_VolumeSource(in *v1.VolumeSource, out *a
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*v1.VolumeSource))(in)
 	}
+	// unable to generate simple pointer conversion for v1.AnchnetPersistentDiskVolumeSource -> api.AnchnetPersistentDiskVolumeSource
+	if in.AnchnetPersistentDisk != nil {
+		out.AnchnetPersistentDisk = new(api.AnchnetPersistentDiskVolumeSource)
+		if err := Convert_v1_AnchnetPersistentDiskVolumeSource_To_api_AnchnetPersistentDiskVolumeSource(in.AnchnetPersistentDisk, out.AnchnetPersistentDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.AnchnetPersistentDisk = nil
+	}
 	// unable to generate simple pointer conversion for v1.HostPathVolumeSource -> api.HostPathVolumeSource
 	if in.HostPath != nil {
 		out.HostPath = new(api.HostPathVolumeSource)
@@ -2952,6 +3000,7 @@ func Convert_extensions_JobStatus_To_v1_JobStatus(in *extensions.JobStatus, out 
 func init() {
 	err := api.Scheme.AddGeneratedConversionFuncs(
 		autoConvert_api_AWSElasticBlockStoreVolumeSource_To_v1_AWSElasticBlockStoreVolumeSource,
+		autoConvert_api_AnchnetPersistentDiskVolumeSource_To_v1_AnchnetPersistentDiskVolumeSource,
 		autoConvert_api_AzureFileVolumeSource_To_v1_AzureFileVolumeSource,
 		autoConvert_api_Capabilities_To_v1_Capabilities,
 		autoConvert_api_CephFSVolumeSource_To_v1_CephFSVolumeSource,
@@ -3005,6 +3054,7 @@ func init() {
 		autoConvert_unversioned_LabelSelectorRequirement_To_v1_LabelSelectorRequirement,
 		autoConvert_unversioned_LabelSelector_To_v1_LabelSelector,
 		autoConvert_v1_AWSElasticBlockStoreVolumeSource_To_api_AWSElasticBlockStoreVolumeSource,
+		autoConvert_v1_AnchnetPersistentDiskVolumeSource_To_api_AnchnetPersistentDiskVolumeSource,
 		autoConvert_v1_AzureFileVolumeSource_To_api_AzureFileVolumeSource,
 		autoConvert_v1_Capabilities_To_api_Capabilities,
 		autoConvert_v1_CephFSVolumeSource_To_api_CephFSVolumeSource,

@@ -109,8 +109,8 @@ func newAnchnet(config io.Reader) (cloudprovider.Interface, error) {
 //
 var _ cloudprovider.Interface = (*Anchnet)(nil)
 
-// TCPLoadBalancer returns an implementation of Interface.TCPLoadBalancer for Anchnet cloud.
-func (an *Anchnet) TCPLoadBalancer() (cloudprovider.TCPLoadBalancer, bool) {
+// LoadBalancer returns an implementation of Interface.LoadBalancer for Anchnet cloud.
+func (an *Anchnet) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	return an, true
 }
 

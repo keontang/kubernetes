@@ -107,3 +107,11 @@ func (util *AnchnetDiskUtil) DetachDisk(c *anchnetPersistentDiskCleaner) error {
 	}
 	return nil
 }
+
+func (util *AnchnetDiskUtil) CreateDisk(provisioner *anchnetPersistentDiskProvisioner) (volumeID string, volumeSizeGB int, labels map[string]string, err error) {
+	return "", 0, nil, nil
+}
+
+func (util *AnchnetDiskUtil) DeleteDisk(deleter *anchnetPersistentDiskDeleter) error {
+	return nil
+}

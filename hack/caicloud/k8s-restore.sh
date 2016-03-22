@@ -23,21 +23,12 @@ source "${KUBE_ROOT}/hack/caicloud/common.sh"
 # Restore 'gcr.io' images.
 grep -rl "index.caicloud.io/caicloudgcr/google_containers_[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build |
   xargs perl -X -i -pe 's|index.caicloud.io/caicloudgcr/google_containers_|gcr.io/google_containers/|g'
 grep -rl "index.caicloud.io/caicloudgcr/google_samples_[^\", ]*" \
      --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs |
+     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build |
   xargs perl -X -i -pe 's|index.caicloud.io/caicloudgcr/google_samples_|gcr.io/google_samples/|g'
-
-# Restore 'golang.org' packages.
-perl -i -pe "s|go get github.com/tools/godep|go get golang.org/x/tools/cmd/cover github.com/tools/godep|g" \
-     ${KUBE_ROOT}/build/build-image/Dockerfile
-
-# Restore 'github.com' files.
-perl -i -pe "s|${ETCD_URL}|https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.tar.gz|g" \
-     ${KUBE_ROOT}/build/build-image/Dockerfile
-perl -i -pe "s|${ETCD_VERSION}|v2.0.0|g" ${KUBE_ROOT}/build/build-image/Dockerfile
 
 # Restore supported e2e tests.
 perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \

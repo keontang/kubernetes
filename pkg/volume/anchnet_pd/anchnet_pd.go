@@ -25,11 +25,12 @@ import (
 	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/api"
-	anchnet_cloud "k8s.io/kubernetes/pkg/cloudprovider/providers/anchnet"
+	"k8s.io/kubernetes/pkg/api/resource"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/anchnet"
 	"k8s.io/kubernetes/pkg/types"
-	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
+	utilstrings "k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 )
 
@@ -45,49 +46,54 @@ type anchnetPersistentDiskPlugin struct {
 	host volume.VolumeHost
 }
 
-// Make sure anchnetPersistentDiskPlugin acutally implements volume.VolumePlugin.
+// Make sure anchnetPersistentDiskPlugin acutally implements volume interfaces.
+// Note: auto-provision is used to automatically provision a PersistentVolume to
+// bind to an unfulfilled PersistentVolumeClaim: it won't be called if there is
+// no unfulfilled PersistentVolumeClaim.
 var _ volume.VolumePlugin = &anchnetPersistentDiskPlugin{}
 var _ volume.PersistentVolumePlugin = &anchnetPersistentDiskPlugin{}
+var _ volume.DeletableVolumePlugin = &anchnetPersistentDiskPlugin{}
+var _ volume.ProvisionableVolumePlugin = &anchnetPersistentDiskPlugin{}
 
 const (
-	// TODO: Can we change the name to "caicloud.io/anchnet-pd".
 	anchnetPersistentDiskPluginName = "kubernetes.io/anchnet-pd"
 )
 
-func (plugin *anchnetPersistentDiskPlugin) Init(host volume.VolumeHost) {
+func (plugin *anchnetPersistentDiskPlugin) Init(host volume.VolumeHost) error {
 	plugin.host = host
+	return nil
 }
 
 func (plugin *anchnetPersistentDiskPlugin) Name() string {
 	return anchnetPersistentDiskPluginName
 }
 
-// CanSupport checks if the PersistentDiskPlugin can support given spec.  It is
+// CanSupport checks if the PersistentDiskPlugin can support given spec. It is
 // called from plugin manager.
 func (plugin *anchnetPersistentDiskPlugin) CanSupport(spec *volume.Spec) bool {
 	return (spec.PersistentVolume != nil && spec.PersistentVolume.Spec.AnchnetPersistentDisk != nil) ||
 		(spec.Volume != nil && spec.Volume.AnchnetPersistentDisk != nil)
 }
 
+// GetAccessModes describes the ways a given volume can be accessed/mounted.
 func (plugin *anchnetPersistentDiskPlugin) GetAccessModes() []api.PersistentVolumeAccessMode {
+	// Anchnet persistent disk can only be mounted once.
 	return []api.PersistentVolumeAccessMode{
-		// Anchnet persistent disk can only be mounted once.
 		api.ReadWriteOnce,
 	}
 }
 
 // NewBuilder returns a builder interface used for kubelet to setup/mount volume.
-// anchnetPersistentDiskBuilder implements the interface.
 func (plugin *anchnetPersistentDiskPlugin) NewBuilder(spec *volume.Spec, pod *api.Pod, _ volume.VolumeOptions) (volume.Builder, error) {
 	// Inject real implementations here, test through the internal function.
 	return plugin.newBuilderInternal(spec, pod.UID, &AnchnetDiskUtil{}, plugin.host.GetMounter())
 }
 
 func (plugin *anchnetPersistentDiskPlugin) newBuilderInternal(spec *volume.Spec, podUID types.UID, manager pdManager, mounter mount.Interface) (volume.Builder, error) {
-	var pd *api.AnchnetPersistentDiskVolumeSource
-	var readOnly bool
 	// PDs used directly in a pod have a ReadOnly flag set by the pod author.
 	// PDs used as a PersistentVolume gets the ReadOnly flag indirectly through the persistent-claim volume used to mount the PV.
+	var readOnly bool
+	var pd *api.AnchnetPersistentDiskVolumeSource
 	if spec.Volume != nil && spec.Volume.AnchnetPersistentDisk != nil {
 		pd = spec.Volume.AnchnetPersistentDisk
 		readOnly = pd.ReadOnly
@@ -105,20 +111,21 @@ func (plugin *anchnetPersistentDiskPlugin) newBuilderInternal(spec *volume.Spec,
 
 	return &anchnetPersistentDiskBuilder{
 		anchnetPersistentDisk: &anchnetPersistentDisk{
-			podUID:   podUID,
-			volName:  spec.Name(),
-			volumeID: volumeID,
-			manager:  manager,
-			mounter:  mounter,
-			plugin:   plugin,
+			podUID:    podUID,
+			volName:   spec.Name(),
+			volumeID:  volumeID,
+			partition: partition,
+			manager:   manager,
+			mounter:   mounter,
+			plugin:    plugin,
 		},
 		fsType:      fsType,
-		partition:   partition,
 		readOnly:    readOnly,
 		diskMounter: &mount.SafeFormatAndMount{mounter, exec.New()},
 	}, nil
 }
 
+// NewCleaner returns a cleaner to cleanup/unmount the volumes.
 func (plugin *anchnetPersistentDiskPlugin) NewCleaner(volName string, podUID types.UID) (volume.Cleaner, error) {
 	// Inject real implementations here, test through the internal function.
 	return plugin.newCleanerInternal(volName, podUID, &AnchnetDiskUtil{}, plugin.host.GetMounter())
@@ -134,16 +141,56 @@ func (plugin *anchnetPersistentDiskPlugin) newCleanerInternal(volName string, po
 	}}, nil
 }
 
+// NewDeleter returns a deleter to delete the volumes.
+func (plugin *anchnetPersistentDiskPlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, error) {
+	return plugin.newDeleterInternal(spec, &AnchnetDiskUtil{})
+}
+
+func (plugin *anchnetPersistentDiskPlugin) newDeleterInternal(spec *volume.Spec, manager pdManager) (volume.Deleter, error) {
+	if spec.PersistentVolume != nil && spec.PersistentVolume.Spec.AnchnetPersistentDisk == nil {
+		return nil, fmt.Errorf("spec.PersistentVolumeSource.AnchnetPersistentDisk is nil")
+	}
+	return &anchnetPersistentDiskDeleter{
+		anchnetPersistentDisk: &anchnetPersistentDisk{
+			volName:  spec.Name(),
+			volumeID: spec.PersistentVolume.Spec.AnchnetPersistentDisk.VolumeID,
+			manager:  manager,
+			plugin:   plugin,
+		}}, nil
+}
+
+// NewProvisioner returns a provisioner to create the volumes.
+func (plugin *anchnetPersistentDiskPlugin) NewProvisioner(options volume.VolumeOptions) (volume.Provisioner, error) {
+	if len(options.AccessModes) == 0 {
+		options.AccessModes = plugin.GetAccessModes()
+	}
+	return plugin.newProvisionerInternal(options, &AnchnetDiskUtil{})
+}
+
+func (plugin *anchnetPersistentDiskPlugin) newProvisionerInternal(options volume.VolumeOptions, manager pdManager) (volume.Provisioner, error) {
+	return &anchnetPersistentDiskProvisioner{
+		anchnetPersistentDisk: &anchnetPersistentDisk{
+			manager: manager,
+			plugin:  plugin,
+		},
+		options: options,
+	}, nil
+}
+
 // pdManager abstracts interface to PD operations.
 type pdManager interface {
 	// AttachAndMountDisk attaches/mounts the disk to the kubelet's host machine.
 	AttachAndMountDisk(b *anchnetPersistentDiskBuilder, globalPDPath string) error
 	// DetachDisk detaches/unmount the disk from the kubelet's host machine.
 	DetachDisk(c *anchnetPersistentDiskCleaner) error
+	// Creates a disk.
+	CreateDisk(provisioner *anchnetPersistentDiskProvisioner) (volumeID string, volumeSizeGB int, labels map[string]string, err error)
+	// Deletes a disk.
+	DeleteDisk(deleter *anchnetPersistentDiskDeleter) error
 }
 
-// anchnetPersistentDisk volumes are disk resources provided by Anchnet
-// that are attached to the kubelet's host machine and exposed to the pod.
+// anchnetPersistentDisk are disk resources provided by anchnet that are attached to
+// the kubelet's host machine and exposed to the pod.
 type anchnetPersistentDisk struct {
 	// Name of the volume in provider.
 	volName string
@@ -151,19 +198,16 @@ type anchnetPersistentDisk struct {
 	volumeID string
 	// Mount the disk to Pod with podUID.
 	podUID types.UID
+	// Specifies the partition to mount
+	partition string
 	// Utility interface that provides API calls to the provider to attach/detach disks.
 	manager pdManager
 	// Mounter interface that provides system calls to mount the global path to the pod local path.
 	mounter mount.Interface
 	// Reference to PD plugin.
 	plugin *anchnetPersistentDiskPlugin
-}
-
-// GetPath returns the directory path the volume is mounted to. The path is a host path, e.g.
-// /var/lib/kubelet/pods/11053ab6-4ba7/volumes/kubernetes.io~pd/mongodb~volume
-func (pd *anchnetPersistentDisk) GetPath() string {
-	name := anchnetPersistentDiskPluginName
-	return pd.plugin.host.GetPodVolumeDir(pd.podUID, util.EscapeQualifiedNameForDisk(name), pd.volName)
+	// Placeholder for anchnet since it doesn't yet support metrics.
+	volume.MetricsNil
 }
 
 // getVolumeProvider returns Anchnet Volumes interface.
@@ -176,28 +220,33 @@ func (pd *anchnetPersistentDisk) getVolumeProvider() (anchnet_cloud.Volumes, err
 	return volumes, nil
 }
 
+// GetPath returns the directory path the volume is mounted to. The path is a host path, e.g.
+// /var/lib/kubelet/pods/11053ab6-4ba7/volumes/kubernetes.io~pd/mongodb~volume
+func (pd *anchnetPersistentDisk) GetPath() string {
+	name := anchnetPersistentDiskPluginName
+	return pd.plugin.host.GetPodVolumeDir(pd.podUID, utilstrings.EscapeQualifiedNameForDisk(name), pd.volName)
+}
+
 // anchnetPersistentDiskBuilder setup and mounts persistent disk.
 type anchnetPersistentDiskBuilder struct {
 	*anchnetPersistentDisk
 	// Filesystem type, optional.
 	fsType string
-	// Specifies the partition to mount
-	partition string
 	// Specifies whether the disk will be attached as read-only.
 	readOnly bool
 	// diskMounter provides the interface that is used to mount the actual block device.
-	diskMounter mount.Interface
+	diskMounter *mount.SafeFormatAndMount
 }
 
 var _ volume.Builder = &anchnetPersistentDiskBuilder{}
 
 // SetUp attaches the disk and bind mounts to default path.
-func (b *anchnetPersistentDiskBuilder) SetUp() error {
-	return b.SetUpAt(b.GetPath())
+func (b *anchnetPersistentDiskBuilder) SetUp(fsGroup *int64) error {
+	return b.SetUpAt(b.GetPath(), fsGroup)
 }
 
 // SetUpAt attaches the disk and bind mounts to the volume path.
-func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string) error {
+func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string, fsGroup *int64) error {
 	notMnt, err := b.mounter.IsLikelyNotMountPoint(dir)
 	glog.V(4).Infof("PersistentDisk set up: %s %v %v", dir, !notMnt, err)
 	if err != nil && !os.IsNotExist(err) {
@@ -259,8 +308,13 @@ func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string) error {
 	return nil
 }
 
-func (b *anchnetPersistentDiskBuilder) IsReadOnly() bool {
-	return b.readOnly
+// GetAttributes returns the attributes of the builder.
+func (b *anchnetPersistentDiskBuilder) GetAttributes() volume.Attributes {
+	return volume.Attributes{
+		ReadOnly:        b.readOnly,
+		Managed:         !b.readOnly,
+		SupportsSELinux: false,
+	}
 }
 
 var _ volume.Cleaner = &anchnetPersistentDiskCleaner{}
@@ -281,17 +335,17 @@ func (c *anchnetPersistentDiskCleaner) TearDown() error {
 func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 	notMnt, err := c.mounter.IsLikelyNotMountPoint(dir)
 	if err != nil {
-		glog.Info("Error checking if mountpoint ", dir, ": ", err)
+		glog.V(2).Info("Error checking if mountpoint ", dir, ": ", err)
 		return err
 	}
 	if notMnt {
-		glog.Info("Not mountpoint, deleting")
+		glog.V(2).Info("Not mountpoint, deleting")
 		return os.Remove(dir)
 	}
 
 	refs, err := mount.GetMountRefs(c.mounter, dir)
 	if err != nil {
-		glog.Info("Error getting mountrefs for ", dir, ": ", err)
+		glog.V(2).Info("Error getting mountrefs for ", dir, ": ", err)
 		return err
 	}
 	if len(refs) == 0 {
@@ -299,7 +353,7 @@ func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 	}
 	// Unmount the bind-mount inside this pod
 	if err := c.mounter.Unmount(dir); err != nil {
-		glog.Info("Error unmounting dir ", dir, ": ", err)
+		glog.V(2).Info("Error unmounting dir ", dir, ": ", err)
 		return err
 	}
 	// If len(refs) is 1, then all bind mounts have been removed, and the
@@ -311,7 +365,7 @@ func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 			return err
 		}
 	} else {
-		glog.Infof("Found multiple refs; won't detach anchnet volume: %v", refs)
+		glog.V(2).Info("Found multiple refs; won't detach anchnet volume: %v", refs)
 	}
 	notMnt, mntErr := c.mounter.IsLikelyNotMountPoint(dir)
 	if mntErr != nil {
@@ -325,6 +379,79 @@ func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 		}
 	}
 	return nil
+}
+
+var _ volume.Deleter = &anchnetPersistentDiskDeleter{}
+
+type anchnetPersistentDiskDeleter struct {
+	*anchnetPersistentDisk
+}
+
+func (d *anchnetPersistentDiskDeleter) GetPath() string {
+	name := anchnetPersistentDiskPluginName
+	return d.plugin.host.GetPodVolumeDir(d.podUID, utilstrings.EscapeQualifiedNameForDisk(name), d.volName)
+}
+
+func (d *anchnetPersistentDiskDeleter) Delete() error {
+	return d.manager.DeleteDisk(d)
+}
+
+var _ volume.Provisioner = &anchnetPersistentDiskProvisioner{}
+
+type anchnetPersistentDiskProvisioner struct {
+	*anchnetPersistentDisk
+	options volume.VolumeOptions
+}
+
+func (c *anchnetPersistentDiskProvisioner) Provision(pv *api.PersistentVolume) error {
+	volumeID, sizeGB, labels, err := c.manager.CreateDisk(c)
+	if err != nil {
+		return err
+	}
+	pv.Spec.PersistentVolumeSource.AnchnetPersistentDisk.VolumeID = volumeID
+	pv.Spec.Capacity = api.ResourceList{
+		api.ResourceName(api.ResourceStorage): resource.MustParse(fmt.Sprintf("%dGi", sizeGB)),
+	}
+
+	if len(labels) != 0 {
+		if pv.Labels == nil {
+			pv.Labels = make(map[string]string)
+		}
+		for k, v := range labels {
+			pv.Labels[k] = v
+		}
+	}
+
+	return nil
+}
+
+func (c *anchnetPersistentDiskProvisioner) NewPersistentVolumeTemplate() (*api.PersistentVolume, error) {
+	// Provide dummy api.PersistentVolume.Spec, it will be filled in
+	// anchnetPersistentDiskProvisioner.Provision()
+	return &api.PersistentVolume{
+		ObjectMeta: api.ObjectMeta{
+			GenerateName: "pv-anchnet-",
+			Labels:       map[string]string{},
+			Annotations: map[string]string{
+				"kubernetes.io/createdby": "anchnet-pd-dynamic-provisioner",
+			},
+		},
+		Spec: api.PersistentVolumeSpec{
+			PersistentVolumeReclaimPolicy: c.options.PersistentVolumeReclaimPolicy,
+			AccessModes:                   c.options.AccessModes,
+			Capacity: api.ResourceList{
+				api.ResourceName(api.ResourceStorage): c.options.Capacity,
+			},
+			PersistentVolumeSource: api.PersistentVolumeSource{
+				AnchnetPersistentDisk: &api.AnchnetPersistentDiskVolumeSource{
+					VolumeID:  volume.ProvisionedVolumeName,
+					FSType:    "ext4",
+					Partition: 0,
+					ReadOnly:  false,
+				},
+			},
+		},
+	}, nil
 }
 
 // makeGlobalPDPath creates a directory path which is used to mount the persistent disk.

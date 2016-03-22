@@ -522,7 +522,7 @@ func (s *ServiceController) needsUpdate(oldService *api.Service, newService *api
 }
 
 func (s *ServiceController) loadBalancerName(service *api.Service) string {
-	return cloudprovider.GetLoadBalancerName(service)
+	return cloudprovider.GetLoadBalancerName(s.clusterName, service)
 }
 
 func getPortsForLB(service *api.Service) ([]*api.ServicePort, error) {
@@ -727,7 +727,7 @@ func (s *ServiceController) lockedUpdateLoadBalancerHosts(service *api.Service, 
 	}
 
 	// This operation doesn't normally take very long (and happens pretty often), so we only record the final event
-	name := cloudprovider.GetLoadBalancerName(service)
+	name := cloudprovider.GetLoadBalancerName(s.clusterName, service)
 	err := s.balancer.UpdateLoadBalancer(name, s.zone.Region, hosts)
 	if err == nil {
 		s.eventRecorder.Event(service, api.EventTypeNormal, "UpdatedLoadBalancer", "Updated load balancer with new hosts")

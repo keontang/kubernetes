@@ -5,30 +5,42 @@ metadata:
   namespace: kube-system
   labels:
     k8s-app: heapster
-    version: v10
     kubernetes.io/cluster-service: "true"
 spec:
   replicas: 1
   selector:
     k8s-app: heapster
-    version: v10
   template:
     metadata:
       labels:
         k8s-app: heapster
-        version: v10
         kubernetes.io/cluster-service: "true"
     spec:
       containers:
-        - image: index.caicloud.io/caicloud/google-heapster:v0.19.0
+        - image: index.caicloud.io/caicloud/google-heapster:v1.0.0
           name: heapster
           resources:
             limits:
               cpu: 100m
               memory: {{ pillar['heapster_memory'] }}
+            requests:
+              cpu: 100m
+              memory: {{ pillar['heapster_request'] }}
           command:
             - /heapster
             - --source=kubernetes:''
             - --sink=influxdb:http://monitoring-influxdb:8086
-            - --stats_resolution=10s
-            - --sink_frequency=30s
+            - --metric_resolution=10s
+        - image: index.caicloud.io/caicloud/google-heapster:v1.0.0
+          name: eventer
+          resources:
+            limits:
+              cpu: 100m
+              memory: {{ pillar['heapster_memory'] }}
+            requests:
+              cpu: 100m
+              memory: {{ pillar['heapster_request'] }}
+          command:
+            - /eventer
+            - --source=kubernetes:''
+            - --sink=influxdb:http://monitoring-influxdb:8086

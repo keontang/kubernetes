@@ -145,16 +145,28 @@ KUBELET_OPTS="--logtostderr=true \
 --port=${KUBELET_PORT} \
 --system-container=/system \
 --cgroup-root=/ \
+--runtime-cgroups=/docker-daemon \
+--kubelet-cgroups=/kubelet \
+--babysit-daemons=true \
 --config=/etc/kubernetes/manifest \
 --kubeconfig=/etc/kubernetes/kubelet-kubeconfig
 EOF
   # If this is master and we want to register master as a node, set --api-servers flag.
-  # Register to node defaults to true if --api-servers is set.
-  if [[ "${1:-}" == "master" && "${REGISTER_MASTER_KUBELET}" == "true" ]]; then
-    echo -n " --api-servers=http://${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} " >> ~/kube/configs/kubelet
+  # Register to node defaults to true if --api-servers is set. If we don't want to
+  # register master as a node, then we set --register-schedulable=false.
+  if [[ "${1:-}" == "master" ]]; then
+    if [[ "${REGISTER_MASTER_KUBELET}" == "true" ]]; then
+      echo -n " --api-servers=http://${MASTER_INSECURE_ADDRESS}:${MASTER_INSECURE_PORT} " >> ~/kube/configs/kubelet
+    fi
+    if [[ "${REGISTER_MASTER_SCHEDULABLE}" == "true" ]]; then
+      echo -n " --register-schedulable=true " >> ~/kube/configs/kubelet
+    else
+      echo -n " --register-schedulable=false " >> ~/kube/configs/kubelet
+    fi
   elif [[ "${1:-}" == "node" ]]; then
     echo -n " --api-servers=https://${MASTER_IIP}:${MASTER_SECURE_PORT} " >> ~/kube/configs/kubelet
   fi
+
   if [[ "${2:-}" != "" ]]; then
     local hostname=$(echo ${2} | tr '[:upper:]' '[:lower:]') # lowercase input value
     echo -n " --hostname-override=${hostname} " >> ~/kube/configs/kubelet

@@ -65,11 +65,14 @@ function deploy-addons {
 
   # Replace placeholder with our configuration for heapster rc.
   local -r heapster_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-controller.yaml.in"
-  sed -e "s/{{ pillar\['heapster_memory'\] }}/${HEAPSTER_MEMORY}/g" ${heapster_rc_file} > ${KUBE_TEMP}/heapster-controller.yaml
+  sed -e "s/{{ pillar\['heapster_memory'\] }}/${HEAPSTER_MEMORY}/g;s/{{ pillar\['heapster_request'\] }}/${HEAPSTER_MEMORY}/g" ${heapster_rc_file} > ${KUBE_TEMP}/heapster-controller.yaml
 
   # Replace placeholder with our configuration for monitoring rc.
   local -r monitoring_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/monitoring/monitoring-controller.yaml.in"
-  sed -e "s/{{ pillar\['cluster_id'\] }}/${CLUSTER_ID}/g;s/{{ pillar\['caicloud_uid'\] }}/${CAICLOUD_UID}/g;s/{{ pillar\['cluster_token'\] }}/${CLUSTER_TOKEN}/g" ${monitoring_rc_file} > ${KUBE_TEMP}/monitoring-controller.yaml
+  sed -e "s/{{ pillar\['cluster_id'\] }}/${CLUSTER_ID}/g;\
+          s/{{ pillar\['caicloud_uid'\] }}/${CAICLOUD_UID}/g;\
+          s/{{ pillar\['cluster_token'\] }}/${CLUSTER_TOKEN}/g;\
+          s/{{ pillar\['cluster_name'\] }}/${CLUSTER_ALIAS}/g" ${monitoring_rc_file} > ${KUBE_TEMP}/monitoring-controller.yaml
 
   # Copy addon configurationss and startup script to master instance under ~/kube.
   rm -rf ${KUBE_TEMP}/addons

@@ -30,6 +30,9 @@ NODE_SSH_INFO=${NODE_SSH_INFO:-"vagrant:vagrant@192.168.205.11,vagrant:vagrant@1
 # in anchnet. The same name needs to be specified when running kube-down to
 # release the resources acquired during kube-up.
 CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
+# This is a more meaningful name to user and will be passed into monitoring for
+# paging later.
+CLUSTER_ALIAS=${CLUSTER_ALIAS:-"kube-default"}
 
 # The version of caicloud release to use if building release is not required.
 # E.g. v1.0.2, 2015-09-09-15-30-30, etc.

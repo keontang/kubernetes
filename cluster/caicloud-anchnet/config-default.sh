@@ -44,6 +44,9 @@ KUBE_DISTRO=${KUBE_DISTRO:-"trusty"}
 # in anchnet. The same name needs to be specified when running kube-down to
 # release the resources acquired during kube-up.
 CLUSTER_NAME=${CLUSTER_NAME:-"kube-default"}
+# This is a more meaningful name to user and will be passed into monitoring for
+# paging later.
+CLUSTER_ALIAS=${CLUSTER_ALIAS:-"kube-default"}
 
 # Decide if building release is needed. If the parameter is true, then use
 # BUILD_VERSION as release version; otherwise, use CAICLOUD_KUBE_VERSION. Using

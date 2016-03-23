@@ -23,10 +23,8 @@ import (
 	"strconv"
 
 	"github.com/golang/glog"
-
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/resource"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/anchnet"
 	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -49,7 +47,7 @@ type anchnetPersistentDiskPlugin struct {
 // Make sure anchnetPersistentDiskPlugin acutally implements volume interfaces.
 // Note: auto-provision is used to automatically provision a PersistentVolume to
 // bind to an unfulfilled PersistentVolumeClaim: it won't be called if there is
-// no unfulfilled PersistentVolumeClaim.
+// no unfulfilled PersistentVolumeClaim. The operations are done in
 var _ volume.VolumePlugin = &anchnetPersistentDiskPlugin{}
 var _ volume.PersistentVolumePlugin = &anchnetPersistentDiskPlugin{}
 var _ volume.DeletableVolumePlugin = &anchnetPersistentDiskPlugin{}
@@ -179,13 +177,14 @@ func (plugin *anchnetPersistentDiskPlugin) newProvisionerInternal(options volume
 
 // pdManager abstracts interface to PD operations.
 type pdManager interface {
-	// AttachAndMountDisk attaches/mounts the disk to the kubelet's host machine.
+	// AttachAndMountDisk attaches a disk specified by a volume.anchnetPersistentDisk
+	// to current kubelet. The mount path is 'globalPDPath'.
 	AttachAndMountDisk(b *anchnetPersistentDiskBuilder, globalPDPath string) error
 	// DetachDisk detaches/unmount the disk from the kubelet's host machine.
 	DetachDisk(c *anchnetPersistentDiskCleaner) error
-	// Creates a disk.
+	// Creates a disk in anchnet.
 	CreateDisk(provisioner *anchnetPersistentDiskProvisioner) (volumeID string, volumeSizeGB int, labels map[string]string, err error)
-	// Deletes a disk.
+	// Deletes a disk in anchnet.
 	DeleteDisk(deleter *anchnetPersistentDiskDeleter) error
 }
 
@@ -210,14 +209,11 @@ type anchnetPersistentDisk struct {
 	volume.MetricsNil
 }
 
-// getVolumeProvider returns Anchnet Volumes interface.
-func (pd *anchnetPersistentDisk) getVolumeProvider() (anchnet_cloud.Volumes, error) {
-	cloud := pd.plugin.host.GetCloudProvider()
-	volumes, ok := cloud.(anchnet_cloud.Volumes)
-	if !ok {
-		return nil, fmt.Errorf("cloudprovider anchnet does not support volumes")
+func detachDiskLogError(pd *anchnetPersistentDisk) {
+	err := pd.manager.DetachDisk(&anchnetPersistentDiskCleaner{pd})
+	if err != nil {
+		glog.Warningf("Failed to detach disk: %v (%v)", pd, err)
 	}
-	return volumes, nil
 }
 
 // GetPath returns the directory path the volume is mounted to. The path is a host path, e.g.
@@ -240,6 +236,15 @@ type anchnetPersistentDiskBuilder struct {
 
 var _ volume.Builder = &anchnetPersistentDiskBuilder{}
 
+// GetAttributes returns the attributes of the builder.
+func (b *anchnetPersistentDiskBuilder) GetAttributes() volume.Attributes {
+	return volume.Attributes{
+		ReadOnly:        b.readOnly,
+		Managed:         !b.readOnly,
+		SupportsSELinux: false,
+	}
+}
+
 // SetUp attaches the disk and bind mounts to default path.
 func (b *anchnetPersistentDiskBuilder) SetUp(fsGroup *int64) error {
 	return b.SetUpAt(b.GetPath(), fsGroup)
@@ -259,7 +264,10 @@ func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string, fsGroup *int64) error
 	// Get the place where we globally mount the disk. The disk will be mounted at
 	// `globalPDPath` first, then will be bind-mounted to `dir`.
 	globalPDPath := makeGlobalPDPath(b.plugin.host, b.volumeID)
-	glog.Infof("Mount PersistentDisk at %v", globalPDPath)
+	glog.V(2).Infof("Mount PersistentDisk at %v", globalPDPath)
+
+	// Call pdManager, which in turn calls cloudprovider to setup up disk. The disk
+	// must exist, i.e. b.VolumeID is a valid identifier (vol-xxxxxx).
 	if err := b.manager.AttachAndMountDisk(b, globalPDPath); err != nil {
 		return err
 	}
@@ -267,7 +275,7 @@ func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string, fsGroup *int64) error
 	// Create `dir` to prepare for bind mount.
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		// TODO: we should really eject the attach/detach out into its own control loop.
-		// detachDiskLogError(b)
+		detachDiskLogError(b)
 		return err
 	}
 
@@ -301,20 +309,11 @@ func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string, fsGroup *int64) error
 		}
 		os.Remove(dir)
 		// TODO: we should really eject the attach/detach out into its own control loop.
-		// detachDiskLogError(b.awsElasticBlockStore)
+		detachDiskLogError(b.anchnetPersistentDisk)
 		return err
 	}
 
 	return nil
-}
-
-// GetAttributes returns the attributes of the builder.
-func (b *anchnetPersistentDiskBuilder) GetAttributes() volume.Attributes {
-	return volume.Attributes{
-		ReadOnly:        b.readOnly,
-		Managed:         !b.readOnly,
-		SupportsSELinux: false,
-	}
 }
 
 var _ volume.Cleaner = &anchnetPersistentDiskCleaner{}
@@ -351,7 +350,7 @@ func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 	if len(refs) == 0 {
 		glog.Warning("Did not find pod-mount for ", dir, " during tear-down")
 	}
-	// Unmount the bind-mount inside this pod
+	// Unmount the bind-mount inside this pod.
 	if err := c.mounter.Unmount(dir); err != nil {
 		glog.V(2).Info("Error unmounting dir ", dir, ": ", err)
 		return err
@@ -362,6 +361,7 @@ func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 		// c.volumeID is not initially set for volume-cleaners, so set it here.
 		c.volumeID = path.Base(refs[0])
 		if err := c.manager.DetachDisk(c); err != nil {
+			glog.V(2).Info("Failed to detach disk ", c.volumeID)
 			return err
 		}
 	} else {
@@ -374,7 +374,7 @@ func (c *anchnetPersistentDiskCleaner) TearDownAt(dir string) error {
 	}
 	if notMnt {
 		if err := os.Remove(dir); err != nil {
-			glog.Info("Error removing mountpoint ", dir, ": ", err)
+			glog.V(2).Info("Error removing mountpoint ", dir, ": ", err)
 			return err
 		}
 	}

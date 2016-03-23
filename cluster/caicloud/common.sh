@@ -404,18 +404,18 @@ function start-node-kubernetes {
 
 # This is used in both kube-up and kube-add-node to create a comma separated
 # string of node internal ips based on the cluster config NODE_IIP_RANGE and
-# NUM_MINIONS. E.g. if NODE_IIP_RANGE is 10.244.1.0/16 and NUM_MINIONS is 2,
+# NUM_NODES. E.g. if NODE_IIP_RANGE is 10.244.1.0/16 and NUM_NODES is 2,
 # then output is: "10.244.1.0,10.244.1.1".
 # Since the internal ip assignment is consecutive for now, we will have to
 # start from the next of the last internal ip we have already assigned.
 # For kube-up, we have 0 occupied internal ip to start with. For kube-add-node, we have
-# ${NUM_RUNNING_MINIONS} occupied internal ip.
+# ${NUM_RUNNING_NODES} occupied internal ip.
 # One known issue: https://github.com/caicloud/caicloud-kubernetes/issues/283
 #
 # Assumed vars:
 #   NODE_IIP_RANGE
-#   NUM_MINIONS
-#   NUM_RUNNING_MINIONS
+#   NUM_NODES
+#   NUM_RUNNING_NODES
 #
 # Vars set:
 #   NODE_IIPS
@@ -455,14 +455,14 @@ function create-node-internal-ips-variable {
     host_zeros=true
   fi
 
-  if (( ${NUM_RUNNING_MINIONS} + ${NUM_MINIONS} > (total_count - used_count) )); then
+  if (( ${NUM_RUNNING_NODES} + ${NUM_NODES} > (total_count - used_count) )); then
     log "Number of nodes is larger than allowed node internal IP address"
     kube-up-complete N
     exit 1
   fi
 
   # We could just compute the starting point directly but I'm lazy...
-  for (( i = 0; i < ${NUM_RUNNING_MINIONS}; i++ )); do
+  for (( i = 0; i < ${NUM_RUNNING_NODES}; i++ )); do
     # Avoid using all-zeros address for CIDR like 10.244.0.0/16.
     if [[ ${i} == 0 && ${host_zeros} == true ]]; then
       ((ip_octects[3]+=1))
@@ -478,7 +478,7 @@ function create-node-internal-ips-variable {
 
   # Since we've checked the required number of hosts < total number of hosts,
   # we can just simply add 1 to previous IP.
-  for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
+  for (( i = 0; i < ${NUM_NODES}; i++ )); do
     # Avoid using all-zeros address for CIDR like 10.244.0.0/16.
     if [[ ${i} == 0 && ${host_zeros} == true ]]; then
       ((ip_octects[3]+=1))

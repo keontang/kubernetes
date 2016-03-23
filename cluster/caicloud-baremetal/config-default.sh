@@ -193,9 +193,9 @@ function calculate-default {
   MASTER_IIP=${MASTER_IP}
   NODE_IIPS=${NODE_IPS}
 
-  # Create node IP address array and NUM_MINIONS.
+  # Create node IP address array and NUM_NODES.
   IFS=',' read -ra NODE_IPS_ARR <<< "${NODE_IPS}"
-  export NUM_MINIONS=${#NODE_IPS_ARR[@]}
+  export NUM_NODES=${#NODE_IPS_ARR[@]}
 
   # Note that master_name and node_name are name of the instances in anchnet, which
   # is helpful to group instances; however, anchnet API works well with instance id,

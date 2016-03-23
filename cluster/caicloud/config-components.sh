@@ -48,7 +48,6 @@ EOF
 # Assumed vars:
 #   ADMISSION_CONTROL
 #   CAICLOUD_PROVIDER
-#   CLUSTER_NAME
 #   MASTER_INSECURE_ADDRESS
 #   MASTER_INSECURE_PORT
 #   MASTER_SECURE_PORT
@@ -62,7 +61,6 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --secure-port=${MASTER_SECURE_PORT} \
 --cors-allowed-origins=.* \
 --etcd-servers=http://127.0.0.1:4001 \
---cluster-name=${CLUSTER_NAME} \
 --service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE} \
 --admission-control=${ADMISSION_CONTROL} \
 --token-auth-file=/etc/kubernetes/known-tokens.csv \

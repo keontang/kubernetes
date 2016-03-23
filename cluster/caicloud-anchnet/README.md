@@ -158,7 +158,7 @@ KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-push.sh
 
 In case we want to add node(s) to a running cluster, we can run:
 ```
-CLUSTER_NAME=kube-default MASTER_EIP=103.21.116.147 NUM_MINIONS=1 KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-add-node.sh
+CLUSTER_NAME=kube-default MASTER_EIP=103.21.116.147 NUM_NODES=1 KUBERNETES_PROVIDER=caicloud-anchnet ./cluster/kube-add-node.sh
 ```
 
 Note this is not working as of now.

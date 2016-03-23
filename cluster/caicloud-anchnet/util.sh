@@ -107,10 +107,10 @@ function kube-up {
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
     # For dev, set to existing instance IDs for master and nodes. Other variables
     # will be calculated based on the IDs.
-    MASTER_INSTANCE_ID="i-LD6T7OD7"
-    NODE_INSTANCE_IDS="i-ETN6DSZ4,i-5XRV5UH2"
+    MASTER_INSTANCE_ID="i-J06C90YM"
+    NODE_INSTANCE_IDS="i-R52JHR1Y,i-Z282YS10"
     # To mimic actual kubeup process, we create vars to match create-master-instance
-    # create-node-instances, etc. We also override NUM_MINIONS.
+    # create-node-instances, etc. We also override NUM_NODES.
     create-dev-variables
     # Add dns record once we get master eip
     if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
@@ -128,7 +128,7 @@ function kube-up {
     if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
       add-dns-record
     fi
-    create-node-instances "${NUM_MINIONS}"
+    create-node-instances "${NUM_NODES}"
     # Create a private SDN; then add master, nodes to it. The IP address of the
     # machines in this network will be set in setup-anchnet-instances. The function
     # will create one var:
@@ -237,11 +237,11 @@ function kube-push {
 
   # PRIVATE_SDN_INTERFACE is a hack, just like in kube-up - there is no easy
   # to find which interface serves private SDN.
-  # TODO: NUM_RUNNING_MINIONS is ugly, we have to swap it with NUM_MINIONS to make
+  # TODO: NUM_RUNNING_NODES is ugly, we have to swap it with NUM_NODES to make
   # kube-push work.
   PRIVATE_SDN_INTERFACE="eth1"
-  NUM_MINIONS=${NUM_RUNNING_MINIONS}
-  NUM_RUNNING_MINIONS=0
+  NUM_NODES=${NUM_RUNNING_NODES}
+  NUM_RUNNING_NODES=0
 
   # Make sure we have:
   #  1. a staging area
@@ -465,7 +465,7 @@ function create-dev-variables {
       NODE_EIPS="${NODE_EIPS},${node_eip}"
     fi
   done
-  export NUM_MINIONS=${#node_instance_ids_arr[@]}
+  export NUM_NODES=${#node_instance_ids_arr[@]}
   PRIVATE_SDN_INTERFACE="eth1"
 }
 
@@ -486,7 +486,7 @@ function create-dev-variables {
 #   NODE_INSTANCE_IDS
 #   NODE_EIPS
 #   NODE_EIP_IDS
-#   NUM_RUNNING_MINIONS
+#   NUM_RUNNING_NODES
 #   INSTANCE_IDS
 #   INSTANCE_EIPS
 #   INSTANCE_EIP_IDS
@@ -528,7 +528,7 @@ function find-instance-and-eip-resouces {
     NODE_EIPS_ARR=""
     NODE_EIP_IDS_ARR=""
     NODE_INSTANCE_IDS_ARR=""
-    export NUM_RUNNING_MINIONS=0
+    export NUM_RUNNING_NODES=0
   else
     INSTANCE_IDS="${MASTER_INSTANCE_ID},${NODE_INSTANCE_IDS}"
     INSTANCE_EIPS="${MASTER_EIP},${NODE_EIPS}"
@@ -536,7 +536,7 @@ function find-instance-and-eip-resouces {
     IFS=',' read -ra NODE_EIPS_ARR <<< "${NODE_EIPS}"
     IFS=',' read -ra NODE_EIP_IDS_ARR <<< "${NODE_EIP_IDS}"
     IFS=',' read -ra NODE_INSTANCE_IDS_ARR <<< "${NODE_INSTANCE_IDS}"
-    export NUM_RUNNING_MINIONS=${#NODE_EIPS_ARR[@]}
+    export NUM_RUNNING_NODES=${#NODE_EIPS_ARR[@]}
   fi
 }
 
@@ -1057,7 +1057,7 @@ function setup-anchnet-instances-internal {
     # instances can't find each other using their hostname, but this is required
     # in kubernetes where master uses node hostname to collect node's data, e.g.
     # logs.
-    for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
+    for (( i = 0; i < ${NUM_NODES}; i++ )); do
       echo "add-hosts-entry ${NODE_INSTANCE_IDS_ARR[$i]} ${NODE_IIPS_ARR[$i]}"
     done
     echo "setup-network"
@@ -1208,7 +1208,7 @@ function prepare-e2e() {
   export CLUSTER_NAME="e2e-test"
   export BUILD_TARBALL="Y"
   export KUBE_UP_MODE="tarball"
-  export NUM_MINIONS=3
+  export NUM_NODES=3
   export MASTER_MEM=2048
   export MASTER_CPU_CORES=2
   export NODE_MEM=2048
@@ -1333,7 +1333,7 @@ function setup-node-network-internal {
     grep -v "^#" "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
     echo ""
     # Make sure master is able to find nodes using node hostname.
-    for (( i = 0; i < ${NUM_MINIONS}; i++ )); do
+    for (( i = 0; i < ${NUM_NODES}; i++ )); do
       echo "add-hosts-entry ${NODE_INSTANCE_IDS_ARR[$i]} ${NODE_IIPS_ARR[$i]}"
     done
   ) > "${KUBE_TEMP}/master-host-setup.sh"

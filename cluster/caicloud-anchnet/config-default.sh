@@ -96,8 +96,13 @@ CLUSTER_ID=${CLUSTER_ID:-"32793e34-79d2-432b-ac17-708b61b80e6a"}
 CLUSTER_TOKEN=${CLUSTER_TOKEN:-"eSbsyAr2eDatXBxa"}
 CAICLOUD_UID=${CAICLOUD_UID:-"110ec58a-a0f2-4ac4-8393-c866d813b8d1"}
 
+# If we want to register master kubelet as a node. Note, since kubernetes 1.2,
+# it's better to always set this to true. We can disable scheduling user pod
+# to master via REGISTER_MASTER_SCHEDULABLE.
+REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET:-"true"}
+
 # If we want to register master kubelet as a node.
-REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET:-"false"}
+REGISTER_MASTER_SCHEDULABLE=${REGISTER_MASTER_SCHEDULABLE:-"false"}
 
 #
 # Following params in the section should rarely change.
@@ -305,6 +310,7 @@ BASE_DOMAIN_NAME=${BASE_DOMAIN_NAME:-"caicloudapp.com"}
 # Misc static configurations.
 # -----------------------------------------------------------------------------
 # Admission Controllers to invoke prior to persisting objects in cluster.
+ADMISSION_CONTROL=NamespaceLifecycle,LimitRanger,ServiceAccount,ResourceQuota,PersistentVolumeLabel
 ADMISSION_CONTROL=NamespaceLifecycle,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota
 
 # The infra container used for every Pod.

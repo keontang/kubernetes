@@ -275,7 +275,7 @@ func (b *anchnetPersistentDiskBuilder) SetUpAt(dir string, fsGroup *int64) error
 	// Create `dir` to prepare for bind mount.
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		// TODO: we should really eject the attach/detach out into its own control loop.
-		detachDiskLogError(b)
+		detachDiskLogError(b.anchnetPersistentDisk)
 		return err
 	}
 

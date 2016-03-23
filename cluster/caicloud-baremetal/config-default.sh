@@ -24,7 +24,7 @@ KUBE_DISTRO=${KUBE_DISTRO:-"trusty"}
 MASTER_SSH_INFO=${MASTER_SSH_INFO:-"vagrant:vagrant@192.168.205.10"}
 
 # ssh information for nodes (comma separated string).
-NODE_SSH_INFO=${NODE_SSH_INFO:-"vagrant:vagrant@192.168.205.11"}
+NODE_SSH_INFO=${NODE_SSH_INFO:-"vagrant:vagrant@192.168.205.11,vagrant:vagrant@192.168.205.12"}
 
 # Name of the cluster. This is used for constructing the prefix of resource IDs
 # in anchnet. The same name needs to be specified when running kube-down to
@@ -63,8 +63,13 @@ CLUSTER_ID=${CLUSTER_ID:-"32793e34-79d2-432b-ac17-708b61b80e6a"}
 CLUSTER_TOKEN=${CLUSTER_TOKEN:-"eSbsyAr2eDatXBxa"}
 CAICLOUD_UID=${CAICLOUD_UID:-"110ec58a-a0f2-4ac4-8393-c866d813b8d1"}
 
-# If we want to register master kubelet as a node.
+# If we want to register master kubelet as a node. Note, since kubernetes 1.2,
+# it's better to always set this to true. We can disable scheduling user pod
+# to master via REGISTER_MASTER_SCHEDULABLE.
 REGISTER_MASTER_KUBELET=${REGISTER_MASTER_KUBELET:-"true"}
+
+# If we want to register master kubelet as a node.
+REGISTER_MASTER_SCHEDULABLE=${REGISTER_MASTER_SCHEDULABLE:-"false"}
 
 #
 # Following params in the section should rarely change.
@@ -151,7 +156,7 @@ BASE_DOMAIN_NAME=${BASE_DOMAIN_NAME:-"caicloudapp.com"}
 # Misc static configurations.
 # -----------------------------------------------------------------------------
 # Admission Controllers to invoke prior to persisting objects in cluster.
-ADMISSION_CONTROL=NamespaceLifecycle,NamespaceExists,LimitRanger,ServiceAccount,ResourceQuota
+ADMISSION_CONTROL=NamespaceLifecycle,LimitRanger,ServiceAccount,ResourceQuota,PersistentVolumeLabel
 
 # The infra container used for every Pod.
 POD_INFRA_CONTAINER="caicloudgcr/pause:1.0"

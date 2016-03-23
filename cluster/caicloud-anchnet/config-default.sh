@@ -65,7 +65,7 @@ PROJECT_USER=${PROJECT_USER:-""}
 # Docker version. Ideally, this should come with CAICLOUD_KUBE_VERSION, but
 # there is no easy to enforce docker version in caicloud kubernetes release,
 # so we define it here separately.
-DOCKER_VERSION=${DOCKER_VERSION:-"1.8.3"}
+DOCKER_VERSION=${DOCKER_VERSION:-"1.9.1"}
 
 # The base image used to create master and node instance in image mode. The
 # param is only used in image mode. This image is created from scripts like
@@ -208,7 +208,7 @@ HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
 # Params from user for kube-up.
 # -----------------------------------------------------------------------------
 # Define number of nodes (minions). There will be only one master.
-NUM_MINIONS=${NUM_MINIONS:-2}
+NUM_NODES=${NUM_NODES:-2}
 
 # Define number of nodes (minions) currently running in the cluster.
 # This variable is mainly used to calculate internal ip address.
@@ -218,7 +218,7 @@ NUM_MINIONS=${NUM_MINIONS:-2}
 #
 # For kube-add-node, we will search for running minions by cluster name,
 # so this variable will be set automatically.
-NUM_RUNNING_MINIONS=${NUM_RUNNING_MINIONS:-0}
+NUM_RUNNING_NODES=${NUM_RUNNING_NODES:-0}
 
 # The memory size of master node (in MB).
 MASTER_MEM=${MASTER_MEM:-1024}

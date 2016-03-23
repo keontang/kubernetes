@@ -45,7 +45,7 @@ function kube-add-nodes {
   ensure-log-dir
 
   # Create nodes from scratch.
-  create-node-instances "${NUM_MINIONS}"
+  create-node-instances "${NUM_NODES}"
 
   # Clean up created node if we failed after new nodes are created.
   trap-add 'clean-up-failed-nodes' EXIT

@@ -22,15 +22,15 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/cloudprovider"
+	anchnet_cloud "k8s.io/kubernetes/pkg/cloudprovider/providers/anchnet"
 )
 
 // AnchnetDiskUtil implements pdManager which abstracts interface to PD operations.
 type AnchnetDiskUtil struct{}
 
-// AttachAndMountDisk attaches a disk specified by a volume.anchnetPersistentDisk to the
-// current kubelet. Mounts the disk to it's global path.
 func (util *AnchnetDiskUtil) AttachAndMountDisk(b *anchnetPersistentDiskBuilder, globalPDPath string) error {
-	volumes, err := b.getVolumeProvider()
+	volumes, err := getCloudProvider()
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,6 @@ func (util *AnchnetDiskUtil) AttachAndMountDisk(b *anchnetPersistentDiskBuilder,
 	return nil
 }
 
-// DetachDisk detaches the disk from the kubelet's host machine.
 func (util *AnchnetDiskUtil) DetachDisk(c *anchnetPersistentDiskCleaner) error {
 	// Unmount the global PD mount, which should be the only one.
 	globalPDPath := makeGlobalPDPath(c.plugin.host, c.volumeID)
@@ -96,7 +95,7 @@ func (util *AnchnetDiskUtil) DetachDisk(c *anchnetPersistentDiskCleaner) error {
 		return err
 	}
 	// Detach the disk.
-	volumes, err := c.getVolumeProvider()
+	volumes, err := getCloudProvider()
 	if err != nil {
 		glog.Info("Error getting volume provider for volumeID ", c.volumeID, ": ", err)
 		return err
@@ -114,4 +113,15 @@ func (util *AnchnetDiskUtil) CreateDisk(provisioner *anchnetPersistentDiskProvis
 
 func (util *AnchnetDiskUtil) DeleteDisk(deleter *anchnetPersistentDiskDeleter) error {
 	return nil
+}
+
+// getCloudProvider returns cloud provider.
+func getCloudProvider() (*anchnet_cloud.Anchnet, error) {
+	anchnetCloudProvider, err := cloudprovider.GetCloudProvider("caicloud-anchnet", nil)
+	if err != nil || anchnetCloudProvider == nil {
+		return nil, err
+	}
+
+	// The conversion must be safe otherwise bug in GetCloudProvider()
+	return anchnetCloudProvider.(*anchnet_cloud.Anchnet), nil
 }

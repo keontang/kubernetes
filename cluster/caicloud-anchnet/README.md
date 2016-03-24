@@ -201,9 +201,9 @@ Running integration test is the same as upstream, i.e.
 
 ### e2e test
 
-Run the following command to start anchnet e2e test:
+Run the following command to start anchnet e2e test (tee is used to redirect to both stdout and file):
 ```
-KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh
+KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh 2>&1 | tee ~/e2e-output
 ```
 
 The script `caicloud-e2e-test.sh` is used for caicloud e2e test. The original e2e test script is located at [hack/e2e-test.sh](https://github.com/caicloud/caicloud-kubernetes/blob/master/hack/e2e-test.sh).

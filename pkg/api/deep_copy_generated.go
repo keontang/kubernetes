@@ -33,6 +33,7 @@ func init() {
 	if err := Scheme.AddGeneratedDeepCopyFuncs(
 		DeepCopy_api_AWSElasticBlockStoreVolumeSource,
 		DeepCopy_api_Affinity,
+		DeepCopy_api_AnchnetPersistentDiskVolumeSource,
 		DeepCopy_api_AzureFileVolumeSource,
 		DeepCopy_api_Binding,
 		DeepCopy_api_Capabilities,
@@ -205,6 +206,14 @@ func DeepCopy_api_Affinity(in Affinity, out *Affinity, c *conversion.Cloner) err
 	} else {
 		out.NodeAffinity = nil
 	}
+	return nil
+}
+
+func DeepCopy_api_AnchnetPersistentDiskVolumeSource(in AnchnetPersistentDiskVolumeSource, out *AnchnetPersistentDiskVolumeSource, c *conversion.Cloner) error {
+	out.VolumeID = in.VolumeID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
 	return nil
 }
 
@@ -1755,6 +1764,15 @@ func DeepCopy_api_PersistentVolumeList(in PersistentVolumeList, out *PersistentV
 }
 
 func DeepCopy_api_PersistentVolumeSource(in PersistentVolumeSource, out *PersistentVolumeSource, c *conversion.Cloner) error {
+	if in.AnchnetPersistentDisk != nil {
+		in, out := in.AnchnetPersistentDisk, &out.AnchnetPersistentDisk
+		*out = new(AnchnetPersistentDiskVolumeSource)
+		if err := DeepCopy_api_AnchnetPersistentDiskVolumeSource(*in, *out, c); err != nil {
+			return err
+		}
+	} else {
+		out.AnchnetPersistentDisk = nil
+	}
 	if in.GCEPersistentDisk != nil {
 		in, out := in.GCEPersistentDisk, &out.GCEPersistentDisk
 		*out = new(GCEPersistentDiskVolumeSource)
@@ -2828,6 +2846,15 @@ func DeepCopy_api_VolumeMount(in VolumeMount, out *VolumeMount, c *conversion.Cl
 }
 
 func DeepCopy_api_VolumeSource(in VolumeSource, out *VolumeSource, c *conversion.Cloner) error {
+	if in.AnchnetPersistentDisk != nil {
+		in, out := in.AnchnetPersistentDisk, &out.AnchnetPersistentDisk
+		*out = new(AnchnetPersistentDiskVolumeSource)
+		if err := DeepCopy_api_AnchnetPersistentDiskVolumeSource(*in, *out, c); err != nil {
+			return err
+		}
+	} else {
+		out.AnchnetPersistentDisk = nil
+	}
 	if in.HostPath != nil {
 		in, out := in.HostPath, &out.HostPath
 		*out = new(HostPathVolumeSource)

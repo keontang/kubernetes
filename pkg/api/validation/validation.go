@@ -411,6 +411,14 @@ func validateVolumeSource(source *api.VolumeSource, fldPath *field.Path) field.E
 		numVolumes++
 		// EmptyDirs have nothing to validate
 	}
+	if source.AnchnetPersistentDisk != nil {
+		if numVolumes > 0 {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("anchnetPersistentDisk"), "may not specify more than 1 volume type"))
+		} else {
+			numVolumes++
+			allErrs = append(allErrs, validateAnchnetPersistentDiskVolumeSource(source.AnchnetPersistentDisk, fldPath.Child("anchnetPersistentDisk"))...)
+		}
+	}
 	if source.HostPath != nil {
 		if numVolumes > 0 {
 			allErrs = append(allErrs, field.Forbidden(fldPath.Child("hostPath"), "may not specify more than 1 volume type"))
@@ -817,7 +825,7 @@ func ValidatePersistentVolume(pv *api.PersistentVolume) field.ErrorList {
 	numVolumes := 0
 	if pv.Spec.AnchnetPersistentDisk != nil {
 		if numVolumes > 0 {
-			allErrs = append(allErrs, field.Forbidden(specPath.Child("hostPath"), "may not specify more than 1 volume type"))
+			allErrs = append(allErrs, field.Forbidden(specPath.Child("anchnetPersistentDisk"), "may not specify more than 1 volume type"))
 		} else {
 			numVolumes++
 			allErrs = append(allErrs, validateAnchnetPersistentDiskVolumeSource(pv.Spec.AnchnetPersistentDisk, specPath.Child("anchnetPersistentDisk"))...)

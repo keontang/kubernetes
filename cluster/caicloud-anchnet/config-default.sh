@@ -228,17 +228,17 @@ NUM_NODES=${NUM_NODES:-2}
 # so this variable will be set automatically.
 NUM_RUNNING_NODES=${NUM_RUNNING_NODES:-0}
 
-# The memory size of master node (in MB).
-MASTER_MEM=${MASTER_MEM:-1024}
+# The memory size of master (in MB).
+MASTER_MEM=${MASTER_MEM:-2048}
 # The number of CPUs of the master.
 MASTER_CPU_CORES=${MASTER_CPU_CORES:-1}
 # The bandwidth of a node
 MASTER_BW=${MASTER_BW:-1}
 
-# The memory size of master node (in MB).
-NODE_MEM=${NODE_MEM:-1024}
+# The memory size of nodes (in MB).
+NODE_MEM=${NODE_MEM:-4096}
 # The number of CPUs of a node.
-NODE_CPU_CORES=${NODE_CPU_CORES:-1}
+NODE_CPU_CORES=${NODE_CPU_CORES:-2}
 # The bandwidth of a node
 NODE_BW=${NODE_BW:-1}
 

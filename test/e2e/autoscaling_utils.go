@@ -36,7 +36,7 @@ const (
 	dynamicRequestSizeCustomMetric  = 10
 	port                            = 80
 	targetPort                      = 8080
-	timeoutRC                       = 120 * time.Second
+	timeoutRC                       = 120 * time.Second * 5
 	startServiceTimeout             = time.Minute
 	startServiceInterval            = 5 * time.Second
 	resourceConsumerImage           = "gcr.io/google_containers/resource_consumer:beta2"

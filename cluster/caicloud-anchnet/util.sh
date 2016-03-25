@@ -21,12 +21,10 @@ set +o errexit
 # Path of kubernetes root directory.
 KUBE_ROOT="$(dirname ${BASH_SOURCE})/../.."
 
-# Get cluster configuration parameters from config-default, and retrieve
-# executor related methods from executor-service.sh. Note KUBE_DISTRO will
+# Get cluster configuration parameters from config-default. KUBE_DISTRO will
 # be available after sourcing file config-default.sh.
 source "${KUBE_ROOT}/cluster/caicloud-anchnet/config-default.sh"
 source "${KUBE_ROOT}/cluster/caicloud/common.sh"
-source "${KUBE_ROOT}/cluster/caicloud/executor-service.sh"
 source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 
 
@@ -1207,15 +1205,17 @@ function prepare-e2e() {
   # they won't be visible outside of the function.
   export CLUSTER_NAME="e2e-test"
   export BUILD_TARBALL="Y"
+  # Note we must prepend BUILD_VERSION with a kuberntes version (e.g. v1.2.1).
+  export BUILD_VERSION="${K8S_VERSION}-${BUILD_VERSION}-e2e-test"
   export KUBE_UP_MODE="tarball"
   export NUM_NODES=3
-  export MASTER_MEM=2048
+  export MASTER_MEM=8192
   export MASTER_CPU_CORES=2
-  export NODE_MEM=2048
+  export NODE_MEM=8192
   export NODE_CPU_CORES=2
   # This will be used during e2e as ssh user to execute command inside nodes.
   export KUBE_SSH_USER=${KUBE_SSH_USER:-"ubuntu"}
-  export KUBECONFIG="$HOME/.kube/config_e2e"
+  export KUBECONFIG="$HOME/.kube/config-e2e"
 
   # Since we changed configs above, we need to re-set cluster env.
   calculate-default
@@ -1235,7 +1235,7 @@ function test-build-release {
   # Note also, e2e test will test client & server version match. Server binary uses
   # dockerized build; however, developer may use local kubectl (_output/local/bin/kubectl),
   # so we do a local build here.
-  log "Anchnet e2e doesn't need pre-build release - release will be built during kube-up"
+  log "Running test-build-release for anchnet"
   caicloud-build-local
 }
 
@@ -1245,7 +1245,9 @@ function test-build-release {
 # Assumed vars:
 #   Variables from config.sh
 function test-setup {
-  log "Anchnet e2e doesn't need special test for setup (after kube-up)"
+  log "Running test-setup for anchnet"
+  kube-up
+  validate-cluster
 }
 
 # Execute after running tests to perform any required clean-up. This is called

@@ -20,7 +20,6 @@ set -o pipefail
 source "${KUBE_ROOT}/cluster/caicloud-anchnet/config-default.sh"
 source "${KUBE_ROOT}/cluster/caicloud-anchnet/util.sh"
 source "${KUBE_ROOT}/cluster/caicloud/common.sh"
-source "${KUBE_ROOT}/cluster/caicloud/executor-service.sh"
 source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 
 # TODO: This could be different for other distros

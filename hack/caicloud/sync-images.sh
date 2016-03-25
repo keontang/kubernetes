@@ -35,8 +35,21 @@ function sync_image {
 #     gcr.io/google_containers/cloudsql-authenticator
 #  -> index.caicloud.io/caicloudgcr/google_containers_cloudsql-authenticator
 grep -IhEro "gcr.io/google_containers/[^\", ]*" \
-     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build | sort -u |
+     --include \*.go \
+     --include \*.json \
+     --include \*.yaml \
+     --include \*.yaml.in \
+     --include \*.yml \
+     --include Dockerfile \
+     --include \*.manifest \
+     ${KUBE_ROOT}/test \
+     ${KUBE_ROOT}/examples \
+     ${KUBE_ROOT}/cluster/addons \
+     ${KUBE_ROOT}/cluster/saltbase \
+     ${KUBE_ROOT}/contrib \
+     ${KUBE_ROOT}/docs \
+     ${KUBE_ROOT}/build \
+     ${KUBE_ROOT}/test/e2e/testing-manifests | sort -u |
   while read -r gcr_image ; do
     image=${gcr_image#"gcr.io/google_containers/"}
     caicloud_image="index.caicloud.io/caicloudgcr/google_containers_$image"
@@ -49,8 +62,21 @@ grep -IhEro "gcr.io/google_containers/[^\", ]*" \
 #     gcr.io/google_samples/gb-frontend:v3
 #  -> index.caicloud.io/caicloudgcr/google_samples_gb-frontend:v3
 grep -IhEro "gcr.io/google_samples/[^\", ]*" \
-     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build | sort -u |
+     --include \*.go \
+     --include \*.json \
+     --include \*.yaml \
+     --include \*.yaml.in \
+     --include \*.yml \
+     --include Dockerfile \
+     --include \*.manifest \
+     ${KUBE_ROOT}/test \
+     ${KUBE_ROOT}/examples \
+     ${KUBE_ROOT}/cluster/addons \
+     ${KUBE_ROOT}/cluster/saltbase \
+     ${KUBE_ROOT}/contrib \
+     ${KUBE_ROOT}/docs \
+     ${KUBE_ROOT}/build \
+     ${KUBE_ROOT}/test/e2e/testing-manifests | sort -u |
   while read -r gcr_image ; do
     image=${gcr_image#"gcr.io/google_samples/"}
     caicloud_image="index.caicloud.io/caicloudgcr/google_samples_$image"

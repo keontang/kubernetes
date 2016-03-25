@@ -80,10 +80,10 @@ import (
 
 const (
 	// How long to wait for the pod to be listable
-	podListTimeout = time.Minute
+	podListTimeout = time.Minute * 2
 	// Initial pod start can be delayed O(minutes) by slow docker pulls
 	// TODO: Make this 30 seconds once #4566 is resolved.
-	podStartTimeout = 5 * time.Minute
+	podStartTimeout = 5 * time.Minute * 6
 
 	// How long to wait for the pod to no longer be running
 	podNoLongerRunningTimeout = 30 * time.Second
@@ -94,7 +94,7 @@ const (
 	namespaceCleanupTimeout = 15 * time.Minute
 
 	// Some pods can take much longer to get ready due to volume attach/detach latency.
-	slowPodStartTimeout = 15 * time.Minute
+	slowPodStartTimeout = 15 * time.Minute * 2
 
 	// How long to wait for a service endpoint to be resolvable.
 	serviceStartTimeout = 1 * time.Minute

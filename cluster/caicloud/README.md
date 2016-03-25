@@ -24,8 +24,8 @@
 ## Overview
 
 Caicloud kubernetes is a customized kubernetes hosted by [caicloud.io](https://caicloud.io). Currently, we support [Anchnet](http://cloud.51idc.com/),
-and there is plan to add more cloudproviders. Kubernetes is the building block of caicloud.io, the long term plan is to enrich its ecosystem to enable
-enterprise use cases.
+and baremetal. There is plan to add more cloudproviders. Kubernetes is the building block of caicloud.io, the long term plan is to enrich its ecosystem
+to enable enterprise use cases.
 
 ## How to do a release
 
@@ -53,64 +53,95 @@ A couple points related to how to maintain caicloud kubernetes.
 * git rebase --preserve-merges -i $COMMIT_ID
 * git push private-upstream master -f
 
-(Use `git config --global rerere.enabled true` to reuse recorded resolustion)
+A couple of points to facilitate rebase:
+
+* Use `git config --global rerere.enabled true` to reuse recorded resolution
+* As we changed API types, we'll always get conflict with generated files: it is better to just use upstream code and re-generate the files
+  - When conflict, use `git checkout --theirs`, e.g. `git checkout --theirs -- pkg/apis/extensions/deep_copy_generated.go`
+  - After rebase, follow [API Change](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/api_changes.md) to re-generate the files
 
 ### Things need to be updated after rebasing
 
-* Merge conflict from below changes (we try to keep this as minimal as possible)
-* In `hack/caicloud/`, we have scripts fixing GFW issues, make sure it still works with newer kubernetes version
-* Run `hack/caicloud/sync-images.sh` to sync all gcr.io images
-* Run `hack/caicloud/caicloud-e2e-test.sh`, `hack/build-go.sh`, `hack/test-go.sh`, `hack/test-integration.sh` to build/test new version
+- Merge conflict from customized changes (we try to keep this as minimal as possible)
+- In `hack/caicloud/`, we have scripts fixing GFW issues, make sure it still works with newer kubernetes version
+  - k8s-replace.sh
+  - k8s-restore.sh
+  - sync-images.sh
+- Run  to sync all gcr.io images to index.caicloud.io
+  - `hack/caicloud/sync-images.sh`
+- Test the new version
+  - `hack/build-go.sh`
+  - `hack/test-go.sh`
+    - To fix individual test, use `go test`, e.g. `godep go test ./pkg/controller/service`
+  - `hack/test-integration.sh`
+  - `hack/caicloud/caicloud-e2e-test.sh`
+    - See README.md of individual cloudprovider for details
+- Update "K8S_VERSION" in `cluster/caicloud/common.sh`
 
 ### Changes relative to public mainstream
 
 #### New files or directories
 
 These are brand new folders created to support our cloudprovider:
-* cluster/caicloud/
-  * Central documentation about caicloud kubernetes
-  * Common utilities about kube-up/kube-down of caicloud kubernetes
-* cluster/caicloud-anchnet/
-  * Scripts used to bring up cluster in anchnet
-* cluster/caicloud-baremetal/
-  * Scripts used to bring up baremetal cluster
-* cluster/kube-add-node.sh
-  * A new script used to add a new node into cluster
-* cluster/kube-halt.sh
-  * A new script used to stop a running cluster
-* cluster/kube-restart.sh
-  * A new script used to start a stopped cluster
-* hack/caicloud/
-  * Various tools for working with caicloud kubernetes
-* examples/caicloud/
-  * Examples for caicloud, typically about how to use caicloud supported cloudproviders
-* pkg/cloudprovider/providers/anchnet/
-  * Go package used for anchnet plugin
-* pkg/volume/anchnet_pd/
-  * Go package used for anchnet persistent volume plugin
+
+- cluster/caicloud/
+  - Central documentation about caicloud kubernetes
+  - Common utilities about kube-up/kube-down of caicloud kubernetes
+- cluster/caicloud-anchnet/
+  - Scripts used to bring up cluster in anchnet
+- cluster/caicloud-baremetal/
+  - Scripts used to bring up baremetal cluster
+- cluster/kube-add-node.sh
+  - A new script used to add a new node into cluster
+- cluster/kube-halt.sh
+  - A new script used to stop a running cluster
+- cluster/kube-restart.sh
+  - A new script used to start a stopped cluster
+- hack/caicloud/
+  - Various tools for working with caicloud kubernetes
+- examples/caicloud/
+  - Examples for caicloud, typically about how to use caicloud supported cloudproviders
+- pkg/cloudprovider/providers/anchnet/
+  - Go package used for anchnet plugin
+- pkg/volume/anchnet_pd/
+  - Go package used for anchnet persistent volume plugin
 
 #### Changes to individual files
 
 These are individual files we have to change in order to meet our requirements:
-* cmd/kubelet/app/plugins.go
-  * To load anchnet volume plugin
-* pkg/api/types.go, pkg/api/v1/types.go
-  * To add `AnchnetPersistentDisk` field in `VolumeSource` structure
-  * To add `AnchnetPersistendDisk` field in `PersistentVolumeSource` structure
-* pkg/api/validation/validation.go
-  * To support validate anchnet persistent disk
-* pkg/api/deep_copy_generated.go, pkg/api/v1/conversion_generated.go, pkg/api/v1/deep_copy_generated.go, pkg/expapi/deep_copy_generated.go, pkg/expapi/v1/conversion_generated.go, pkg/expapi/v1/deep_copy_generated.go
-  * To support API type changes
-  * Auto generated by hack/update-genereated-deep-copies.sh and hack/update-generated-conversions.sh
-* pkg/controller/servicecontroller.go pkg/controller/servicecontroller_test.go
-  * To support creating loadbalancer prefixed with cluster name
-* test/e2e/util.go
-  * To use correct ssh private key & user for e2e test
+
+##### Support anchnet disk
+
+- cmd/kubelet/app/plugins.go
+  - To load anchnet volume plugin
+- pkg/api/types.go, pkg/api/v1/types.go
+  - To add `AnchnetPersistentDisk` field in `VolumeSource` structure
+  - To add `AnchnetPersistendDisk` field in `PersistentVolumeSource` structure
+- pkg/api/validation/validation.go
+  - To support validate anchnet persistent disk
+- pkg/api/deep_copy_generated.go, pkg/api/v1/conversion_generated.go, pkg/api/v1/deep_copy_generated.go, pkg/expapi/deep_copy_generated.go, pkg/expapi/v1/conversion_generated.go, pkg/expapi/v1/deep_copy_generated.go
+  - To support API type changes
+  - Auto generated by hack/update-genereated-deep-copies.sh and hack/update-generated-conversions.sh
+
+##### Add cluster name to external service
+
+- pkg/controller/servicecontroller.go, pkg/controller/servicecontroller_test.go pkg/cloudprovider/cloud.go
+  - To support creating loadbalancer prefixed with cluster name
+
+##### Fix e2e test
+
+- test/e2e/util.go
+  - To use correct ssh private key & user for e2e test
+  - Increase timeout constants
+- test/e2e/service.go
+  - Enable external loadbalancer by modfiying SkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")
+- test/e2e/austocaling_utils.go
+  - Increase timeoutRC
 
 #### Depedencies
 
-* Add more dependencies in godeps:
-  * Anchnet-go: SDK for anchnet API
+- Add more dependencies in godeps:
+  - Anchnet-go: SDK for anchnet API
 
 ## Cluster resize
 

@@ -20,19 +20,41 @@
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 source "${KUBE_ROOT}/hack/caicloud/common.sh"
 
-# Restore 'gcr.io' images.
+# Restore all 'gcr.io' images.
 grep -rl "index.caicloud.io/caicloudgcr/google_containers_[^\", ]*" \
-     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build |
+     --include \*.go \
+     --include \*.json \
+     --include \*.yaml \
+     --include \*.yaml.in \
+     --include \*.yml \
+     --include Dockerfile \
+     --include \*.manifest \
+     ${KUBE_ROOT}/test \
+     ${KUBE_ROOT}/examples \
+     ${KUBE_ROOT}/cluster/addons \
+     ${KUBE_ROOT}/cluster/saltbase \
+     ${KUBE_ROOT}/contrib \
+     ${KUBE_ROOT}/docs \
+     ${KUBE_ROOT}/build \
+     ${KUBE_ROOT}/test/e2e/testing-manifests |
   xargs perl -X -i -pe 's|index.caicloud.io/caicloudgcr/google_containers_|gcr.io/google_containers/|g'
+
 grep -rl "index.caicloud.io/caicloudgcr/google_samples_[^\", ]*" \
-     --include \*.go --include \*.json --include \*.yaml --include \*.yaml.in --include \*.yml --include Dockerfile --include \*.manifest \
-     ${KUBE_ROOT}/test ${KUBE_ROOT}/examples ${KUBE_ROOT}/cluster/addons ${KUBE_ROOT}/cluster/saltbase ${KUBE_ROOT}/contrib ${KUBE_ROOT}/docs ${KUBE_ROOT}/build |
+     --include \*.go \
+     --include \*.json \
+     --include \*.yaml \
+     --include \*.yaml.in \
+     --include \*.yml \
+     --include Dockerfile \
+     --include \*.manifest \
+     ${KUBE_ROOT}/test \
+     ${KUBE_ROOT}/examples \
+     ${KUBE_ROOT}/cluster/addons \
+     ${KUBE_ROOT}/cluster/saltbase \
+     ${KUBE_ROOT}/contrib \
+     ${KUBE_ROOT}/docs \
+     ${KUBE_ROOT}/build \
+     ${KUBE_ROOT}/test/e2e/testing-manifests |
   xargs perl -X -i -pe 's|index.caicloud.io/caicloudgcr/google_samples_|gcr.io/google_samples/|g'
 
-# Restore supported e2e tests.
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
-     ${KUBE_ROOT}/test/e2e/kubectl.go
-perl -i -pe 's|\QSkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")\E|SkipUnlessProviderIs("gce", "gke", "aws")|g' \
-     ${KUBE_ROOT}/test/e2e/service.go
-perl -i -pe "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go
+perl -i -pe "s|baidu.com|google.com|g" ${KUBE_ROOT}/test/e2e/networking.go ${KUBE_ROOT}/test/e2e/dns.go

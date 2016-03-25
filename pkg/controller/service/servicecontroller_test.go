@@ -166,7 +166,7 @@ func TestUpdateNodesInExternalLoadBalancer(t *testing.T) {
 				newService("s0", "333", api.ServiceTypeLoadBalancer),
 			},
 			expectedUpdateCalls: []fakecloud.FakeUpdateBalancerCall{
-				{Name: "a333", Region: region, Hosts: []string{"node0", "node1", "node73"}},
+				{Name: "test-cluster2-s0-namespace-a333", Region: region, Hosts: []string{"node0", "node1", "node73"}},
 			},
 		},
 		{
@@ -177,9 +177,9 @@ func TestUpdateNodesInExternalLoadBalancer(t *testing.T) {
 				newService("s2", "666", api.ServiceTypeLoadBalancer),
 			},
 			expectedUpdateCalls: []fakecloud.FakeUpdateBalancerCall{
-				{Name: "a444", Region: region, Hosts: []string{"node0", "node1", "node73"}},
-				{Name: "a555", Region: region, Hosts: []string{"node0", "node1", "node73"}},
-				{Name: "a666", Region: region, Hosts: []string{"node0", "node1", "node73"}},
+				{Name: "test-cluster2-s0-namespace-a444", Region: region, Hosts: []string{"node0", "node1", "node73"}},
+				{Name: "test-cluster2-s1-namespace-a555", Region: region, Hosts: []string{"node0", "node1", "node73"}},
+				{Name: "test-cluster2-s2-namespace-a666", Region: region, Hosts: []string{"node0", "node1", "node73"}},
 			},
 		},
 		{
@@ -191,8 +191,8 @@ func TestUpdateNodesInExternalLoadBalancer(t *testing.T) {
 				newService("s4", "123", api.ServiceTypeClusterIP),
 			},
 			expectedUpdateCalls: []fakecloud.FakeUpdateBalancerCall{
-				{Name: "a888", Region: region, Hosts: []string{"node0", "node1", "node73"}},
-				{Name: "a999", Region: region, Hosts: []string{"node0", "node1", "node73"}},
+				{Name: "test-cluster2-s1-namespace-a888", Region: region, Hosts: []string{"node0", "node1", "node73"}},
+				{Name: "test-cluster2-s3-namespace-a999", Region: region, Hosts: []string{"node0", "node1", "node73"}},
 			},
 		},
 		{
@@ -202,7 +202,7 @@ func TestUpdateNodesInExternalLoadBalancer(t *testing.T) {
 				nil,
 			},
 			expectedUpdateCalls: []fakecloud.FakeUpdateBalancerCall{
-				{Name: "a234", Region: region, Hosts: []string{"node0", "node1", "node73"}},
+				{Name: "test-cluster2-s0-namespace-a234", Region: region, Hosts: []string{"node0", "node1", "node73"}},
 			},
 		},
 	}

@@ -20,12 +20,10 @@ set +o errexit
 
 KUBE_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 
-# Get cluster configuration parameters from config-default, as well as all
-# other utilities. Note KUBE_DISTRO will be available after sourcing file
-# config-default.sh.
+# Get cluster configuration parameters from config-default. KUBE_DISTRO
+# will be available after sourcing file config-default.sh.
 source "${KUBE_ROOT}/cluster/caicloud-baremetal/config-default.sh"
 source "${KUBE_ROOT}/cluster/caicloud/common.sh"
-source "${KUBE_ROOT}/cluster/caicloud/executor-service.sh"
 source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 
 

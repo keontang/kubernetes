@@ -15,10 +15,17 @@
 # limitations under the License.
 
 #
-# The script contains common functions used to provision caicloud kubernetes.
-# Assumed vars in some of the functions should be available after sourcing
-# file: cluster/${KUBERNETES_PROVIDER}/config-default.sh.
+# The script contains common configs and functions used to provision caicloud
+# kubernetes. Assumed vars in some of the functions should be available after
+# sourcing file: cluster/${KUBERNETES_PROVIDER}/config-default.sh.
 #
+
+# -----------------------------------------------------------------------------
+# Cluster related common configurations.
+# -----------------------------------------------------------------------------
+
+# The version of upstream kubernetes.
+K8S_VERSION=${K8S_VERSION:-"v1.2.0"}
 
 # -----------------------------------------------------------------------------
 # Cluster related common operations.
@@ -1228,4 +1235,161 @@ function command-exec-and-retry {
     attempt=$(($attempt+1))
     sleep $(($attempt*2))
   done
+}
+
+# Provides utility functions for talking back to cluster deployment executor.
+
+# Sends out request based on the input url.
+#
+# Input:
+#   $1 The full url to access.
+#
+# Output:
+#   stdout: normal execution information.
+#   stderr: Record the url if fails.
+function send-request-with-retry {
+  if [[ ! -z $1 ]]; then
+    local attempt=0
+    local full_command="curl -sL -w %{http_code} $1 -o /dev/null"
+    while true; do
+      echo "Attempt ${attempt}: ${full_command}"
+      local resp_code=$(${full_command})
+      echo "response_code: ${resp_code}"
+      if [[ ${resp_code} == "200" ]]; then
+        break
+      fi
+      attempt=$(($attempt+1))
+      if (( attempt > 3 )); then
+        echo "Failed to send the following request to executor \n: $1" 1>&2
+        break
+      fi
+      sleep $(($attempt*2))
+    done
+  fi
+}
+
+# Report a list of ips back to the executor for recording.
+#
+# Input:
+#   $1 The list of comma deliminated ips.
+#   $2 M or N. M indicates the ips reported belong to the master,
+#      and N indicates ips are for regular nodes.
+#
+# Assumed vars:
+#   EXECUTOR_HOST_NAME
+#   EXECUTION_ID
+function report-ips {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_ips?id=${EXECUTION_ID}&ips=$1&type=$2"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-ips failed."
+    fi
+  fi
+}
+
+# Report a list of instance ids back to the executor for recording.
+#
+# Input:
+#   $1 The list of comma deliminated instance ids.
+#   $2 M or N. M indicates the ips reported belong to the master,
+#      and N indicates ips are for regular nodes.
+#
+# Assumed vars:
+#   EXECUTOR_HOST_NAME
+#   EXECUTION_ID
+function report-instance-ids {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_instance_ids?id=${EXECUTION_ID}&instances=$1&type=$2"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-instance-ids failed."
+    fi
+  fi
+}
+
+# Report a list of security group ids back to the executor for recording.
+#
+# Input:
+#   $1 The list of comma deliminated security group ids.
+#   $2 M or N. M indicates the ips reported belong to the master,
+#      and N indicates ips are for regular nodes.
+#
+# Assumed vars:
+#   EXECUTOR_HOST_NAME
+#   EXECUTION_ID
+function report-security-group-ids {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_security_group_ids?id=${EXECUTION_ID}&security_groups=$1&type=$2"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-security-group-ids failed."
+    fi
+  fi
+}
+
+# Report a list of external ip ids back to the executor for recording.
+#
+# Input:
+#   $1 The list of comma deliminated eip ids.
+#
+# Assumed vars:
+#   EXECUTOR_HOST_NAME
+#   EXECUTION_ID
+function report-eip-ids {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_eip_ids?id=${EXECUTION_ID}&eips=$1"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-eip-ids failed."
+    fi
+  fi
+}
+
+# Report project ID (anchnet subaccount).
+#
+# Assumed vars:
+#   EXECUTOR_HOST_NAME
+#   EXECUTION_ID
+function report-project-id {
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${KUBE_USER-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/report_project_id?uid=${PROJECT_USER}&projectid=$1"
+    else
+      echo "EXECUTOR_HOST_NAME or KUBE_USER is not set up. report-project-id failed."
+    fi
+  fi
+}
+
+# Send a log to executor.
+#
+# Input:
+#   $1 a code of LogLevelType in execution_report_collection.go
+#   $2 a message to log
+#
+# Assumed vars:
+#   EXECUTOR_HOST_NAME
+#   EXECUTION_ID
+function report-log-entry {
+  message=`echo $2 | base64`
+  if [[ ${REPORT_KUBE_STATUS-} == "Y" ]]; then
+    if [[ ! -z "${EXECUTOR_HOST_NAME-}" && ! -z "${EXECUTION_ID-}" ]]; then
+      send-request-with-retry "$EXECUTOR_HOST_NAME/log?id=${EXECUTION_ID}&level=$1&encoded_msg=$message"
+    else
+      echo "EXECUTOR_HOST_NAME or EXECUTION_ID is not set up. report-log-entry failed."
+    fi
+  fi
+}
+
+# Send a user message log. The message will be sent to end user.
+#
+# Input:
+#   $1 a message to log
+#
+# Assumed vars:
+#   EXECUTOR_HOST_NAME
+#   EXECUTION_ID
+function report-user-message {
+  # "1" is the log level set in executor; the level means "Info" and will be sent to end user.
+  report-log-entry "1" "$1"
 }

@@ -115,7 +115,7 @@ used in kube-up. For a full list of options, consult the file.
 
 * `ENABLE_CLUSTER_LOGGING`: Decide if cluster logging addon needs to be created.
 
-* `ENABLE_CLUSTER_UI`: Decide if cluster ui addon needs to be created.
+* `ENABLE_CLUSTER_DASHBOARD`: Decide if cluster dashboard addon needs to be created.
 
 * `ENABLE_CLUSTER_REGISTRY`: Decide if cluster registry addon needs to be created.
 

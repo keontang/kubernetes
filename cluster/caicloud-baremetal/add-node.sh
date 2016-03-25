@@ -17,10 +17,11 @@
 set -o nounset
 set -o pipefail
 
+# Get cluster configuration parameters from config-default. KUBE_DISTRO
+# will be available after sourcing file config-default.sh.
 source "${KUBE_ROOT}/cluster/caicloud-baremetal/config-default.sh"
 source "${KUBE_ROOT}/cluster/caicloud-baremetal/util.sh"
 source "${KUBE_ROOT}/cluster/caicloud/common.sh"
-source "${KUBE_ROOT}/cluster/caicloud/executor-service.sh"
 source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 
 function kube-add-nodes {

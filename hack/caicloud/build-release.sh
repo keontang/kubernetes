@@ -27,11 +27,11 @@ function usage {
   echo -e "  ./build-release.sh [version]"
   echo -e ""
   echo -e "Parameter:"
-  echo -e " version\tRelease version. If provided, the tag must be the form of vA.B.C, where"
-  echo -e "        \tA, B, C are digits, e.g. v1.0.1. If not provided, current date/time will"
-  echo -e "        \tbe used, i.e. YYYY-mm-DD-HH-MM-SS, where YYY is year, mm is month, DD is"
-  echo -e "        \tday, HH is hour, MM is minute and SS is second, e.g. 2015-09-10-18-15-30."
-  echo -e "        \tThe second case is used for development."
+  echo -e " version\tRelease version. If provided, the tag must be the form of vA.B.C-patch, where"
+  echo -e "        \tA, B, C are digits, e.g. v1.0.1-e2e. If not provided, current date/time will"
+  echo -e "        \tbe used, i.e. YYYY-mm-DD-HH-MM-SS, where YYY is year, mm is month, DD is day,"
+  echo -e "        \tHH is hour, MM is minute and SS is second, e.g. 2015-09-10-18-15-30. The second"
+  echo -e "        \tcase is used for development."
   echo -e ""
   echo -e "Environment variable:"
   echo -e " ETCD_VERSION     \tetcd version to use. etcd will be packed into release tarball. Default value ${ETCD_VERSION}"
@@ -60,7 +60,7 @@ if [[ "$#" == "1" ]]; then
     echo -e ""
     usage
     exit 0
-  elif [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && ! $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+  elif [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+\- && ! $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
     # We also allow passing date/time directly, this is usually used internally.
     echo -e "Error: Version format error, see usage."
     echo -e ""

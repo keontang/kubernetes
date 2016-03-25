@@ -55,7 +55,7 @@ const loadBalancerLagTimeoutDefault = 2 * time.Minute
 const loadBalancerLagTimeoutAWS = 10 * time.Minute
 
 // How long to wait for a load balancer to be created/modified.
-//TODO: once support ticket 21807001 is resolved, reduce this timeout back to something reasonable
+// TODO: once support ticket 21807001 is resolved, reduce this timeout back to something reasonable
 const loadBalancerCreateTimeout = 20 * time.Minute
 
 // This should match whatever the default/configured range is
@@ -405,7 +405,7 @@ var _ = Describe("Services", func() {
 
 	It("should be able to change the type and ports of a service", func() {
 		// requires cloud load-balancer support
-		SkipUnlessProviderIs("gce", "gke", "aws")
+		SkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")
 
 		loadBalancerSupportsUDP := !providerIs("aws")
 

@@ -201,17 +201,10 @@ Running integration test is the same as upstream, i.e.
 
 ### e2e test
 
-Run the following command to start anchnet e2e test:
+Run the following command to start anchnet e2e test (tee is used to redirect to both stdout and file):
 ```
-KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh
+KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh 2>&1 | tee ~/e2e-output
 ```
 
-The script `caicloud-e2e-test.sh` is used for caicloud e2e test. The original e2e test script is located at [hack/e2e-test.sh](https://github.com/caicloud/caicloud-kubernetes/blob/master/hack/e2e-test.sh).
-All e2e tests are located at `test/e2e`. Test cases can be disabled using `--test_args="--ginkgo.skip=${CAICLOUD_TEST_SKIP_REGEX}"` flag.
-If a test case is not needed, we can add it to `CAICLOUD_TEST_SKIP_REGEX`. E.g.
-
-```
-CAICLOUD_TEST_SKIP_REGEX="kube-ui|Cluster\slevel\slogging" KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh
-```
-will disable [elasticsearch](https://github.com/caicloud/caicloud-kubernetes/blob/master/test/e2e/es_cluster_logging.go#L34) & [kube-ui](https://github.com/caicloud/caicloud-kubernetes/blob/master/test/e2e/kube-ui.go#L30)
-tests. On the other hand, `--test_args="--ginkgo.focus=${REGEX}"` can be use to only run tests that match the regex.
+The script `caicloud-e2e-test.sh` is used for caicloud e2e test - all e2e tests are located at `test/e2e`. Consult the file
+for more details.

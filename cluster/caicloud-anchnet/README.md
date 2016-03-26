@@ -203,7 +203,7 @@ Running integration test is the same as upstream, i.e.
 
 Run the following command to start anchnet e2e test (tee is used to redirect to both stdout and file):
 ```
-KUBE_RELEASE_RUN_TESTS=n KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh 2>&1 | tee ~/e2e-output
+KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh 2>&1 | tee ~/e2e-output
 ```
 
 The script `caicloud-e2e-test.sh` is used for caicloud e2e test - all e2e tests are located at `test/e2e`. Consult the file

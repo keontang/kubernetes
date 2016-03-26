@@ -65,12 +65,12 @@ func (an *Anchnet) GetLoadBalancer(name, region string) (status *api.LoadBalance
 	return status, true, nil
 }
 
-// EnsureLoadBalancer creates a new tcp load balancer, or updates an existing one. Returns
-// the status of the balancer.
+// EnsureLoadBalancer creates a new load balancer, or updates an existing one. Returns the
+// status of the balancer.
 // 'region' is returned from Zone interface and is not used here, since anchnet only supports
 // one zone. If it starts supporting multiple zones, we just need to update the request.
 // 'externalIP' is not used, we use external IP given by anchnent.
-// To create a TCP LoadBalancer for kubernetes, we do the following:
+// To create a LoadBalancer for kubernetes, we do the following:
 // 1. create external ip;
 // 2. create a loadbalancer with that ip;
 // 3. add listeners for the loadbalancer, number of listeners = number of service ports;

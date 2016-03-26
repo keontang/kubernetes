@@ -26,7 +26,7 @@ set -o pipefail
 
 ENABLE_CLUSTER_DNS=${ENABLE_CLUSTER_DNS:-false}
 ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING:-false}
-ENABLE_CLUSTER_UI=${ENABLE_CLUSTER_UI:-false}
+ENABLE_CLUSTER_DASHBOARD=${ENABLE_CLUSTER_DASHBOARD:-false}
 ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
 ENABLE_CLUSTER_REGISTRY=${ENABLE_CLUSTER_REGISTRY:-false}
 SYSTEM_NAMESPACE=${SYSTEM_NAMESPACE:-"kube-system"}
@@ -78,8 +78,8 @@ function create-logging-addon {
   done
 }
 
-function create-kube-ui-addon {
-  for obj in $(find ~/kube/addons/kube-ui -type f -name \*.yaml -o -name \*.json); do
+function create-kube-dashboard-addon {
+  for obj in $(find ~/kube/addons/dashboard -type f -name \*.yaml -o -name \*.json); do
     create-resource-from-file ${obj} 10 10 "${SYSTEM_NAMESPACE}"
   done
 }
@@ -107,8 +107,8 @@ if [[ "${ENABLE_CLUSTER_LOGGING}" == "true" ]]; then
   create-logging-addon
 fi
 
-if [[ "${ENABLE_CLUSTER_UI}" == "true" ]]; then
-  create-kube-ui-addon
+if [[ "${ENABLE_CLUSTER_DASHBOARD}" == "true" ]]; then
+  create-kube-dashboard-addon
 fi
 
 if [[ "${ENABLE_CLUSTER_MONITORING}" == "true" ]]; then

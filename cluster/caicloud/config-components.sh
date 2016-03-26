@@ -217,11 +217,11 @@ function create-flanneld-opts {
   # For master, etcd endpoint is 127.0.0.1; for node, it's master internal IP address.
   if [[ "${1:-}" == "master" ]]; then
     cat <<EOF > ~/kube/configs/flanneld
-FLANNEL_OPTS="--iface=${FLANNEL_INTERFACE} --etcd-endpoints=http://127.0.0.1:4001"
+FLANNEL_OPTS="--iface=${FLANNEL_INTERFACE} --etcd-endpoints=http://127.0.0.1:4001 --ip-masq"
 EOF
   else
     cat <<EOF > ~/kube/configs/flanneld
-FLANNEL_OPTS="--iface=${FLANNEL_INTERFACE} --etcd-endpoints=http://${MASTER_IIP}:4001"
+FLANNEL_OPTS="--iface=${FLANNEL_INTERFACE} --etcd-endpoints=http://${MASTER_IIP}:4001 --ip-masq"
 EOF
   fi
 }

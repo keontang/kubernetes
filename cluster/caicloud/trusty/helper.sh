@@ -144,6 +144,9 @@ function send-master-files {
     echo "config-etcd-flanneld"
     # After starting flannel, configure docker network to use flannel overlay.
     echo "restart-docker /etc/default/docker"
+    # Note: After using iptables mode, we need to change flannel to use --ip-masq, but
+    # it won't take effect after docker restart, we have to restart flannel again.
+    echo "sudo service flanneld restart"
   ) > ${KUBE_TEMP}/kube-master/kube/master-start.sh
   chmod a+x ${KUBE_TEMP}/kube-master/kube/master-start.sh
 
@@ -303,6 +306,9 @@ function send-node-files-internal {
     echo "sudo service flanneld start"
     # After starting flannel, configure docker network to use flannel overlay.
     echo "restart-docker /etc/default/docker"
+    # Note: After using iptables mode, we need to change flannel to use --ip-masq, but
+    # it won't take effect after docker restart, we have to restart flannel again.
+    echo "sudo service flanneld restart"
   ) > ${KUBE_TEMP}/kube-node${1}/kube/node-start.sh
   chmod a+x ${KUBE_TEMP}/kube-node${1}/kube/node-start.sh
 

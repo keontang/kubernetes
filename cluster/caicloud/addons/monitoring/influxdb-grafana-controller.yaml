@@ -3,24 +3,24 @@ kind: ReplicationController
 metadata:
   name: monitoring-influxdb-grafana-v3
   namespace: kube-system
-  labels: 
+  labels:
     k8s-app: influxGrafana
     version: v3
     kubernetes.io/cluster-service: "true"
-spec: 
+spec:
   replicas: 1
-  selector: 
+  selector:
     k8s-app: influxGrafana
     version: v3
-  template: 
-    metadata: 
-      labels: 
+  template:
+    metadata:
+      labels:
         k8s-app: influxGrafana
         version: v3
         kubernetes.io/cluster-service: "true"
-    spec: 
-      containers: 
-        - image: index.caicloud.io/caicloud/google_heapster_influxdb:v0.5
+    spec:
+      containers:
+        - image: index.caicloud.io/caicloudgcr/google_containers_heapster_influxdb:v0.5
           name: influxdb
           resources:
             # keep request = limit to keep this container in guaranteed class
@@ -30,7 +30,7 @@ spec:
             requests:
               cpu: 100m
               memory: 500Mi
-          ports: 
+          ports:
             - containerPort: 8083
               hostPort: 8083
             - containerPort: 8086
@@ -38,7 +38,7 @@ spec:
           volumeMounts:
           - name: influxdb-persistent-storage
             mountPath: /data
-        - image: index.caicloud.io/caicloud/google_heapster_grafana:v2.6.0-2
+        - image: index.caicloud.io/caicloudgcr/google_containers_heapster_grafana:v2.6.0-2
           name: grafana
           env:
           resources:

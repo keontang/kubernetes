@@ -9,7 +9,7 @@ metadata:
     k8s-app: kubernetes-dashboard
     kubernetes.io/cluster-service: "true"
 spec:
-  replicas: {{ pillar['dashboard_replicas'] }}
+  replicas: 1
   selector:
     k8s-app: kubernetes-dashboard
   template:

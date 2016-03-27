@@ -1205,8 +1205,10 @@ function prepare-e2e() {
   # they won't be visible outside of the function.
   export CLUSTER_NAME="e2e-test"
   export BUILD_TARBALL="Y"
-  # Note we must prepend BUILD_VERSION with a kuberntes version (e.g. v1.2.1).
-  export BUILD_VERSION="${K8S_VERSION}-${BUILD_VERSION}-e2e-test"
+  # Note in e2e we must prepend BUILD_VERSION with a kuberntes version (e.g. v1.2.1).
+  # Also, our own information must go to version meta data, not pre-release, see:
+  # http://semver.org/#spec-item-9 and http://semver.org/#spec-item-10.
+  export BUILD_VERSION="${K8S_VERSION}+${BUILD_VERSION}-e2e-test"
   export KUBE_UP_MODE="tarball"
   export NUM_NODES=3
   export MASTER_MEM=8192

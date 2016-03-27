@@ -53,6 +53,7 @@ const loadBalancerLagTimeoutDefault = 2 * time.Minute
 // On AWS there is a delay between ELB creation and serving traffic;
 // a few minutes is typical, so use 10m.
 const loadBalancerLagTimeoutAWS = 10 * time.Minute
+const loadBalancerLagTimeoutAnchnet = 10 * time.Minute
 
 // How long to wait for a load balancer to be created/modified.
 // TODO: once support ticket 21807001 is resolved, reduce this timeout back to something reasonable
@@ -407,11 +408,14 @@ var _ = Describe("Services", func() {
 		// requires cloud load-balancer support
 		SkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")
 
-		loadBalancerSupportsUDP := !providerIs("aws")
+		loadBalancerSupportsUDP := !providerIs("aws", "caicloud-anchnet")
 
 		loadBalancerLagTimeout := loadBalancerLagTimeoutDefault
 		if providerIs("aws") {
 			loadBalancerLagTimeout = loadBalancerLagTimeoutAWS
+		}
+		if providerIs("caicloud-anchnet") {
+			loadBalancerLagTimeout = loadBalancerLagTimeoutAnchnet
 		}
 
 		// This test is more monolithic than we'd like because LB turnup can be

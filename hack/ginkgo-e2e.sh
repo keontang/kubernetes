@@ -40,6 +40,12 @@ export KUBECTL KUBE_CONFIG_FILE
 
 source "${KUBE_ROOT}/cluster/kube-env.sh"
 
+# Note, this is the final place (after e2e-setup, etc) where e2e tests will run.
+# Make sure to replace gcr images here as well, as some tests will create resources
+# from local files.
+${KUBE_ROOT}/hack/caicloud/k8s-replace.sh
+trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+
 # ---- Do cloud-provider-specific setup
 if [[ -n "${KUBERNETES_CONFORMANCE_TEST:-}" ]]; then
     echo "Conformance test: not doing test setup."

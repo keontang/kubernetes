@@ -65,7 +65,7 @@ const (
 	netexecContainer         = "netexec"
 	netexecPodSelector       = "name=netexec"
 	kubectlProxyPort         = 8011
-	guestbookStartupTimeout  = 10 * time.Minute
+	guestbookStartupTimeout  = 10 * time.Minute * 3
 	guestbookResponseTimeout = 3 * time.Minute
 	simplePodSelector        = "name=nginx"
 	simplePodName            = "nginx"

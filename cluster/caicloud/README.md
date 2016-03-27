@@ -135,8 +135,14 @@ These are individual files we have to change in order to meet our requirements:
   - Increase timeout constants
 - test/e2e/service.go
   - Enable external loadbalancer by modfiying SkipUnlessProviderIs("gce", "gke", "aws", "caicloud-anchnet")
+  - Skip UDP external loadbalancer
+  - Increase loadbalancer creation timeout
 - test/e2e/austocaling_utils.go
   - Increase timeoutRC
+- test/e2e/kubectl.go
+  - Increase guestbookStartupTimeout
+- hack/ginkgo-e2e.sh
+  - Run k8s-replace before actually running e2e tests.
 
 #### Depedencies
 

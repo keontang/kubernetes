@@ -25,7 +25,7 @@
             "containers":[
                {
                   "name":"redis-slave",
-                  "image":"kubernetes/redis-slave:v2",
+                  "image":"index.caicloud.io/kubernetes/redis-slave:v2",
                   "ports":[
                      {
                         "name":"redis-server",

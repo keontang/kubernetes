@@ -11,6 +11,9 @@
     - [Changes relative to public mainstream](#changes-relative-to-public-mainstream)
       - [New files or directories](#new-files-or-directories)
       - [Changes to individual files](#changes-to-individual-files)
+        - [Support anchnet disk](#support-anchnet-disk)
+        - [Add cluster name to external service](#add-cluster-name-to-external-service)
+        - [Fix e2e test](#fix-e2e-test)
       - [Depedencies](#depedencies)
   - [Cluster resize](#cluster-resize)
       - [Scale up](#scale-up)
@@ -67,6 +70,7 @@ A couple of points to facilitate rebase:
   - k8s-replace.sh
   - k8s-restore.sh
   - sync-images.sh
+    - Note there is some images hard to sync, see [fix e2e test](#fix-e2e-test) "Replace images from dockerhub to index.caicloud.io"
 - Run  to sync all gcr.io images to index.caicloud.io
   - `hack/caicloud/sync-images.sh`
 - Test the new version
@@ -147,6 +151,8 @@ These are individual files we have to change in order to meet our requirements:
   - Enable elasticsearch cluster logging by monifying SkipUnlessProviderIs("gce")
 - hack/ginkgo-e2e.sh
   - Run k8s-replace before actually running e2e tests.
+- docs/user-guide/pod.yaml, example/guestbook-go/redis-master-controller.json, example/guestbook-go/redis-slave-controller.json
+  - Replace images from dockerhub to index.caicloud.io
 
 #### Depedencies
 

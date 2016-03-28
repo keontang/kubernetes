@@ -19,21 +19,8 @@
 # Especially:
 #   https://github.com/kubernetes/kubernetes/blob/master/docs/devel/e2e-tests.md#kinds-of-tests
 #
-# Typical workflow for running caicloud e2e tests:
-# Step1:
-#   Build codebase, create a new cluster and run default set of tests (see
-#   DEFAULT_TEST_SKIP_REGEX for all tests).
-#   $ KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh
-# Step2:
-#   Test features enabled in caicloud, on the same cluster e.g.
-#   $ TEST_BUILD=N TEST_UP=N CAICLOUD_TEST_FOCUS_REGEX="\[Feature:Elasticsearch\]" \
-#      KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh#
-# Step3:
-#   R-run failure tests. You may want to create a new cluster if you touches core
-#   kubernetes codebase:
-#   $ TEST_BUILD=Y TEST_UP=N CAICLOUD_TEST_FOCUS_REGEX="\[ReplicationController.*light\]" \
-#      KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh#
-#
+# For how to use the script on caicloud cloudproviders, see README of respective repo.
+
 # Add focused test regex here. If this is not empty, we'll only run focused tests.
 # Note:
 #   - CAICLOUD_TEST_FOCUS_REGEX take precedence over CAICLOUD_TEST_SKIP_REGEX
@@ -47,6 +34,7 @@ CAICLOUD_TEST_FOCUS_REGEX=${CAICLOUD_TEST_FOCUS_REGEX:-""}
 #   - By default, features are all excluded. Those features are supplemental
 #     features, not core kubernetes features, so skipping them is fine in most
 #     cases. Use `grep -r "\[Feature.*\]"` to find all featured tests.
+#   - Right now, we need to test [Feature:Elasticsearch].
 DEFAULT_TEST_SKIP_REGEX="\[Slow\]|\[Serial\]|\[Flaky\]|\[Disruptive\]|\[Feature:.+\]"
 CAICLOUD_TEST_SKIP_REGEX=${CAICLOUD_TEST_SKIP_REGEX:-${DEFAULT_TEST_SKIP_REGEX}}
 

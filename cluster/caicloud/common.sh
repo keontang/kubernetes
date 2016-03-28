@@ -66,13 +66,9 @@ function deploy-addons {
   local -r kibana_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/logging/kibana-rc.yaml.in"
   sed -e "s/{{ pillar\['kibana_replicas'\] }}/${KIBANA_REPLICAS}/g" ${kibana_rc_file} > ${KUBE_TEMP}/kibana-rc.yaml
 
-  # Replace placeholder with our configuration for dashboard rc.
-  local -r dashboard_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/dashboard/dashboard-rc.yaml.in"
-  sed -e "s/{{ pillar\['dashboard_replicas'\] }}/${DASHBOARD_REPLICAS}/g" ${dashboard_rc_file} > ${KUBE_TEMP}/dashboard-rc.yaml
-
   # Replace placeholder with our configuration for heapster rc.
   local -r heapster_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-controller.yaml.in"
-  sed -e "s/{{ pillar\['heapster_memory'\] }}/${HEAPSTER_MEMORY}/g;s/{{ pillar\['heapster_request'\] }}/${HEAPSTER_MEMORY}/g" ${heapster_rc_file} > ${KUBE_TEMP}/heapster-controller.yaml
+  sed -e "s/{{ pillar\['metrics_memory'\] }}/${METRICS_MEMORY}/g;s/{{ pillar\['eventer_memory'\] }}/${EVENTER_MEMORY}/g" ${heapster_rc_file} > ${KUBE_TEMP}/heapster-controller.yaml
 
   # Replace placeholder with our configuration for monitoring rc.
   local -r monitoring_rc_file="${KUBE_ROOT}/cluster/caicloud/addons/monitoring/monitoring-controller.yaml.in"
@@ -85,20 +81,27 @@ function deploy-addons {
   rm -rf ${KUBE_TEMP}/addons
   mkdir -p ${KUBE_TEMP}/addons/dns ${KUBE_TEMP}/addons/logging ${KUBE_TEMP}/addons/dashboard ${KUBE_TEMP}/addons/monitoring ${KUBE_TEMP}/addons/registry
   # dns rc/svc
-  cp ${KUBE_TEMP}/skydns-rc.yaml ${KUBE_TEMP}/skydns-svc.yaml ${KUBE_TEMP}/addons/dns
+  cp ${KUBE_TEMP}/skydns-rc.yaml \
+     ${KUBE_TEMP}/skydns-svc.yaml \
+     ${KUBE_TEMP}/addons/dns
   # logging rc/svc
-  cp ${KUBE_TEMP}/elasticsearch-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/logging/elasticsearch-svc.yaml \
-     ${KUBE_TEMP}/kibana-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/logging/kibana-svc.yaml ${KUBE_TEMP}/addons/logging
+  cp ${KUBE_TEMP}/elasticsearch-rc.yaml \
+     ${KUBE_TEMP}/kibana-rc.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/logging/elasticsearch-svc.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/logging/kibana-svc.yaml \
+     ${KUBE_TEMP}/addons/logging
   # dashboard rc/svc
-  cp ${KUBE_TEMP}/dashboard-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/dashboard/dashboard-svc.yaml ${KUBE_TEMP}/addons/dashboard
+  cp ${KUBE_ROOT}/cluster/caicloud/addons/dashboard/dashboard-rc.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/dashboard/dashboard-svc.yaml \
+     ${KUBE_TEMP}/addons/dashboard
   # monitoring rc/svc
   cp ${KUBE_TEMP}/heapster-controller.yaml \
      ${KUBE_TEMP}/monitoring-controller.yaml \
+     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-grafana-controller.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/grafana-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/heapster-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-service.yaml \
      ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/monitoring-service.yaml \
-     ${KUBE_ROOT}/cluster/caicloud/addons/monitoring/influxdb-grafana-controller.yaml \
      ${KUBE_TEMP}/addons/monitoring
   # registry rc/svc
   cp ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-rc.yaml ${KUBE_ROOT}/cluster/caicloud/addons/registry/registry-svc.yaml \

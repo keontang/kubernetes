@@ -21,32 +21,37 @@
 
 # Add focused test regex here. If this is not empty, we'll only run focused tests.
 # Note:
-#  - We don't call build and up for focused tests: build is needed if any
-#    e2e related files have changed; up is needed to bring up a new cluster.
-#  - To match "kubectl run default", you must supply "kubectl.*run.*default"
+#   - To match "kubectl run default", you must supply "kubectl.*run.*default"
+#   - CAICLOUD_TEST_FOCUS_REGEX take precedence over CAICLOUD_TEST_SKIP_REGEX
 CAICLOUD_TEST_FOCUS_REGEX=${CAICLOUD_TEST_FOCUS_REGEX:-""}
 
 # Add skipped test regex here. Ignored CAICLOUD_TEST_FOCUS_REGEX is not empty. By
 # default, heavy tests are disabled.
 CAICLOUD_TEST_SKIP_REGEX=${CAICLOUD_TEST_SKIP_REGEX:-"\[Slow\]|\[Serial\]|\[Flaky\]|\[Disruptive\]|\[Feature:.+\]"}
 
-# By default, do not run unit/integration tests.
-export KUBE_RELEASE_RUN_TESTS=${KUBE_RELEASE_RUN_TESTS:-"N"}
+# Build and up is not desired if we want to run some focused tests.
+BUILD_AND_UP=${BUILD_AND_UP:-"Y"}
 
-# Disable logging and monitoring since it takes a long time to bring up (due
-# to docker pull image).
-export ENABLE_CLUSTER_LOGGING=false
-export ENABLE_CLUSTER_MONITORING=false
-export ENABLE_CLUSTER_REGISTRY=false
-# Enable cluster dashboard.
+# By default, do not run unit/integration tests.
+KUBE_RELEASE_RUN_TESTS=${KUBE_RELEASE_RUN_TESTS:-"N"}
+
+# Addon switches.
 export ENABLE_CLUSTER_DASHBOARD=true
+export ENABLE_CLUSTER_MONITORING=true
+export ENABLE_CLUSTER_LOGGING=false
+export ENABLE_CLUSTER_REGISTRY=false
+
+# Do not check version skew since server & client version may slightly differ in caicloud.
+if [[ "${BUILD_AND_UP}" == "Y" ]]; then
+  OPTS="-build -up -v -test --check_version_skew=false"
+else
+  OPTS="-v -test --check_version_skew=false"
+fi
 
 if [[ "${CAICLOUD_TEST_FOCUS_REGEX}" = "" ]]; then
-  # Build code base, create new cluster and run all tests. Do not check version skew
-  # since server & client version may slightly differ in caicloud.
-  go run "$(dirname $0)/../e2e.go" -v -build -up -test --check_version_skew=false --test_args="--ginkgo.skip=${CAICLOUD_TEST_SKIP_REGEX}"
+  go run "$(dirname $0)/../e2e.go" ${OPTS} --test_args="--ginkgo.skip=${CAICLOUD_TEST_SKIP_REGEX}"
 else
-  go run "$(dirname $0)/../e2e.go" -v -test --check_version_skew=false --test_args="--ginkgo.focus=${CAICLOUD_TEST_FOCUS_REGEX}"
+  go run "$(dirname $0)/../e2e.go" ${OPTS} --test_args="--ginkgo.focus=${CAICLOUD_TEST_FOCUS_REGEX}"
 fi
 
 exit $?

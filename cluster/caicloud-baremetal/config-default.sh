@@ -110,16 +110,14 @@ DNS_SERVER_IP=${DNS_SERVER_IP:-10.254.0.100} # Must be a IP in SERVICE_CLUSTER_I
 DNS_DOMAIN=${DNS_DOMAIN:-"cluster.local"}
 DNS_REPLICAS=${DNS_REPLICAS:-1}
 
+# Optional: Install cluster monitoring. Resource requirement is calculated at last.
+ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-true}
+
 # Optional: When set to true, fluentd, elasticsearch and kibana will be setup as
 # part of the cluster bring up.
 ENABLE_CLUSTER_LOGGING=${ENABLE_CLUSTER_LOGGING:-false}
 ELASTICSEARCH_REPLICAS=${ELASTICSEARCH_REPLICAS:-2}
 KIBANA_REPLICAS=${KIBANA_REPLICAS:-1}
-
-# Optional: Install cluster monitoring.
-ENABLE_CLUSTER_MONITORING=${ENABLE_CLUSTER_MONITORING:-false}
-# TODO: config the default memory limit according to num of nodes.
-HEAPSTER_MEMORY=${HEAPSTER_MEMORY:-"300Mi"}
 
 # Optional: Install kubernetes dashboard.
 ENABLE_CLUSTER_DASHBOARD=${ENABLE_CLUSTER_DASHBOARD:-true}
@@ -232,13 +230,17 @@ function calculate-default {
   fi
 
   # MASTER_SECURE_* is accessed directly from outside world, serving HTTPS.
+  MASTER_SECURE_ADDRESS=${MASTER_IIP}
   if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
     MASTER_SECURE_PORT="6443"
   else
     MASTER_SECURE_PORT="443"
   fi
 
-  MASTER_SECURE_ADDRESS=${MASTER_IIP}
+  # Calculate heapster memory limit based on number of nodes. Number come from
+  # cluster/addons/cluster-monitoring/influxdb/heapster-controller.yaml
+  METRICS_MEMORY="$((200 + ${NUM_NODES} * 4))Mi"
+  EVENTER_MEMORY="$((200 * 1024 + ${NUM_NODES} * 500))Ki"
 }
 
 calculate-default

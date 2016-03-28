@@ -130,6 +130,8 @@ These are individual files we have to change in order to meet our requirements:
 
 ##### Fix e2e test
 
+- test/e2e/e2e.go
+  - Increase podStartupTimeout for kube-system pods
 - test/e2e/util.go
   - To use correct ssh private key & user for e2e test
   - Increase timeout constants
@@ -141,6 +143,8 @@ These are individual files we have to change in order to meet our requirements:
   - Increase timeoutRC
 - test/e2e/kubectl.go
   - Increase guestbookStartupTimeout
+- test/e2e/es_cluster_logging.go
+  - Enable elasticsearch cluster logging by monifying SkipUnlessProviderIs("gce")
 - hack/ginkgo-e2e.sh
   - Run k8s-replace before actually running e2e tests.
 

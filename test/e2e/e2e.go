@@ -44,7 +44,7 @@ const (
 	// podStartupTimeout is the time to allow all pods in the cluster to become
 	// running and ready before any e2e tests run. It includes pulling all of
 	// the pods (as of 5/18/15 this is 8 pods).
-	podStartupTimeout = 10 * time.Minute
+	podStartupTimeout = 10 * time.Minute * 3
 )
 
 var (

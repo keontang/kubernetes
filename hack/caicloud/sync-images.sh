@@ -20,6 +20,13 @@
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 
+# Special handling for gcr.io/google_containers/kube-cross:vX.Y.Z
+source ${KUBE_ROOT}/build/common.sh
+KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+cp ${KUBE_ROOT}/build/build-image/Dockerfile ${KUBE_ROOT}/build/build-image/Dockerfile.bk
+perl -X -i -pe "s/KUBE_BUILD_IMAGE_CROSS_TAG/${KUBE_BUILD_IMAGE_CROSS_TAG}/g" ${KUBE_ROOT}/build/build-image/Dockerfile
+trap "mv ${KUBE_ROOT}/build/build-image/Dockerfile.bk ${KUBE_ROOT}/build/build-image/Dockerfile" EXIT
+
 # Sync a single image. $1 will be pulled, then tagged and pushed as $2.
 #
 # Input:

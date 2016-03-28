@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ReplicationController
 metadata:
-  name: heapster
+  name: heapster-v1.0.0
   namespace: kube-system
   labels:
     k8s-app: heapster
@@ -17,29 +17,31 @@ spec:
         kubernetes.io/cluster-service: "true"
     spec:
       containers:
-        - image: index.caicloud.io/caicloud/google-heapster:v1.0.0
+        - image: index.caicloud.io/caicloudgcr/google_containers_heapster:v1.0.0
           name: heapster
           resources:
+            # keep request = limit to keep this container in guaranteed class
             limits:
               cpu: 100m
-              memory: {{ pillar['heapster_memory'] }}
+              memory: {{ pillar['metrics_memory'] }}
             requests:
               cpu: 100m
-              memory: {{ pillar['heapster_request'] }}
+              memory: {{ pillar['metrics_memory'] }}
           command:
             - /heapster
-            - --source=kubernetes:''
+            - --source=kubernetes.summary_api:''
             - --sink=influxdb:http://monitoring-influxdb:8086
-            - --metric_resolution=10s
-        - image: index.caicloud.io/caicloud/google-heapster:v1.0.0
+            - --metric_resolution=60s
+        - image: index.caicloud.io/caicloudgcr/google_containers_heapster:v1.0.0
           name: eventer
           resources:
+            # keep request = limit to keep this container in guaranteed class
             limits:
               cpu: 100m
-              memory: {{ pillar['heapster_memory'] }}
+              memory: {{ pillar['eventer_memory'] }}
             requests:
               cpu: 100m
-              memory: {{ pillar['heapster_request'] }}
+              memory: {{ pillar['eventer_memory'] }}
           command:
             - /eventer
             - --source=kubernetes:''

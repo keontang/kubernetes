@@ -201,10 +201,24 @@ Running integration test is the same as upstream, i.e.
 
 ### e2e test
 
-Run the following command to start anchnet e2e test (tee is used to redirect to both stdout and file):
-```
-KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh 2>&1 | tee ~/e2e-output
-```
+Typical workflow for running anchnet e2e tests:
 
-The script `caicloud-e2e-test.sh` is used for caicloud e2e test - all e2e tests are located at `test/e2e`. Consult the file
-for more details.
+- Step1:
+  Build codebase, create a new cluster and run default set of tests. `tee` is used to redirect to both stdout and file):
+  ```
+  $ KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh 2>&1 | tee ~/e2e-output
+  ```
+  To use another anchnet account, add `ANCHNET_CONFIG_FILE=$HOME/.anchnet/config-devtest`; to increase bandwidth, add `MASTER_BW=5 NODE_BW=30`.
+
+- Step2:
+  Test features enabled in caicloud, on the same cluster e.g.
+  ```
+  $ TEST_BUILD=N TEST_UP=N CAICLOUD_TEST_FOCUS_REGEX="\[Feature:Elasticsearch\]" KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh
+  ```
+  Note `ANCHNET_CONFIG_FILE` is required if the cluster is creating with this option.
+
+- Step3:
+  Re-run failed tests. You may want to create a new cluster if you touches core kubernetes codebase:
+  ```
+  $ TEST_BUILD=Y TEST_UP=N CAICLOUD_TEST_FOCUS_REGEX="\[ReplicationController.*light\]" KUBERNETES_PROVIDER=caicloud-anchnet ./hack/caicloud/caicloud-e2e-test.sh
+  ```

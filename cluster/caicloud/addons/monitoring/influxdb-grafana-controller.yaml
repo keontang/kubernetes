@@ -51,8 +51,10 @@ spec:
               memory: 100Mi
           env:
             # This variable is required to setup templates in Grafana.
+            # Note: we change the value from 'monitoring-influxdb' to 'localhost' due to
+            # kube-proxy iptables issue: https://github.com/kubernetes/kubernetes/issues/20475
             - name: INFLUXDB_SERVICE_URL
-              value: http://monitoring-influxdb:8086
+              value: http://localhost:8086
               # The following env variables are required to make Grafana accessible via
               # the kubernetes api-server proxy. On production clusters, we recommend
               # removing these env variables, setup auth for grafana, and expose the grafana

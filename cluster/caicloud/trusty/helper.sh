@@ -49,13 +49,6 @@ function send-master-files {
     interface="${ssh_info[2]}"
   fi
 
-  if [[ ! ${KUBELET_ADDRESS} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-    kubelet_ip_address=`ssh-to-instance "${MASTER_SSH_EXTERNAL}" \
-"ifconfig | grep -A 1 ${KUBELET_ADDRESS} | tail -1 | cut -d ':' -f 2 | cut -d ' ' -f 1" | tr -d " \t\n\r"`
-  else
-    kubelet_ip_address=${KUBELET_ADDRESS}
-  fi
-
   # All files will be stored under this directory.
   mkdir -p ${KUBE_TEMP}/kube-master/kube/master
 
@@ -75,7 +68,8 @@ function send-master-files {
     echo "FLANNEL_SUBNET_MIN=${FLANNEL_SUBNET_MIN}"
     echo "FLANNEL_SUBNET_MAX=${FLANNEL_SUBNET_MAX}"
     echo "FLANNEL_TYPE=${FLANNEL_TYPE}"
-    echo "KUBELET_IP_ADDRESS=${kubelet_ip_address}"
+    echo "KUBELET_ADDRESS=${KUBELET_ADDRESS}"
+    echo "KUBELET_NODE_IP=${MASTER_IIP}"
     echo "MASTER_SECURE_ADDRESS=${MASTER_SECURE_ADDRESS}"
     echo "MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS}"
     echo "MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT}"
@@ -201,6 +195,7 @@ sudo mkdir -p /etc/caicloud && sudo cp ~/kube/kubelet-kubeconfig ~/kube/kube-pro
 #   MASTER_SSH_EXTERNAL
 #   CAICLOUD_PROVIDER
 #   NODE_SSH_EXTERNAL
+#   NODE_SSH_INTERNAL
 #   NODE_INSTANCE_IDS
 function send-node-files {
   # Get array of hostnames to override if necessary.
@@ -224,14 +219,8 @@ function send-node-files {
       hostname_override=""
     fi
 
-    if [[ ! ${KUBELET_ADDRESS} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-      kubelet_ip_address=`ssh-to-instance "${node_ssh_info[$i]}" \
-"ifconfig | grep -A 1 ${KUBELET_ADDRESS} | tail -1 | cut -d ':' -f 2 | cut -d ' ' -f 1" | tr -d " \t\n\r"`
-    else
-      kubelet_ip_address=${KUBELET_ADDRESS}
-    fi
-
-    send-node-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" "${kubelet_ip_address}" & pids="${pids} $!"
+    IFS=',' read -ra node_iip_array <<< "${NODE_IIPS}"
+    send-node-files-internal "${node_ssh_info[$i]}" "${interface}" "${hostname_override}" "${node_iip_array[$i]}" & pids="${pids} $!"
   done
   wait ${pids}
 }
@@ -239,7 +228,7 @@ function send-node-files {
 #   $1 Node ssh info, e.g. "root:password@43.254.54.59"
 #   $2 Interface or IP address used by flanneld to send internal traffic
 #   $3 Hostname override
-#   $4 Kubelet bind IP address
+#   $4 Node internal IP address
 function send-node-files-internal {
   mkdir -p ${KUBE_TEMP}/kube-node${1}/kube/node
 
@@ -256,7 +245,8 @@ function send-node-files-internal {
     echo "DNS_DOMAIN=${DNS_DOMAIN}"
     echo "DNS_SERVER_IP=${DNS_SERVER_IP}"
     echo "FLANNEL_INTERFACE=${2}"
-    echo "KUBELET_IP_ADDRESS=${4}"
+    echo "KUBELET_ADDRESS=${KUBELET_ADDRESS}"
+    echo "KUBELET_NODE_IP=${4}"
     echo "MASTER_SECURE_ADDRESS=${MASTER_SECURE_ADDRESS}"
     echo "MASTER_INSECURE_ADDRESS=${MASTER_INSECURE_ADDRESS}"
     echo "MASTER_INSECURE_PORT=${MASTER_INSECURE_PORT}"

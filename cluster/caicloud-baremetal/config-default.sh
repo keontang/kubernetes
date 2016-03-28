@@ -92,15 +92,6 @@ http://mirrors.aliyun.com/ubuntu/,\
 http://mirrors.163.com/ubuntu/,\
 http://ftp.sjtu.edu.cn/ubuntu/"}
 
-# The IP address or interface for kubelet to serve on. Note kubelet only accepts
-# an IP address, we add the ability to use interface as well. E.g. use 0.0.0.0
-# to have kubelet listen on all interfaces; use 'eth1' to listen on eth1 interface.
-if [[ "${MASTER_SSH_INFO}" =~ "vagrant" ]]; then
-  KUBELET_ADDRESS="eth1"
-else
-  KUBELET_ADDRESS=0.0.0.0
-fi
-
 # -----------------------------------------------------------------------------
 # Parameter from executor for cluster addons.
 # -----------------------------------------------------------------------------
@@ -148,6 +139,9 @@ FLANNEL_TYPE="host-gw"
 # Note, the above configs should rarely change.
 MASTER_INSECURE_ADDRESS="127.0.0.1"
 MASTER_INSECURE_PORT="8080"
+
+# The IP address or interface for kubelet to serve on.
+KUBELET_ADDRESS="0.0.0.0"
 KUBELET_PORT="10250"
 
 DNS_HOST_NAME=${DNS_HOST_NAME:-"cluster"}
@@ -182,7 +176,8 @@ function calculate-default {
     KUBECONFIG="$HOME/.kube/config_${CLUSTER_NAME}"
   fi
 
-  # Master IP and node IPs.
+  # Master IP and node IPs. Note we intentially use NODE_IPS instead of using
+  # NODE_IIPS here since the IPs can be public IPs.
   MASTER_IP=${MASTER_SSH_INFO#*@}
   NODE_IPS=""
   IFS=',' read -ra node_info_array <<< "${NODE_SSH_INFO}"
@@ -195,13 +190,13 @@ function calculate-default {
     fi
   done
 
-  # Master/node IP is also their internal IPs.
+  # However, we also treat Master/node IP as their internal IPs.
   MASTER_IIP=${MASTER_IP}
   NODE_IIPS=${NODE_IPS}
 
   # Create node IP address array and NUM_NODES.
-  IFS=',' read -ra NODE_IPS_ARR <<< "${NODE_IPS}"
-  export NUM_NODES=${#NODE_IPS_ARR[@]}
+  IFS=',' read -ra NODE_IIPS_ARR <<< "${NODE_IIPS}"
+  export NUM_NODES=${#NODE_IIPS_ARR[@]}
 
   # Note that master_name and node_name are name of the instances in anchnet, which
   # is helpful to group instances; however, anchnet API works well with instance id,

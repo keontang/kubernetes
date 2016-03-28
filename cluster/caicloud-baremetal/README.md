@@ -1,3 +1,14 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Caicloud baremetal cloudprovider](#caicloud-baremetal-cloudprovider)
+  - [Create a development cluster](#create-a-development-cluster)
+  - [Scale up the cluster](#scale-up-the-cluster)
+      - [Options:](#options)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Caicloud baremetal cloudprovider
 
 Baremetal cloudprovider implements kubernetes cloudprovider plugin. It assumes nothing but a few running instances.

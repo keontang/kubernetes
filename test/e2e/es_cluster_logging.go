@@ -37,7 +37,7 @@ var _ = Describe("Cluster level logging using Elasticsearch [Feature:Elasticsear
 		// TODO: For now assume we are only testing cluster logging with Elasticsearch
 		// on GCE. Once we are sure that Elasticsearch cluster level logging
 		// works for other providers we should widen this scope of this test.
-		SkipUnlessProviderIs("gce")
+		SkipUnlessProviderIs("gce", "caicloud-anchnet")
 	})
 
 	It("should check that logs from pods on all nodes are ingested into Elasticsearch", func() {

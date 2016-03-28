@@ -20,11 +20,14 @@ spec:
         kubernetes.io/cluster-service: "true"
     spec:
       containers:
-      - image: index.caicloud.io/caicloudgcr/google_containers_elasticsearch:1.7
+      - image: index.caicloud.io/caicloudgcr/google_containers_elasticsearch:1.8
         name: elasticsearch-logging
         resources:
+          # keep request = limit to keep this container in guaranteed class
           limits:
-            cpu: 100m
+            cpu: 300m
+          requests:
+            cpu: 300m
         ports:
         - containerPort: 9200
           name: db

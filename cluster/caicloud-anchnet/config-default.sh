@@ -55,7 +55,7 @@ BUILD_TARBALL=${BUILD_TARBALL:-"N"}
 
 # The version of caicloud release to use if building release is not required.
 # E.g. v1.0.2, 2015-09-09-15-30-30, etc.
-CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.7.6"}
+CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.8.0"}
 
 # Project ID actually stands for anchnet sub-account. If PROJECT_ID and PROJECT_USER
 # are not set, all the subsequent anchnet calls will use main account in anchnet.
@@ -73,7 +73,7 @@ DOCKER_VERSION=${DOCKER_VERSION:-"1.9.1"}
 # The base image used to create master and node instance in image mode. The
 # param is only used in image mode. This image is created from scripts like
 # 'image-from-devserver.sh'.
-IMAGEMODE_IMAGE=${IMAGEMODE_IMAGE:-"img-C0SA7DD5"}
+IMAGEMODE_IMAGE=${IMAGEMODE_IMAGE:-"img-OXUAQLFF"}
 
 # The base image used to create master and node instance in non-image modes.
 RAW_BASE_IMAGE=${RAW_BASE_IMAGE:-"trustysrvx64c"}

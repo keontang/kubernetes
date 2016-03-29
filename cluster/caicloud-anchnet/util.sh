@@ -31,6 +31,7 @@ source "${KUBE_ROOT}/cluster/caicloud/${KUBE_DISTRO}/helper.sh"
 # -----------------------------------------------------------------------------
 # Cluster specific library utility functions.
 # -----------------------------------------------------------------------------
+
 # Verify cluster prerequisites.
 function verify-prereqs {
   if [[ "$(which anchnet)" == "" ]]; then
@@ -60,19 +61,6 @@ function verify-prereqs {
     log "For ubuntu/debian, if you have root access, run: sudo apt-get install expect."
     exit 1
   fi
-  if [[ "$(which kubectl)" == "" ]]; then
-    caicloud-build-local
-    if [[ "$(which kubectl)" == "" ]]; then
-      log "Can't find kubectl binary in PATH, please fix and retry."
-      exit 1
-    fi
-  fi
-  cd ${KUBE_ROOT}
-  ./cluster/kubectl.sh > /dev/null 2>&1
-  if [[ "$?" != "0" ]]; then
-    caicloud-build-local
-  fi
-  cd - > /dev/null
   if [[ ! -f "${ANCHNET_CONFIG_FILE}" ]]; then
     log "Can't find anchnet config file ${ANCHNET_CONFIG_FILE}, please fix and retry."
     log "Anchnet config file contains credentials used to access anchnet API."
@@ -82,6 +70,13 @@ function verify-prereqs {
     log "${color_red}Unrecognized kube-up mode ${KUBE_UP_MODE}${color_norm}"
     exit 1
   fi
+  # Make sure kucbetl is available.
+  cd ${KUBE_ROOT}
+  ./cluster/kubectl.sh > /dev/null 2>&1
+  if [[ "$?" != "0" ]]; then
+    caicloud-build-local-kubectl
+  fi
+  cd - > /dev/null
 }
 
 # Instantiate a kubernetes cluster
@@ -105,8 +100,8 @@ function kube-up {
   if [[ "${KUBE_UP_MODE}" = "dev" ]]; then
     # For dev, set to existing instance IDs for master and nodes. Other variables
     # will be calculated based on the IDs.
-    MASTER_INSTANCE_ID="i-J06C90YM"
-    NODE_INSTANCE_IDS="i-R52JHR1Y,i-Z282YS10"
+    MASTER_INSTANCE_ID="i-UHKSBW0X"
+    NODE_INSTANCE_IDS="i-L57OCUK7,i-0X68BTZ2,i-3GAREYUJ"
     # To mimic actual kubeup process, we create vars to match create-master-instance
     # create-node-instances, etc. We also override NUM_NODES.
     create-dev-variables
@@ -1194,72 +1189,6 @@ function anchnet-wait-job {
   fi
 }
 
-# -----------------------------------------------------------------------------
-# Cluster specific test helpers used from hack/e2e-test.sh
-# -----------------------------------------------------------------------------
-# Perform preparations required to run e2e tests.
-function prepare-e2e() {
-  ensure-temp-dir
-
-  # Cluster configs for e2e test. Note we must export the variables; otherwise,
-  # they won't be visible outside of the function.
-  export CLUSTER_NAME="e2e-test"
-  export BUILD_TARBALL="Y"
-  # Note in e2e we must prepend BUILD_VERSION with a kuberntes version (e.g. v1.2.1).
-  # Also, our own information must go to version meta data, not pre-release, see:
-  # http://semver.org/#spec-item-9 and http://semver.org/#spec-item-10.
-  export BUILD_VERSION="${K8S_VERSION}+${BUILD_VERSION}-e2e-test"
-  export KUBE_UP_MODE="tarball"
-  export NUM_NODES=3
-  export MASTER_MEM=8192
-  export MASTER_CPU_CORES=2
-  export NODE_MEM=8192
-  export NODE_CPU_CORES=2
-  # This will be used during e2e as ssh user to execute command inside nodes.
-  export KUBE_SSH_USER=${KUBE_SSH_USER:-"ubuntu"}
-  export KUBECONFIG="$HOME/.kube/config-e2e"
-
-  # Since we changed configs above, we need to re-set cluster env.
-  calculate-default
-
-  # As part of e2e preparation, we fix image path.
-  ${KUBE_ROOT}/hack/caicloud/k8s-replace.sh
-  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
-}
-
-# Execute prior to running tests to build a release if required for env.
-#
-# Assumed Vars:
-#   KUBE_ROOT
-function test-build-release {
-  # In e2e test, we will run in tarball mode without specifying version; therefore
-  # release will be built during kube-up and we do not need to build release here.
-  # Note also, e2e test will test client & server version match. Server binary uses
-  # dockerized build; however, developer may use local kubectl (_output/local/bin/kubectl),
-  # so we do a local build here.
-  log "Running test-build-release for anchnet"
-  caicloud-build-local
-}
-
-# Execute prior to running tests to initialize required structure. This is
-# called from hack/e2e.go only when running -up (it is ran after kube-up).
-#
-# Assumed vars:
-#   Variables from config.sh
-function test-setup {
-  log "Running test-setup for anchnet"
-  kube-up
-  validate-cluster
-}
-
-# Execute after running tests to perform any required clean-up. This is called
-# from hack/e2e.go
-function test-teardown {
-  # CLUSTER_NAME should already be set, but we set again to make sure.
-  export CLUSTER_NAME="e2e-test"
-  kube-down
-}
-
 
 # -----------------------------------------------------------------------------
 # Anchnet specific utility functions used in kube-add-node
@@ -1420,4 +1349,72 @@ function wait-for-dns-propagation {
 function wait-for-dns-propagation-internal {
   log "+++++ Wait for dns record ${MASTER_DOMAIN_NAME} to propagate..."
   host ${MASTER_DOMAIN_NAME}
+}
+
+
+# -----------------------------------------------------------------------------
+# Cluster specific test helpers.
+# -----------------------------------------------------------------------------
+
+# Perform preparations required to run e2e tests.
+function prepare-e2e() {
+  ensure-temp-dir
+
+  # Cluster configs for e2e test. Note we must export the variables; otherwise,
+  # they won't be visible outside of the function.
+  export CLUSTER_NAME="e2e-test"
+  export BUILD_TARBALL="Y"
+  # Note in e2e we must prepend BUILD_VERSION with a kuberntes version (e.g. v1.2.1).
+  # Also, our own information must go to version meta data, not pre-release, see:
+  # http://semver.org/#spec-item-9 and http://semver.org/#spec-item-10.
+  export BUILD_VERSION="${K8S_VERSION}+${BUILD_VERSION}-e2e-test"
+  export KUBE_UP_MODE="tarball"
+  export NUM_NODES=3
+  export MASTER_MEM=8192
+  export MASTER_CPU_CORES=2
+  export NODE_MEM=8192
+  export NODE_CPU_CORES=2
+  # This will be used during e2e as ssh user to execute command inside nodes.
+  export KUBE_SSH_USER=${KUBE_SSH_USER:-"ubuntu"}
+  export KUBECONFIG="$HOME/.kube/config-e2e"
+
+  # Since we changed configs above, we need to re-set cluster env.
+  calculate-default
+
+  # As part of e2e preparation, we fix image path.
+  ${KUBE_ROOT}/hack/caicloud/k8s-replace.sh
+  trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
+}
+
+# Execute prior to running tests to build a release if required for env.
+#
+# Assumed Vars:
+#   KUBE_ROOT
+function test-build-release {
+  # In e2e test, we will run in tarball mode without specifying version; therefore
+  # release will be built during kube-up and we do not need to build release here.
+  # Note also, e2e test will test client & server version match. Server binary uses
+  # dockerized build; however, developer may use local kubectl (_output/local/bin/kubectl),
+  # so we do a local build here.
+  log "Running test-build-release for anchnet"
+  caicloud-build-local-kubectl
+}
+
+# Execute prior to running tests to initialize required structure. This is
+# called from hack/e2e.go only when running -up (it is ran after kube-up).
+#
+# Assumed vars:
+#   Variables from config.sh
+function test-setup {
+  log "Running test-setup for anchnet"
+  kube-up
+  validate-cluster
+}
+
+# Execute after running tests to perform any required clean-up. This is called
+# from hack/e2e.go
+function test-teardown {
+  # CLUSTER_NAME should already be set, but we set again to make sure.
+  export CLUSTER_NAME="e2e-test"
+  kube-down
 }

@@ -132,17 +132,19 @@ EOF
 #   MASTER_IIP
 #   MASTER_SECURE_PORT
 #   POD_INFRA_CONTAINER
-#   KUBELET_IP_ADDRESS
+#   KUBELET_ADDRESS
 #   KUBELET_PORT
+#   KUBELET_NODE_IP
 #   REGISTER_MASTER_KUBELET
 function create-kubelet-opts {
   cat <<EOF | tr "\n" " " > ~/kube/configs/kubelet
 KUBELET_OPTS="--logtostderr=true \
---address=${KUBELET_IP_ADDRESS} \
+--address=${KUBELET_ADDRESS} \
+--port=${KUBELET_PORT} \
+--node-ip=${KUBELET_NODE_IP} \
 --cluster-dns=${DNS_SERVER_IP} \
 --cluster-domain=${DNS_DOMAIN} \
 --pod-infra-container-image=${POD_INFRA_CONTAINER} \
---port=${KUBELET_PORT} \
 --system-container=/system \
 --cgroup-root=/ \
 --runtime-cgroups=/docker-daemon \
@@ -175,6 +177,7 @@ EOF
     echo -n " --cloud-provider=${CAICLOUD_PROVIDER} " >> ~/kube/configs/kubelet
     echo -n " --cloud-config=/etc/kubernetes/cloud-config " >> ~/kube/configs/kubelet
   fi
+
   echo -n '"' >> ~/kube/configs/kubelet
 }
 

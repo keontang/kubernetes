@@ -350,6 +350,10 @@ function build-instance-image {
   MASTER_SSH_EXTERNAL="${INSTANCE_USER}:${KUBE_INSTANCE_PASSWORD}@${MASTER_EIP}"
   INSTANCE_SSH_EXTERNAL="${MASTER_SSH_EXTERNAL}"
 
+  # Upgrade packages. Note, use ";" instead of "&&" so we'll still be able to run
+  # upgrade even if there is error like "hashsum not match".
+  ssh-to-instance-expect ${MASTER_SSH_EXTERNAL} "sudo apt-get update; sudo apt-get -y upgrade"
+
   local pids=""
   fetch-tarball-in-master & pids="$pids $!"
   install-packages & pids="$pids $!"

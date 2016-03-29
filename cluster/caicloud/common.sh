@@ -489,6 +489,7 @@ function create-node-internal-ips-variable {
     done
   done
 
+  NODE_IIPS=""
   # Since we've checked the required number of hosts < total number of hosts,
   # we can just simply add 1 to previous IP.
   for (( i = 0; i < ${NUM_NODES}; i++ )); do
@@ -1090,10 +1091,18 @@ function caicloud-build-tarball {
 }
 
 # Build local binaries.
+#
+# Inputs:
+#   $1 Binary target to build, e.g. "cmd/kubectl" to only build kubectl
 function caicloud-build-local {
   cd ${KUBE_ROOT}
-  hack/build-go.sh
+  hack/build-go.sh "$@"
   cd -
+}
+
+# Build local kubectl binary, put under _output/local/bin/kubectl.
+function caicloud-build-local-kubectl {
+  caicloud-build-local "cmd/kubectl"
 }
 
 # Clean up repository.

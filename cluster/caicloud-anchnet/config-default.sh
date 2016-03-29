@@ -288,10 +288,8 @@ FLANNEL_TYPE="vxlan"
 MASTER_INSECURE_ADDRESS="127.0.0.1"
 MASTER_INSECURE_PORT="8080"
 
-# The IP address or interface for kubelet to serve on. Note kubelet only accepts
-# an IP address, we add the ability to use interface as well. E.g. use 0.0.0.0
-# to have kubelet listen on all interfaces; use 'eth1' to listen on eth1 interface.
-KUBELET_ADDRESS=0.0.0.0
+# The IP address or interface for kubelet to serve on.
+KUBELET_ADDRESS="0.0.0.0"
 KUBELET_PORT="10250"
 
 # Define the internal IPs for instances in private SDN network.
@@ -388,11 +386,11 @@ function calculate-default {
   # self signed cert (USE_SELF_SIGNED_CERT=true)
   #
   # In case we present a self signed cert to user, the cert will be used both
-  # externally and internally(for in cluster component like kubelet, kube-proxy or
+  # externally and internally (for in cluster component like kubelet, kube-proxy or
   # applications running inside cluster to access apiserver through https). Apiserver
   # will serve securely on 0.0.0.0:443 and insecurely on localhost:8080. This is more
   # of a testing use case (e.g. We only want to test kube-up script without adding
-  # dns record)
+  # dns record).
   #
   # ca verified cert (USE_SELF_SIGNED_CERT=false)
   #
@@ -400,15 +398,16 @@ function calculate-default {
   # verified cert is used by a nginx pod serving on 0.0.0.0:443 on master which
   # proxies all external requests to apiserver's secure location. A self signed cert
   # is also used by apiserver to deal with internal https requests. Apiserver will
-  # serve securely on 10.244.0.1:6443 and insecurely on localhost:8080. This setup is
-  # mostly used in production.
+  # serve securely on ${MASTER_IIP}:6443 and insecurely on localhost:8080. This
+  # setup is mostly used in production.
   #
   # In both cases, kubelet & kube-proxy will access master on secure location through
-  # https(except for those running on master)
+  # https (except for those running on master).
   # -----------------------------------------------------------------------------
 
-  # MASTER_SECURE_* is accessed directly from outside world, serving HTTPS.
-  # Thses configs should rarely change.
+  # If using self-signed cert, MASTER_SECURE_* is accessed directly from outside
+  # world, serving HTTPS; if using ca signed cert, MASTER_SECURE_* is accessed
+  # for internal components - a nginx pod serves outside traffic.
   if [[ ${USE_SELF_SIGNED_CERT} == "false" ]]; then
     MASTER_SECURE_ADDRESS=${MASTER_IIP}
     MASTER_SECURE_PORT="6443"

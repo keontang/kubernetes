@@ -60,7 +60,7 @@ if [[ "$#" == "1" ]]; then
     echo -e ""
     usage
     exit 0
-  elif [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+ && ! $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+  elif [[ ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+ && ! $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
     # We also allow passing date/time directly, this is usually used internally.
     echo -e "Error: Version format error, see usage."
     echo -e ""
@@ -169,17 +169,12 @@ function create-cloud-image {
 
 # Decide if we create cloud images.
 if [[ "${BUILD_CLOUD_IMAGE}" == "Y" ]]; then
-  # config-xinzhang is the anchnet account used to host all users' cluster
-  # config-devtest is the anchnet account used to host dev/test cluster
-  # When releasing, both account needs to have the updated image available.
-  pids=""
+  # config-xinzhang is the anchnet account used to host all clusters.
   create-cloud-image "caicloud-anchnet" "$HOME/.anchnet/config-xinzhangcmu" & pids="$pids $!"
-  create-cloud-image "caicloud-anchnet" "$HOME/.anchnet/config-devtest" & pids="$pids $!"
-  wait ${pids}
 fi
 
 # A reminder for creating Github release.
-if [[ "$#" == "1" && $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+if [[ "$#" == "1" && $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
   echo -e "Finished building release. If this is a formal release, please remember to create a release tag at Github at:"
   echo -e "  https://github.com/caicloud/caicloud-kubernetes/releases"
 fi

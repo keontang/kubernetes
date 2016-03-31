@@ -170,7 +170,7 @@ function create-cloud-image {
 # Decide if we create cloud images.
 if [[ "${BUILD_CLOUD_IMAGE}" == "Y" ]]; then
   # config-xinzhang is the anchnet account used to host all clusters.
-  create-cloud-image "caicloud-anchnet" "$HOME/.anchnet/config-xinzhangcmu" & pids="$pids $!"
+  create-cloud-image "caicloud-anchnet" "$HOME/.anchnet/config-xinzhangcmu"
 fi
 
 # A reminder for creating Github release.

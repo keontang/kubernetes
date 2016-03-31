@@ -36,7 +36,7 @@ CLUSTER_ALIAS=${CLUSTER_ALIAS:-"kube-default"}
 
 # The version of caicloud release to use if building release is not required.
 # E.g. v1.0.2, 2015-09-09-15-30-30, etc.
-CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.8.0"}
+CAICLOUD_KUBE_VERSION=${CAICLOUD_KUBE_VERSION:-"v0.8.1"}
 
 # KUBE_USER uniquely identifies a caicloud user. This is the user that owns the
 # cluster, and will be used to create kubeconfig file.

@@ -22,16 +22,18 @@ set -o pipefail
 # and restarts kubernetes.
 
 # Set master and node internal IPs.
-MASTER_IP="10.57.53.139"
-NODE_IPS="10.57.57.64"
+MASTER_IP="10.57.64.142"
+NODE_IPS="10.57.46.64,11,10.57.65.207"
 KUBE_INSTANCE_PASSWORD="caicloud2015ABC"
 CLEAN_ETCD=false
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../../..
-source "${KUBE_ROOT}/cluster/anchnet/util.sh"
+source "${KUBE_ROOT}/cluster/caicloud-anchnet/util.sh"
 
 # Build current codebase.
-source "${KUBE_ROOT}/hack/build-go.sh"
+cd ${KUBE_ROOT}
+./hack/build-go.sh cmd/kubelet
+cd - > /dev/null
 
 # Push new binaries to master and nodes.
 INSTANCE_IPS="${MASTER_IP},${NODE_IPS}"
@@ -76,7 +78,7 @@ for instance_ip in ${instance_ip_arr[*]}; do
   expect <<EOF
 set timeout -1
 spawn ssh -t -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=quiet \
-  ubuntu@${instance_ip} "sudo service etcd stop"
+  ubuntu@${instance_ip} "sudo service etcd stop; sudo service flannel stop"
 expect {
   "*assword*" {
     send -- "${KUBE_INSTANCE_PASSWORD}\r"

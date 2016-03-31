@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/resource"
+	anchnet_cloud "k8s.io/kubernetes/pkg/cloudprovider/providers/anchnet"
 	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -221,6 +222,16 @@ func detachDiskLogError(pd *anchnetPersistentDisk) {
 func (pd *anchnetPersistentDisk) GetPath() string {
 	name := anchnetPersistentDiskPluginName
 	return pd.plugin.host.GetPodVolumeDir(pd.podUID, utilstrings.EscapeQualifiedNameForDisk(name), pd.volName)
+}
+
+// getVolumeProvider returns anchnet volumes interface.
+func (pd *anchnetPersistentDisk) getVolumeProvider() (anchnet_cloud.Volumes, error) {
+	cloud := pd.plugin.host.GetCloudProvider()
+	volumes, ok := cloud.(anchnet_cloud.Volumes)
+	if !ok {
+		return nil, fmt.Errorf("cloudprovider anchnet doesn't support volumes interface")
+	}
+	return volumes, nil
 }
 
 // anchnetPersistentDiskBuilder setup and mounts persistent disk.

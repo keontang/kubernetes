@@ -766,16 +766,14 @@ function clean-up-working-dir {
 # This function simply remove the ~/kube directory from instances
 #
 # Assumed vars:
-#   MASTER_SSH_EXTERNAL
-#   NODE_SSH_EXTERNAL
+#   INSTANCE_SSH_EXTERNAL
 function clean-up-working-dir-internal {
   local pids=""
   log "+++++ Start cleaning working dir. "
-  ssh-to-instance-expect "${MASTER_SSH_EXTERNAL}" "sudo rm -rf ~/kube" & pids="${pids} $!"
 
-  IFS=',' read -ra node_ssh_info <<< "${NODE_SSH_EXTERNAL}"
-  for ssh_info in "${node_ssh_info[@]}"; do
-    ssh-to-instance-expect "${ssh_info}" "sudo rm -rf ~/kube" & pids="${pids} $!"
+  IFS=',' read -ra instance_ssh_info <<< "${INSTANCE_SSH_EXTERNAL}"
+  for ssh_info in "${instance_ssh_info[@]}"; do
+    ssh-to-instance-expect "${ssh_info}" "sudo mv ~/kube /etc/caicloud" & pids="${pids} $!"
   done
 
   log-oneline "+++++ Wait for all instances to clean up working dir ..."

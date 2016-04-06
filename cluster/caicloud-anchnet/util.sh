@@ -292,18 +292,18 @@ function kube-down {
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${VXNET_DELETE_WAIT_RETRY} ${VXNET_DELETE_WAIT_INTERVAL}
   fi
 
-  # Find all security group prefixed with CLUSTER_NAME.
-  find-securitygroup-resources "${CLUSTER_NAME}"
-  if [[ "$?" == "0" ]]; then
-    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS} --project=${PROJECT_ID}"
-    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
-  fi
-
   # Find all loadbalancer prefixed with CLUSTER_NAME.
   find-loadbalancer-resources "${CLUSTER_NAME}" "active,pending,stopped,suspended"
   if [[ "$?" == "0" ]]; then
     anchnet-exec-and-retry "${ANCHNET_CMD} deleteloadbalancer ${LOADBALANCER_IDS} ${LOADBALANCER_EIP_IDS} --project=${PROJECT_ID}"
     anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${LB_DELETE_WAIT_RETRY} ${LB_DELETE_WAIT_INTERVAL}
+  fi
+
+  # Find all security group prefixed with CLUSTER_NAME.
+  find-securitygroup-resources "${CLUSTER_NAME}"
+  if [[ "$?" == "0" ]]; then
+    anchnet-exec-and-retry "${ANCHNET_CMD} deletesecuritygroups ${SECURITY_GROUP_IDS} --project=${PROJECT_ID}"
+    anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${SG_DELETE_WAIT_RETRY} ${SG_DELETE_WAIT_INTERVAL}
   fi
 
   # Remove dns name if we add dns name when bringing up the cluster

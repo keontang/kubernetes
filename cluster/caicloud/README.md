@@ -40,7 +40,9 @@ kubernetes root directory):
 ./hack/caicloud/build-release.sh
 ```
 
-E.g. following command will build tarballs tagged with version v1.0.1:
+Note, quite a few k8s components will explicitly check cluster version, so we can't simply use our own version. Therefore, we append our version to
+k8s version as a metadata, which can pass version check and still keep our own version. E.g. following command will build tarballs tagged with version
+v1.2.0+v1.0.1, assuming upstream k8s version is v1.2.0:
 ```
 ./hack/caicloud/build-release.sh v1.0.1
 ```

@@ -4,8 +4,8 @@
 
 - [Caicloud baremetal cloudprovider](#caicloud-baremetal-cloudprovider)
   - [Create a development cluster](#create-a-development-cluster)
-  - [Scale up the cluster](#scale-up-the-cluster)
       - [Options:](#options)
+  - [Scale up the cluster](#scale-up-the-cluster)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -25,11 +25,6 @@ This will create two ubuntu VMs with dedicated IP addresses. Now, to bring up ku
 KUBERNETES_PROVIDER=caicloud-baremetal ./cluster/kube-up.sh
 ```
 
-## Scale up the cluster
-To add nodes to a baremetal cluster, you have to know the ssh info of master and nodes to be added. e.g. The cluster to add node to has a master `vagrant:vagrant@192.168.205.10`, and the node to be added is `vagrant:vagrant@192.168.205.13`. To add node to this cluster, run:
-```
-MASTER_SSH_INFO=vagrant:vagrant@192.168.205.10 NODE_SSH_INFO=vagrant:vagrant@192.168.205.13 KUBERNETES_PROVIDER=caicloud-baremetal ./cluster/kube-add-node.sh
-```
 
 
 #### Options:
@@ -44,3 +39,11 @@ used in kube-up. For a full list of options, consult the file.
 * `NODE_SSH_INFO`: The master ssh information in the format of "username:password@ip_address". Multiple nodes are separated via comma.
 
 * `REGISTER_MASTER_KUBELET`: The flag controls whether we registry master as a node, this is true by default.
+
+
+
+## Scale up the cluster
+To add nodes to a baremetal cluster, you have to know the ssh info of master and nodes to be added. e.g. The cluster to add node to has a master `vagrant:vagrant@192.168.205.10`, and the node to be added is `vagrant:vagrant@192.168.205.13`. To add node to this cluster, run:
+```
+MASTER_SSH_INFO=vagrant:vagrant@192.168.205.10 NODE_SSH_INFO=vagrant:vagrant@192.168.205.13 KUBERNETES_PROVIDER=caicloud-baremetal ./cluster/kube-add-node.sh
+```

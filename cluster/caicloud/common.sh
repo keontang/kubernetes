@@ -75,7 +75,9 @@ function deploy-addons {
   sed -e "s/{{ pillar\['cluster_id'\] }}/${CLUSTER_ID}/g;\
           s/{{ pillar\['caicloud_uid'\] }}/${CAICLOUD_UID}/g;\
           s/{{ pillar\['cluster_token'\] }}/${CLUSTER_TOKEN}/g;\
-          s/{{ pillar\['cluster_name'\] }}/${CLUSTER_ALIAS}/g" ${monitoring_rc_file} > ${KUBE_TEMP}/monitoring-controller.yaml
+          s/{{ pillar\['cluster_name'\] }}/${CLUSTER_ALIAS}/g;\
+          s|{{ pillar\['paging_url'\] }}|${PAGING_EXTERNAL_ADDR}|g;\
+          s/{{ pillar\['running_enviroment'\] }}/${RUNNING_ENV}/g" ${monitoring_rc_file} > ${KUBE_TEMP}/monitoring-controller.yaml
 
   # Copy addon configurationss and startup script to master instance under ~/kube.
   rm -rf ${KUBE_TEMP}/addons

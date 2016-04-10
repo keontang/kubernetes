@@ -99,6 +99,11 @@ CLUSTER_ID=${CLUSTER_ID:-"32793e34-79d2-432b-ac17-708b61b80e6a"}
 CLUSTER_TOKEN=${CLUSTER_TOKEN:-"eSbsyAr2eDatXBxa"}
 CAICLOUD_UID=${CAICLOUD_UID:-"110ec58a-a0f2-4ac4-8393-c866d813b8d1"}
 
+# Used by monitoring to indicate which environment we are running on
+RUNNING_ENV=${RUNNING_ENV:-"dev"}
+# The default paging url is an invalid one which is only for when running kube-up locally.
+PAGING_EXTERNAL_ADDR=${PAGING_EXTERNAL_ADDR:-"http://paging-dev/api/paging"}
+
 # If we want to register master kubelet as a node. Note, since kubernetes 1.2,
 # it's better to always set this to true. We can disable scheduling user pod
 # to master via REGISTER_MASTER_SCHEDULABLE.

@@ -44,7 +44,7 @@ function usage {
 KUBE_ROOT=$(cd "$(dirname ${BASH_SOURCE})/../.." && pwd)
 
 # -----------------------------------------------------------------------------
-# Parameters for building tarball.
+# Parameters for building tarball and hyperkube image
 # -----------------------------------------------------------------------------
 # Do we want to upload the release tarball to qiniu: Y or N. Default to Y.
 UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"Y"}
@@ -54,6 +54,9 @@ BUILD_CLOUD_IMAGE=${BUILD_CLOUD_IMAGE:-"Y"}
 
 # Do we want to build script docker image: Y or N. Default to Y.
 BUILD_SCRIPTS_DOCKER_IMAGE=${BUILD_SCRIPTS_DOCKER_IMAGE:-"Y"}
+
+# Do we want to push the hyperkube image to registry: Y or N. Default to Y.
+PUSH_TO_REGISTRY=${PUSH_TO_REGISTRY:-"Y"}
 
 # Get configs and commone utilities.
 source ${KUBE_ROOT}/hack/caicloud/common.sh
@@ -104,7 +107,12 @@ export KUBE_GIT_TREE_STATE="clean"
 # Work around mainland network connection.
 hack/caicloud/k8s-replace.sh
 trap '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT
-build/run.sh hack/build-go.sh
+if [[ "${PUSH_TO_REGISTRY}" == "Y" ]]; then
+  login-caicloud-docker-registry
+  KUBE_DOCKER_REGISTRY="${CAICLOUD_DOCKER_REGISTRY}/${CAICLOUD_DOCKER_REGISTRY_USERNAME}" KUBE_DOCKER_IMAGE_TAG="${KUBE_GIT_VERSION}" hack/caicloud/run.sh hack/build-go.sh
+else
+  hack/caicloud/run.sh hack/build-go.sh
+fi
 if [[ "$?" != "0" ]]; then
   echo "Error building server binaries"
   exit 1
@@ -197,3 +205,31 @@ if [[ "$#" == "1" && $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
   echo -e "Finished building release. If this is a formal release, please remember to create a release tag at Github at:"
   echo -e "  https://github.com/caicloud/caicloud-kubernetes/releases"
 fi
+
+# Assumed vars:
+#   CAICLOUD_DOCKER_REGISTRY
+#   CAICLOUD_DOCKER_REGISTRY_USERNAME
+#   CAICLOUD_DOCKER_REGISTRY_PASSWORD
+function login-caicloud-docker-registry {
+  expect <<EOF
+set timeout -1
+spawn docker login ${CAICLOUD_DOCKER_REGISTRY}
+expect {
+  "*?sername:" {
+    send -- "${CAICLOUD_DOCKER_REGISTRY_USERNAME}\r"
+    exp_continue
+  }
+  "*?assword:" {
+    send -- "${CAICLOUD_DOCKER_REGISTRY_PASSWORD}\r"
+    exp_continue
+  }
+  "*?mail:" {
+    send -- "\r"
+    exp_continue
+  }
+  "*?annot" { exit 1 }
+  "*?error" { exit 1 }
+  eof {}
+}
+EOF
+}

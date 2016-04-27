@@ -75,6 +75,11 @@ else
   exit 0
 fi
 
+# Final caicloud kubernetes version consists of upstream version and caicloud
+# version. Also, our own information must go to version meta data, see:
+# http://semver.org/#spec-item-9 and http://semver.org/#spec-item-10.
+CAICLOUD_KUBE_VERSION=${K8S_VERSION}+${CAICLOUD_KUBE_VERSION}
+
 # DO NOT CHANGE. Derived variables for tarball building.
 CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_KUBE_VERSION}.tar.gz"
 CAICLOUD_KUBE_KUBECTL_PKG="caicloud-kubectl-${CAICLOUD_KUBE_VERSION}.tar.gz"

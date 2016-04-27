@@ -14,9 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# The version of upstream kubernetes.
+K8S_VERSION=${K8S_VERSION:-"v1.2.0"}
+
 # Third-party binary versions, used to create tarball, etc.
-ETCD_VERSION=${ETCD_VERSION:-v2.2.4}
-FLANNEL_VERSION=${FLANNEL_VERSION:-0.5.5}
+ETCD_VERSION=${ETCD_VERSION:-"v2.2.4"}
+FLANNEL_VERSION=${FLANNEL_VERSION:-"0.5.5"}
 
 # URL of the server hosting packages.
 RELEASE_HOST_URL="http://7xli2p.dl1.z0.glb.clouddn.com"

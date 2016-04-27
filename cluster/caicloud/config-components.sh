@@ -248,7 +248,7 @@ function config-etcd-flanneld {
     else
       # Give a large timeout since this depends on status of etcd on
       # other machines.
-      if (( attempt > 600 )); then
+      if (( attempt > 60 )); then
         echo "timeout waiting for network config"
         exit 2
       fi

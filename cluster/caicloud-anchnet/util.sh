@@ -613,7 +613,7 @@ function find-securitygroup-resources {
 #   LOADBALANCER_EIP_IDS
 #   TOTAL_COUNT
 function find-loadbalancer-resources {
-  anchnet-exec-and-retry "${ANCHNET_CMD} searchloadbalancer ${1} --status=${1} --project=${PROJECT_ID}"
+  anchnet-exec-and-retry "${ANCHNET_CMD} searchloadbalancer ${1} --status=${2} --project=${PROJECT_ID}"
   TOTAL_COUNT=$(echo ${COMMAND_EXEC_RESPONSE} | json_len '["item_set"]')
   LOADBALANCER_EIP_IDS=()
   LOADBALANCER_IDS=()

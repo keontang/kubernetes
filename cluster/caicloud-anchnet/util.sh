@@ -1352,7 +1352,17 @@ function wait-for-dns-propagation {
 }
 function wait-for-dns-propagation-internal {
   log "+++++ Wait for dns record ${MASTER_DOMAIN_NAME} to propagate..."
-  host ${MASTER_DOMAIN_NAME}
+  local return_val=0
+  local check_num=10
+  # Only return 0 if we have 10 consecutive success on dns resolve
+  for (( i = 0; i < $((check_num)); i++ ));do
+    host ${MASTER_DOMAIN_NAME}
+    if [[ "$?" != "0" ]]; then
+      return_val=1
+      break
+    fi
+  done
+  return $((return_val))
 }
 
 

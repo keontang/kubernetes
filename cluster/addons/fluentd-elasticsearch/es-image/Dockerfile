@@ -28,8 +28,9 @@ RUN apt-get update && \
 RUN cd / && \
     curl -O https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.5.2.tar.gz && \
     tar xf elasticsearch-1.5.2.tar.gz && \
-    rm elasticsearch-1.5.2.tar.gz && \
-    mkdir -p /elasticsearch-1.5.2/config/templates
+    rm elasticsearch-1.5.2.tar.gz
+    
+RUN mkdir -p /elasticsearch-1.5.2/config/templates
 
 COPY elasticsearch.yml /elasticsearch-1.5.2/config/elasticsearch.yml
 COPY template-k8s-logstash.json /elasticsearch-1.5.2/config/templates/template-k8s-logstash.json

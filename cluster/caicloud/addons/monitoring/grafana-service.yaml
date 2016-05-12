@@ -14,4 +14,4 @@ spec:
     - port: 80
       targetPort: 3000
   selector:
-    k8s-app: influxGrafana
+    k8s-app: monitoring

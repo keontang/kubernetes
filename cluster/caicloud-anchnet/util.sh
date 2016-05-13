@@ -111,7 +111,7 @@ function kube-up {
     fi
   else
     # Create an anchnet project if PROJECT_ID is empty.
-    create-project
+    get-anchnet-project
     # Create master/node instances from anchnet without provision. The following
     # two methods will create a set of vars to be used later:
     #   MASTER_INSTANCE_ID,  MASTER_EIP_ID,  MASTER_EIP
@@ -276,6 +276,7 @@ function kube-push {
 
 # Delete a kubernete cluster from anchnet, using CLUSTER_NAME.
 function kube-down {
+  get-anchnet-project
   # Find all instances prefixed with CLUSTER_NAME.
   find-instance-and-eip-resouces "running,pending,stopped,suspended"
   if [[ "$?" == "0" ]]; then
@@ -314,6 +315,7 @@ function kube-down {
 
 # Stop a kubernetes cluster from anchnet, using CLUSTER_NAME.
 function kube-halt {
+  get-anchnet-project
   # Find all instances prefixed with CLUSTER_NAME.
   find-instance-and-eip-resouces "running"
   if [[ "$?" == "0" ]]; then
@@ -324,6 +326,7 @@ function kube-halt {
 
 # Start a stopped kubernetes cluster from anchnet, using CLUSTER_NAME.
 function kube-restart {
+  get-anchnet-project
   # Find all instances prefixed with CLUSTER_NAME.
   find-instance-and-eip-resouces "stopped"
   if [[ "$?" == "0" ]]; then
@@ -701,7 +704,7 @@ function create-resource-variables {
 #
 # Vars set:
 #   PROJECT_ID
-function create-project {
+function get-anchnet-project {
   if [[ ! -z "${PROJECT_ID-}" && ! -z "${PROJECT_USER-}" ]]; then
     # If both PROJECT_ID and PROJECT_USER are given, make sure the project
     # actually belongs to the user.
@@ -723,10 +726,8 @@ function create-project {
       anchnet-exec-and-retry "${ANCHNET_CMD} createuserproject ${PROJECT_USER}"
       anchnet-wait-job ${COMMAND_EXEC_RESPONSE} ${USER_PROJECT_WAIT_RETRY} ${USER_PROJECT_WAIT_INTERVAL}
       PROJECT_ID=$(echo ${COMMAND_EXEC_RESPONSE} | json_val "['api_id']")
-      report-project-id ${PROJECT_ID}
     else
       log "+++++ Reuse existing project ID ${PROJECT_ID} for ${PROJECT_USER}"
-      report-project-id ${PROJECT_ID}
     fi
   fi
 }

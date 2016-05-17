@@ -111,6 +111,8 @@ These are brand new folders created to support our cloudprovider:
   - Go package used for anchnet plugin
 - pkg/volume/anchnet_pd/
   - Go package used for anchnet persistent volume plugin
+- plugin/plugin/pkg/admission/hostpathdeny
+  - Go package used to reject hostpath mount
 
 #### Changes to individual files
 
@@ -120,6 +122,8 @@ These are individual files we have to change in order to meet our requirements:
 
 - cmd/kubelet/app/plugins.go
   - To load anchnet volume plugin
+- cmd/kube-apiserver/app/plugins.go
+  - To load admission control plugin
 - pkg/api/types.go, pkg/api/v1/types.go
   - To add `AnchnetPersistentDisk` field in `VolumeSource` structure
   - To add `AnchnetPersistendDisk` field in `PersistentVolumeSource` structure

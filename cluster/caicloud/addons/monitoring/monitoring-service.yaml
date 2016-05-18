@@ -11,4 +11,4 @@ spec:
   - port: 80
     targetPort: 6090
   selector:
-    name: monitoring
+    k8s-app: monitoring

@@ -15,4 +15,4 @@ spec:
       port: 8086
       targetPort: 8086
   selector:
-    k8s-app: influxGrafana
+    k8s-app: monitoring

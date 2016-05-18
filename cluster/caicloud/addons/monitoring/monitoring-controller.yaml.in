@@ -94,7 +94,7 @@ spec:
             - name: RUNNING_ENVIRONMENT
               value: {{ pillar['running_enviroment'] }}
             - name: INFLUXDB_URL
-              value: http://monitoring-influxdb:8086
+              value: http://localhost:8086
             - name: INTERVAL
               value: "30"
             - name: SERVICE_PORT

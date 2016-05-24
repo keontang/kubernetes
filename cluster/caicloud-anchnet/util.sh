@@ -1392,6 +1392,11 @@ function prepare-e2e() {
   # Since we changed configs above, we need to re-set cluster env.
   calculate-default
 
+  # HACK: version must prepend upstream k8s version.
+  source "${KUBE_ROOT}/hack/caicloud/common.sh"
+  export CAICLOUD_KUBE_PKG="caicloud-kube-${K8S_VERSION}+${FINAL_VERSION}.tar.gz"
+  export CAICLOUD_TARBALL_URL="${CAICLOUD_HOST_URL}/${CAICLOUD_KUBE_PKG}"
+
   # As part of e2e preparation, we fix image path.
   ${KUBE_ROOT}/hack/caicloud/k8s-replace.sh
   trap-add '${KUBE_ROOT}/hack/caicloud/k8s-restore.sh' EXIT

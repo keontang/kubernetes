@@ -19,10 +19,12 @@
 # The script must be ran on host outside of GFW.
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+source ${KUBE_ROOT}/build/common.sh
+
+# Avoid bail out when error pulling/pushing a single image.
+set +o errexit
 
 # Special handling for gcr.io/google_containers/kube-cross:vX.Y.Z
-source ${KUBE_ROOT}/build/common.sh
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 cp ${KUBE_ROOT}/build/build-image/Dockerfile ${KUBE_ROOT}/build/build-image/Dockerfile.bk
 perl -X -i -pe "s/KUBE_BUILD_IMAGE_CROSS_TAG/${KUBE_BUILD_IMAGE_CROSS_TAG}/g" ${KUBE_ROOT}/build/build-image/Dockerfile
 trap "mv ${KUBE_ROOT}/build/build-image/Dockerfile.bk ${KUBE_ROOT}/build/build-image/Dockerfile" EXIT
@@ -34,8 +36,15 @@ trap "mv ${KUBE_ROOT}/build/build-image/Dockerfile.bk ${KUBE_ROOT}/build/build-i
 #   $2 The image to push
 function sync_image {
   docker pull "$1"
+  if [[ "$?" != "0" ]]; then
+    echo "********** ERROR ********** Unable to pull", "$1"
+    return
+  fi
   docker tag -f "$1" "$2"
   docker push "$2"
+  if [[ "$?" != "0" ]]; then
+    echo "********** ERROR ********** Unable to push", "$2"
+  fi
 }
 
 # Sync images in gcr.io/google_containers. E.g.

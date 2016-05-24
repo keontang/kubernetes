@@ -62,7 +62,10 @@ A couple of points to facilitate rebase:
 
 * Use `git config --global rerere.enabled true` to reuse recorded resolution
 * As we changed API types, we'll always get conflict with generated files: it is better to just use upstream code and re-generate the files
-  - When conflict, use `git checkout --theirs`, e.g. `git checkout --theirs -- pkg/apis/extensions/deep_copy_generated.go`
+  - When conflict, use `git checkout --theirs`, e.g.
+    ```
+    git checkout --theirs -- pkg/apis/extensions/deep_copy_generated.go
+    ```
   - After rebase, follow [API Change](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/api_changes.md) to re-generate the files
 
 ### Things need to be updated after rebasing
@@ -72,7 +75,7 @@ A couple of points to facilitate rebase:
   - k8s-replace.sh
   - k8s-restore.sh
   - sync-images.sh
-    - Note there is some images hard to sync, see [fix e2e test](#fix-e2e-test) "Replace images from dockerhub to index.caicloud.io"
+    - Note there is some images hard to sync, see [fix e2e test](#fix-e2e-test)
 - Run  to sync all gcr.io images to index.caicloud.io
   - `hack/caicloud/sync-images.sh`
 - Test the new version
@@ -81,8 +84,8 @@ A couple of points to facilitate rebase:
     - To fix individual test, use `go test`, e.g. `godep go test ./pkg/controller/service`
   - `hack/test-integration.sh`
   - `hack/caicloud/caicloud-e2e-test.sh`
-    - See README.md of individual cloudprovider for details
-- Update "K8S_VERSION" in `cluster/caicloud/common.sh`
+    - See `README.md` of individual cloudprovider for details
+- Update `K8S_VERSION` in `hack/caicloud/common.sh`
 
 ### Changes relative to public mainstream
 

@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # The version of upstream kubernetes.
-K8S_VERSION=${K8S_VERSION:-"v1.2.0"}
+K8S_VERSION=${K8S_VERSION:-"v1.2.4"}
 
 # Third-party binary versions, used to create tarball, etc.
 ETCD_VERSION=${ETCD_VERSION:-"v2.2.4"}

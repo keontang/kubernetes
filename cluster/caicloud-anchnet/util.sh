@@ -771,8 +771,6 @@ function create-master-instance {
 
   echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[created master with instance ID ${MASTER_INSTANCE_ID}, \
 eip ID ${MASTER_EIP_ID}, master eip: ${MASTER_EIP}]${color_norm}"
-  report-instance-ids ${MASTER_INSTANCE_ID} M
-  report-eip-ids ${MASTER_EIP_ID}
   report-ips ${MASTER_EIP} M
 }
 
@@ -838,8 +836,6 @@ eip ID ${node_eip_id}. Node EIP: ${node_eip}]${color_norm}"
 
   echo -e "[`TZ=Asia/Shanghai date`] ${color_green}[Created cluster nodes with instance IDs ${NODE_INSTANCE_IDS}, \
 eip IDs ${NODE_EIP_IDS}, node eips ${NODE_EIPS}]${color_norm}"
-  report-instance-ids ${NODE_INSTANCE_IDS} N
-  report-eip-ids ${NODE_EIP_IDS}
   report-ips ${NODE_EIPS} N
 }
 
@@ -954,7 +950,6 @@ function create-firewall {
   MASTER_SG_ID=$(echo ${master_sg_info} | json_val '["security_group_id"]')
 
   # Now, apply all above changes.
-  report-security-group-ids ${MASTER_SG_ID} M
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${MASTER_SG_ID} ${MASTER_INSTANCE_ID} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE}
 
@@ -974,7 +969,6 @@ function create-firewall {
   NODE_SG_ID=$(echo ${node_sg_info} | json_val '["security_group_id"]')
 
   # Now, apply all above changes.
-  report-security-group-ids ${NODE_SG_ID} N
   anchnet-exec-and-retry "${ANCHNET_CMD} applysecuritygroup ${NODE_SG_ID} ${NODE_INSTANCE_IDS} --project=${PROJECT_ID}"
   anchnet-wait-job ${COMMAND_EXEC_RESPONSE}
 }

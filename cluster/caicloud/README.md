@@ -33,9 +33,9 @@ to enable enterprise use cases.
 ## How to do a release
 
 To build release, use script `hack/caicloud/build-release.sh`. The script will build caicloud kubernetes binaries, i.e. kubelet, apiserver, etc. It
-will also build script release, i.e. kube-up.sh, kube-down.sh etc. By default, it will create two tarballs (binaries and scripts) and push to qiniu,
-it will also create cloud images, which can be used to create an image from cloudprovider directly. To see its full description, run (assuming at
-kubernetes root directory):
+will also build script release, i.e. kube-up.sh, kube-down.sh etc. By default, it will create two tarballs (binaries and scripts) and push to qiniu.
+It will create a docker image which contains all the scripts. The docker image is used by cluster manager for now. It will also create cloud images,
+which can be used to create an image from cloudprovider directly. To see its full description, run (assuming at kubernetes root directory):
 ```
 ./hack/caicloud/build-release.sh
 ```

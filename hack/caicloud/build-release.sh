@@ -40,7 +40,8 @@ function usage {
   echo -e " BUILD_CLOUD_IMAGE\tBuild cloud image or not, options: Y or N. Default to ${BUILD_CLOUD_IMAGE}"
 }
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
+# KUBE_ROOT is a absolute path to root of the repo
+KUBE_ROOT=$(cd "$(dirname ${BASH_SOURCE})/../.." && pwd)
 
 # -----------------------------------------------------------------------------
 # Parameters for building tarball.
@@ -50,6 +51,9 @@ UPLOAD_TO_QINIU=${UPLOAD_TO_QINIU:-"Y"}
 
 # Do we want to build cloud image: Y or N. Default to Y.
 BUILD_CLOUD_IMAGE=${BUILD_CLOUD_IMAGE:-"Y"}
+
+# Do we want to build script docker image: Y or N. Default to Y.
+BUILD_SCRIPTS_DOCKER_IMAGE=${BUILD_SCRIPTS_DOCKER_IMAGE:-"Y"}
 
 # Get configs and commone utilities.
 source ${KUBE_ROOT}/hack/caicloud/common.sh
@@ -67,7 +71,7 @@ if [[ "$#" == "1" ]]; then
     usage
     exit 1
   else
-    CAICLOUD_KUBE_VERSION=${1}
+    CAICLOUD_VERSION=${1}
   fi
 else
   echo -e ""
@@ -78,12 +82,13 @@ fi
 # Final caicloud kubernetes version consists of upstream version and caicloud
 # version. Also, our own information must go to version meta data, see:
 # http://semver.org/#spec-item-9 and http://semver.org/#spec-item-10.
-CAICLOUD_KUBE_VERSION=${K8S_VERSION}+${CAICLOUD_KUBE_VERSION}
+CAICLOUD_KUBE_VERSION=${K8S_VERSION}+${CAICLOUD_VERSION}
 
 # DO NOT CHANGE. Derived variables for tarball building.
 CAICLOUD_KUBE_PKG="caicloud-kube-${CAICLOUD_KUBE_VERSION}.tar.gz"
 CAICLOUD_KUBE_KUBECTL_PKG="caicloud-kubectl-${CAICLOUD_KUBE_VERSION}.tar.gz"
 CAICLOUD_KUBE_SCRIPT_PKG="caicloud-kube-script-${CAICLOUD_KUBE_VERSION}.tar.gz"
+CAICLOUD_KUBE_SCRIPT_DOCKER_IMAGE="index.caicloud.io/caicloud/caicloud-kubernetes"
 
 # -----------------------------------------------------------------------------
 # Start building tarball from current code base.
@@ -141,6 +146,15 @@ cp -R hack cluster build caicloud-kube-script
 rm -rf caicloud-kube-script/cluster/caicloud/certs
 mkdir -p caicloud-kube-script/_output/dockerized/bin/linux/amd64/
 cp _output/dockerized/bin/linux/amd64/kubectl caicloud-kube-script/_output/dockerized/bin/linux/amd64/
+# Build docker image that will be used by cluster manager. The image contains all the k8s scripts
+if [[ "$BUILD_SCRIPTS_DOCKER_IMAGE" == "Y" ]]; then
+  cp -R caicloud-kube-script ${KUBE_ROOT}/hack/caicloud
+  cd ${KUBE_ROOT}/hack/caicloud
+  docker build -t ${CAICLOUD_KUBE_SCRIPT_DOCKER_IMAGE}:${CAICLOUD_VERSION} .
+  docker push ${CAICLOUD_KUBE_SCRIPT_DOCKER_IMAGE}:${CAICLOUD_VERSION}
+  rm -rf caicloud-kube-script
+  cd - > /dev/null
+fi
 tar czf ${KUBE_ROOT}/_output/caicloud/${CAICLOUD_KUBE_SCRIPT_PKG} caicloud-kube-script
 rm -rf caicloud-kube-script
 

@@ -126,6 +126,11 @@ func newEtcd(ns runtime.NegotiatedSerializer, storageGroupVersionString, memoryG
 }
 
 // parse the value of --etcd-servers-overrides and update given storageDestinations.
+/**
+ * --etcd-servers-overrides=[]: Per-resource etcd servers overrides,
+ * comma separated. The individual override format: group/resource#servers,
+ * where servers are http://ip:port, semicolon separated.
+ */
 func updateEtcdOverrides(overrides []string, storageVersions map[string]string, etcdConfig etcdstorage.EtcdConfig, storageDestinations *genericapiserver.StorageDestinations, newEtcdFn newEtcdFunc) {
 	if len(overrides) == 0 {
 		return

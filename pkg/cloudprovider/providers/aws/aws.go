@@ -514,6 +514,16 @@ func (s *awsSdkEC2) ModifyInstanceAttribute(request *ec2.ModifyInstanceAttribute
 	return s.ec2.ModifyInstanceAttribute(request)
 }
 
+/*
+go语言中init函数用于包(package)的初始化, 该函数是go语言的一个重要特性,
+有下面的特征:
+1 init函数是用于程序执行前做包的初始化的函数，比如初始化包里的变量等
+2 每个包可以拥有多个init函数
+3 包的每个源文件也可以拥有多个init函数
+4 同一个包中多个init函数的执行顺序go语言没有明确的定义(说明)
+5 不同包的init函数按照包导入的依赖关系决定该初始化函数的执行顺序
+6 init函数不能被其他函数调用，而是在main函数执行之前，自动被调用
+*/
 func init() {
 	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		creds := credentials.NewChainCredentials(

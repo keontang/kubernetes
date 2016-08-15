@@ -23,6 +23,25 @@ import (
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
 
+/*
+https://github.com/spf13/cobra
+Cobra is both a library for creating powerful modern CLI applications
+as well as a program to generate applications and command files.
+Many of the most widely used Go projects are built using Cobra including:
+  Kubernetes
+  Etcd
+  OpenShift
+  ...
+
+Cobra is a library providing a simple interface to create powerful modern CLI interfaces similar to git & go tools.
+
+Cobra is also an application that will generate your application scaffolding to rapidly develop a Cobra-based application.
+
+The pattern to follow is APPNAME VERB NOUN --ADJECTIVE. or APPNAME COMMAND ARG --FLAG
+Commands represent actions, Args are things and Flags are modifiers for those actions.
+
+kubectl is an application.
+*/
 func Run() error {
 	cmd := cmd.NewKubectlCommand(cmdutil.NewFactory(nil), os.Stdin, os.Stdout, os.Stderr)
 	return cmd.Execute()

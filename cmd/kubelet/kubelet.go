@@ -33,6 +33,11 @@ import (
 	"github.com/spf13/pflag"
 )
 
+/*
+app目录下有2个文件: plugins.go和server.go
+  server.go是具体的main函数调用的Run接口
+  plugins.go主要是加载依赖的插件
+*/
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	s := options.NewKubeletServer()

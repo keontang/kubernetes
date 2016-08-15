@@ -133,6 +133,7 @@ func UnsecuredKubeletConfig(s *options.KubeletServer) (*KubeletConfig, error) {
 
 	mounter := mount.New()
 	var writer io.Writer = &io.StdWriter{}
+	// kubelet是否要跑在container内部
 	if s.Containerized {
 		glog.V(2).Info("Running kubelet in containerized mode (experimental)")
 		mounter = mount.NewNsenterMounter()
@@ -146,8 +147,10 @@ func UnsecuredKubeletConfig(s *options.KubeletServer) (*KubeletConfig, error) {
 
 	var dockerExecHandler dockertools.ExecHandler
 	switch s.DockerExecHandlerName {
+	// 默认通过 docker exec 进入 docker 容器
 	case "native":
 		dockerExecHandler = &dockertools.NativeExecHandler{}
+	// 还支持nsenter
 	case "nsenter":
 		dockerExecHandler = &dockertools.NsenterExecHandler{}
 	default:
@@ -155,15 +158,19 @@ func UnsecuredKubeletConfig(s *options.KubeletServer) (*KubeletConfig, error) {
 		dockerExecHandler = &dockertools.NativeExecHandler{}
 	}
 
+	// 设置image回收策略
 	imageGCPolicy := kubelet.ImageGCPolicy{
 		MinAge:               s.ImageMinimumGCAge.Duration,
 		HighThresholdPercent: s.ImageGCHighThresholdPercent,
 		LowThresholdPercent:  s.ImageGCLowThresholdPercent,
 	}
 
+	// 为 docker 设置磁盘预留空间
 	diskSpacePolicy := kubelet.DiskSpacePolicy{
+		// free disk space threshold for filesystem holding docker images.
 		DockerFreeDiskMB: s.LowDiskSpaceThresholdMB,
-		RootFreeDiskMB:   s.LowDiskSpaceThresholdMB,
+		// free disk space threshold for root filesystem. Host volumes are created on root fs.
+		RootFreeDiskMB: s.LowDiskSpaceThresholdMB,
 	}
 
 	manifestURLHeader := make(http.Header)
@@ -284,6 +291,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 	} else {
 		glog.Errorf("unable to register configz: %s", err)
 	}
+	// main函数进来的时候，可以看到kcfg=nil
 	if kcfg == nil {
 		cfg, err := UnsecuredKubeletConfig(s)
 		if err != nil {
@@ -291,6 +299,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 		}
 		kcfg = cfg
 
+		// generates a client.Config from command line flags
 		clientConfig, err := CreateAPIServerClientConfig(s)
 		if err == nil {
 			kcfg.KubeClient, err = clientset.NewForConfig(clientConfig)
@@ -305,6 +314,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 			glog.Warningf("No API client: %v", err)
 		}
 
+		// 通过cloud我们可以获得宿主机器的信息
 		cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider, s.CloudConfigFile)
 		if err != nil {
 			return err
@@ -314,6 +324,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 	}
 
 	if kcfg.CAdvisorInterface == nil {
+		// 通过CAdvisor我们可以看到kuberlet管理的机器上container的资源统计信息
 		kcfg.CAdvisorInterface, err = cadvisor.New(s.CAdvisorPort)
 		if err != nil {
 			return err
@@ -344,11 +355,15 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 	glog.V(2).Infof("Using root directory: %v", s.RootDirectory)
 
 	// TODO(vmarmol): Do this through container config.
+	// 主要是通过设置/proc//oom_score_adj来控制.
+	// oom_score_adj的范围是[-1000,1000], 设置为-1000,
+	// 该进程就被排除在OOM Killer强制终止的对象外, 值越高, 越容易被杀掉.
 	oomAdjuster := kcfg.OOMAdjuster
 	if err := oomAdjuster.ApplyOOMScoreAdj(0, s.OOMScoreAdj); err != nil {
 		glog.Warning(err)
 	}
 
+	// 设置并且启动kubelet
 	if err := RunKubelet(kcfg); err != nil {
 		return err
 	}

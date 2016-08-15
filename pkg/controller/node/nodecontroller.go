@@ -125,6 +125,7 @@ type NodeController struct {
 }
 
 // NewNodeController returns a new node controller to sync instances from cloudprovider.
+// Nodes are discovered, managed, and monitored by the node controller.
 func NewNodeController(
 	cloud cloudprovider.Interface,
 	kubeClient clientset.Interface,

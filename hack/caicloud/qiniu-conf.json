@@ -1,5 +1,0 @@
-{
-  "src" : "../../_output/caicloud/",
-  "dest": "qiniu:access_key=fHBUpVf7zkwOlGKTnuAV3sZHDhhrD86n5uBuGK0H&secret_key=GrwbQId27AJtWi306CqIlLXOvitcATIL5XFbUXlB&bucket=caicloudget",
-  "debug_level":  1
-}

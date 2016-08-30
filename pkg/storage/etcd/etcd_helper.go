@@ -73,6 +73,10 @@ type EtcdConfig struct {
 }
 
 func (c *EtcdConfig) newEtcdClient() (etcd.Client, error) {
+	/*
+	 * Clients and Transports are safe for concurrent use by multiple
+	 * goroutines and for efficiency should only be created once and re-used.
+	 */
 	t, err := c.newHttpTransport()
 	if err != nil {
 		return nil, err
@@ -100,6 +104,10 @@ func (c *EtcdConfig) newHttpTransport() (*http.Transport, error) {
 		return nil, err
 	}
 
+	/*
+	 * For control over proxies, TLS configuration, keep-alives, compression,
+	 * and other settings, create a Transport
+	 */
 	// Copied from etcd.DefaultTransport declaration.
 	// TODO: Determine if transport needs optimization
 	tr := &http.Transport{

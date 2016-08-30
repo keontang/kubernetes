@@ -177,8 +177,12 @@ func updateEtcdOverrides(overrides []string, storageVersions map[string]string, 
 
 // Run runs the specified APIServer.  This should never exit.
 func Run(s *options.APIServer) error {
+	/* 检查 cluster ip 的参数是否合法 */
 	verifyClusterIPFlags(s)
 
+	/*
+	 * The IP address on which to advertise the apiserver to members of the cluster.
+	 */
 	// If advertise-address is not specified, use bind-address. If bind-address
 	// is not usable (unset, 0.0.0.0, or loopback), we will use the host's default
 	// interface as valid public addr for master (see: util/net#ValidPublicAddrForMaster)
@@ -192,6 +196,7 @@ func Run(s *options.APIServer) error {
 	}
 	glog.Infof("Will report %v as public IP address.", s.AdvertiseAddress)
 
+	/* etcd server 参数是否设置 */
 	if len(s.EtcdConfig.ServerList) == 0 {
 		glog.Fatalf("--etcd-servers must be specified")
 	}
@@ -200,6 +205,7 @@ func Run(s *options.APIServer) error {
 		glog.Fatalf("Kubernetes service port range %v doesn't contain %v", s.ServiceNodePortRange, (s.KubernetesServiceNodePort))
 	}
 
+	/* 隔离是基于 Linux 的 Capability 机制实现的 */
 	capabilities.Initialize(capabilities.Capabilities{
 		AllowPrivileged: s.AllowPrivileged,
 		// TODO(vmarmol): Implement support for HostNetworkSources.
@@ -211,6 +217,7 @@ func Run(s *options.APIServer) error {
 		PerConnectionBandwidthLimitBytesPerSec: s.MaxConnectionBytesPerSec,
 	})
 
+	/* 如果运行在 IAAS 云平台提供的 instance 之上, 就获得一个 cloud provider 实例 */
 	cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider, s.CloudConfigFile)
 	if err != nil {
 		glog.Fatalf("Cloud provider could not be initialized: %v", err)
@@ -291,6 +298,7 @@ func Run(s *options.APIServer) error {
 	if _, found := storageVersions[legacyV1Group.GroupVersion.Group]; !found {
 		glog.Fatalf("Couldn't find the storage version for group: %q in storageVersions: %v", legacyV1Group.GroupVersion.Group, storageVersions)
 	}
+	/* 创建 etcdStorage 对象, etcd_helper.go 中实现了 storage.Interface 接口 */
 	etcdStorage, err := newEtcd(api.Codecs, storageVersions[legacyV1Group.GroupVersion.Group], "/__internal", s.EtcdConfig)
 	if err != nil {
 		glog.Fatalf("Invalid storage version or misconfigured etcd: %v", err)
@@ -376,6 +384,11 @@ func Run(s *options.APIServer) error {
 		storageDestinations.AddAPIGroup(batch.GroupName, batchEtcdStorage)
 	}
 
+	/*
+	 * 通过 --etcd-servers-overrides 参数, 可以为某些资源选择另外的 etcd server 作为
+	 * 存储. 比如, 可以将 k8s 中的 events 存到单独的一个 etcd 中, 可以按照如下方式指定:
+	 *   --etcd-servers-overrides=/events#http://127.0.0.1:4002
+	 */
 	updateEtcdOverrides(s.EtcdServersOverrides, storageVersions, s.EtcdConfig, &storageDestinations, newEtcd)
 
 	n := s.ServiceClusterIPRange
@@ -396,6 +409,7 @@ func Run(s *options.APIServer) error {
 		serviceAccountGetter = serviceaccountcontroller.NewGetterFromStorageInterface(etcdStorage)
 	}
 
+	/* 认证实例 */
 	authenticator, err := authenticator.New(authenticator.AuthenticatorConfig{
 		BasicAuthFile:             s.BasicAuthFile,
 		ClientCAFile:              s.ClientCAFile,
@@ -416,12 +430,14 @@ func Run(s *options.APIServer) error {
 	}
 
 	authorizationModeNames := strings.Split(s.AuthorizationMode, ",")
+	/* 授权实例 */
 	authorizer, err := apiserver.NewAuthorizerFromAuthorizationConfig(authorizationModeNames, s.AuthorizationConfig)
 	if err != nil {
 		glog.Fatalf("Invalid Authorization Config: %v", err)
 	}
 
 	admissionControlPluginNames := strings.Split(s.AdmissionControl, ",")
+	/* 准人控制器实例 */
 	admissionController := admission.NewFromPlugins(client, admissionControlPluginNames, s.AdmissionControlConfigFile)
 
 	if len(s.ExternalHost) == 0 {
@@ -448,6 +464,7 @@ func Run(s *options.APIServer) error {
 		}
 	}
 
+	/* 构造 master 的 Config 结构 */
 	config := &master.Config{
 		Config: &genericapiserver.Config{
 			StorageDestinations:       storageDestinations,
@@ -491,11 +508,16 @@ func Run(s *options.APIServer) error {
 		cachesize.SetWatchCacheSizes(s.WatchCacheSizes)
 	}
 
+	/*
+	 * 构造master的config结构, 生成一个master实例.
+	 * 各种api请求最后都是通过master对象来处理的
+	 */
 	m, err := master.New(config)
 	if err != nil {
 		return err
 	}
 
+	/* 开始监听客户端请求 */
 	m.Run(s.ServerRunOptions)
 	return nil
 }

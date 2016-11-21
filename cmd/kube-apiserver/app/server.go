@@ -205,25 +205,99 @@ func Run(s *options.APIServer) error {
 		glog.Fatalf("Kubernetes service port range %v doesn't contain %v", s.ServiceNodePortRange, (s.KubernetesServiceNodePort))
 	}
 
-	/* 隔离是基于 Linux 的 Capability 机制实现的 */
+	/* 定义了系统可用的一些 capabilities */
 	capabilities.Initialize(capabilities.Capabilities{
+		/* 是否允许 pod 具有特权 */
 		AllowPrivileged: s.AllowPrivileged,
 		// TODO(vmarmol): Implement support for HostNetworkSources.
 		PrivilegedSources: capabilities.PrivilegedSources{
+			/* 共享主机网络名字空间的特权 pod 集合 */
 			HostNetworkSources: []string{},
-			HostPIDSources:     []string{},
-			HostIPCSources:     []string{},
+			/* 共享主机 PID 名字空间的特权 pod 集合 */
+			HostPIDSources: []string{},
+			/* 共享主机 IPC 名字空间的特权 pod 集合 */
+			HostIPCSources: []string{},
 		},
 		PerConnectionBandwidthLimitBytesPerSec: s.MaxConnectionBytesPerSec,
 	})
 
-	/* 如果运行在 IAAS 云平台提供的 instance 之上, 就获得一个 cloud provider 实例 */
+	/* 如果运行在 IAAS 云平台上, 就获得一个 cloud provider 实例 */
 	cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider, s.CloudConfigFile)
 	if err != nil {
 		glog.Fatalf("Cloud provider could not be initialized: %v", err)
 	}
 
 	// Setup tunneler if needed
+	/* 在一些主机环境/配置中，node 和 master 的网络通信可能会经过公共因特网,
+	 * 所以通过 ssh tunnel 来确保 node 和 master 的网络通信安全.
+	 *
+	 * The intent is to allow users to customize their installation to harden
+	 * the network configuration such that the cluster can be run on an
+	 * untrusted network (or on fully public IPs on a cloud provider).
+	 *
+	 * Cluster -> Master:
+	 *   All communication paths from the cluster to the master terminate at
+	 * the apiserver (none of the other master components are designed to
+	 * expose remote services). In a typical deployment, the apiserver is
+	 * configured to listen for remote connections on a secure HTTPS port
+	 * (443) with one or more forms of client authentication enabled.
+	 *   Nodes should be provisioned with the public root certificate for the
+	 * cluster such that they can connect securely to the apiserver along with
+	 * valid client credentials.
+	 *   Pods that wish to connect to the apiserver can do so securely by
+	 * leveraging a service account so that Kubernetes will automatically
+	 * inject the public root certificate and a valid bearer token into the
+	 * pod when it is instantiated.
+	 *   The kubernetes service (in all namespaces) is configured with a
+	 * virtual IP address that is redirected (via kube-proxy) to the HTTPS
+	 * endpoint on the apiserver.
+	 *   The master components communicate with the cluster apiserver over the
+	 * insecure (not encrypted or authenticated) port. This port is typically
+	 * only exposed on the localhost interface of the master machine, so that
+	 * the master components, all running on the same machine, can communicate
+	 * with the cluster apiserver. Over time, the master components will be
+	 * migrated to use the secure port with authentication and authorization
+	 * (see #13598).
+	 *   As a result, the default operating mode for connections from the
+	 * cluster (nodes and pods running on the nodes) to the master is secured
+	 * by default and can run over untrusted and/or public networks.
+	 *
+	 * Master -> Cluster:
+	 *   There are two primary communication paths from the master (apiserver)
+	 * to the cluster. The first is from the apiserver to the kubelet process
+	 * which runs on each node in the cluster. The second is from the
+	 * apiserver to any node, pod, or service through the apiserver’s proxy
+	 * functionality.
+	 *   The connections from the apiserver to the kubelet are used for
+	 * fetching logs for pods, attaching (through kubectl) to running pods,
+	 * and using the kubelet’s port-forwarding functionality. These
+	 * connections terminate at the kubelet’s HTTPS endpoint, which is
+	 * typically using a self-signed certificate, and ignore the certificate
+	 * presented by the kubelet (although you can override this behavior by
+	 * specifying the --kubelet-certificate-authority,
+	 * --kubelet-client-certificate, and --kubelet-client-key flags when
+	 * starting the cluster apiserver). By default, these connections are not
+	 * currently safe to run over untrusted and/or public networks as they are
+	 * subject to man-in-the-middle attacks.
+	 *   The connections from the apiserver to a node, pod, or service default
+	 * to plain HTTP connections and are therefore neither authenticated nor
+	 * encrypted. They can be run over a secure HTTPS connection by prefixing
+	 * https: to the node, pod, or service name in the API URL, but they will
+	 * not validate the certificate provided by the HTTPS endpoint nor provide
+	 * client credentials so while the connection will by encrypted, it will
+	 * not provide any guarantees of integrity. These connections are not
+	 * currently safe to run over untrusted and/or public networks.
+	 *
+	 * Google Container Engine uses SSH tunnels to protect the
+	 * Master -> Cluster communication paths. In this configuration, the
+	 * apiserver initiates an SSH tunnel to each node in the cluster
+	 * (connecting to the ssh server listening on port 22) and passes all
+	 * traffic destined for a kubelet, node, pod, or service through the
+	 * tunnel. This tunnel ensures that the traffic is not exposed outside of
+	 * the private GCE network in which the cluster is running.
+	 *
+	 * http://kubernetes.github.io/docs/admin/master-node-communication
+	 */
 	var tunneler master.Tunneler
 	var proxyDialerFn apiserver.ProxyDialerFunc
 	if len(s.SSHUser) > 0 {

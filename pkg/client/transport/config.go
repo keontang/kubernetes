@@ -16,6 +16,18 @@ limitations under the License.
 
 package transport
 
+/*
+ * 传输层安全协议（Transport Layer Security，缩写：TLS），
+ * 及其前身安全套接层（Secure Sockets Layer，缩写：SSL）是一种安全协议，
+ * 目的是为互联网通信提供安全及数据完整性保障
+ * SSL/TLS 是一个介于 HTTP 协议与 TCP 之间的一个可选层
+ *
+ * SSL/TLS 协议提供的服务主要有:
+ *   1. 认证用户和服务器，确保数据发送到正确的客户机和服务器
+ *   2. 加密数据以防止数据中途被窃取
+ *   3. 维护数据的完整性，确保数据在传输过程中不被改变
+ */
+
 import "net/http"
 
 // Config holds various options for establishing a transport.
@@ -37,6 +49,18 @@ type Config struct {
 	// Transport may be used for custom HTTP behavior. This attribute may
 	// not be specified with the TLS client certificate options. Use
 	// WrapTransport for most client level operations.
+	/*
+	 * RoundTripper is an interface representing the ability to execute a
+	 * single HTTP transaction, obtaining the Response for a given Request.
+	 *
+	 * RoundTrip executes a single HTTP transaction, returning the Response
+	 * for the request req. (RoundTrip 代表一个 http 事务，给一个请求返回一个响应)
+	 *
+	 * golang net/http库发送http请求，最后都是调用 transport的 RoundTrip方法
+	 *
+	 * 无论是 roundtrip, 还是 transport, 都是http包, 并不是tcp/ip的传输层
+	 * 只是他在代码实现的过程中取了这个名字
+	 */
 	Transport http.RoundTripper
 
 	// WrapTransport will be invoked for custom HTTP behavior after the

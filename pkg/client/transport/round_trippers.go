@@ -29,6 +29,7 @@ import (
 // behavior but then must hijack the underlying connection (like WebSocket or
 // HTTP2 clients). Pure HTTP clients should use the RoundTripper returned from
 // New.
+/* 一层一层的包装 */
 func HTTPWrappersForConfig(config *Config, rt http.RoundTripper) (http.RoundTripper, error) {
 	if config.WrapTransport != nil {
 		rt = config.WrapTransport(rt)

@@ -201,6 +201,34 @@ func Run(s *options.APIServer) error {
 		glog.Fatalf("--etcd-servers must be specified")
 	}
 
+	/*
+	 * 检查 KubernetesServiceNodePort 是否合法
+	 *
+	 * If non-zero, the Kubernetes master service (which apiserver
+	 * creates/maintains) will be of type NodePort, using this as
+	 * the value of the port. If zero, the Kubernetes master service will
+	 * be of type ClusterIP.
+	 *
+	 * # kubectl get svc
+	 * NAME         CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+	 * kubernetes   10.254.0.1   <none>        443/TCP   12d
+	 *
+	 * # kubectl describe svc kubernetes
+	 * Name:			kubernetes
+	 * Namespace:		default
+	 * Labels:			component=apiserver
+	 * 					provider=kubernetes
+	 * Selector:		<none>
+	 * Type:			ClusterIP
+	 * IP:			10.254.0.1
+	 * Port:			https	443/TCP
+	 * Endpoints:		192.168.10.133:6443
+	 * Session Affinity:	ClientIP
+	 * No events.
+	 *
+	 * 所以, 系统默认的 kubernetes service, 也可以说是 apiserver service
+	 * 单 master 就对应一个 endpoint, 多 master 就对应多个 endpoint.
+	 */
 	if s.KubernetesServiceNodePort > 0 && !s.ServiceNodePortRange.Contains(s.KubernetesServiceNodePort) {
 		glog.Fatalf("Kubernetes service port range %v doesn't contain %v", s.ServiceNodePortRange, (s.KubernetesServiceNodePort))
 	}
@@ -328,13 +356,24 @@ func Run(s *options.APIServer) error {
 	}
 
 	// Proxying to pods and services is IP-based... don't expect to be able to verify the hostname
+	/*
+	 * InsecureSkipVerify controls whether a client verifies the
+	 * server's certificate chain and host name.
+	 * If InsecureSkipVerify is true, TLS accepts any certificate
+	 * presented by the server and any host name in that certificate.
+	 */
 	proxyTLSClientConfig := &tls.Config{InsecureSkipVerify: true}
 
+	/* 返回一个 HTTPKubeletClient 对象, 用于kubelet的健康检查
+	 * HTTPKubeletClient is the default implementation of KubeletHealthchecker,
+	 * accesses the kubelet over HTTP.
+	 */
 	kubeletClient, err := kubeletclient.NewStaticKubeletClient(&s.KubeletConfig)
 	if err != nil {
 		glog.Fatalf("Failure to start kubelet client: %v", err)
 	}
 
+	/* 通过 runtime-config 来配置哪些 api 版本打开, 哪些 api 版本关闭 */
 	apiGroupVersionOverrides, err := parseRuntimeConfig(s)
 	if err != nil {
 		glog.Fatalf("error in parsing runtime-config: %s", err)
@@ -612,6 +651,13 @@ func getRuntimeConfigValue(s *options.APIServer, apiKey string, defaultValue boo
 }
 
 // Parses the given runtime-config and formats it into map[string]ApiGroupVersionOverride
+/*
+ * A set of key=value pairs that describe runtime configuration that may be
+ * passed to apiserver. apis/<groupVersion> key can be used to turn on/off
+ * specific api versions. apis/<groupVersion>/<resource> can be used to turn
+ * on/off specific resources. api/all and api/legacy are special keys to
+ * control all and legacy api versions respectively.
+ */
 func parseRuntimeConfig(s *options.APIServer) (map[string]genericapiserver.APIGroupVersionOverride, error) {
 	// "api/all=false" allows users to selectively enable specific api versions.
 	disableAllAPIs := false

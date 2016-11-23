@@ -94,7 +94,8 @@ type Config struct {
 	EnableCoreControllers   bool
 	DeleteCollectionWorkers int
 	EventTTL                time.Duration
-	KubeletClient           kubeletclient.KubeletClient
+	/* 目前只用于kubelet的健康检查, HTTP 访问方式 */
+	KubeletClient kubeletclient.KubeletClient
 	// Used to start and monitor tunneling
 	Tunneler Tunneler
 }

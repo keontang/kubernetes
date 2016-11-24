@@ -380,6 +380,7 @@ func Run(s *options.APIServer) error {
 	}
 
 	clientConfig := &restclient.Config{
+		/* JoinHostPort 将 host 和 port 合并为一个网络地址, 一般格式为 "host:port" */
 		Host: net.JoinHostPort(s.InsecureBindAddress.String(), strconv.Itoa(s.InsecurePort)),
 		// Increase QPS limits. The client is currently passed to all admission plugins,
 		// and those can be throttled in case of higher load on apiserver - see #22340 and #22422
@@ -387,6 +388,7 @@ func Run(s *options.APIServer) error {
 		QPS:   50,
 		Burst: 100,
 	}
+	/* The version to store the legacy v1 resources with. */
 	if len(s.DeprecatedStorageVersion) != 0 {
 		gv, err := unversioned.ParseGroupVersion(s.DeprecatedStorageVersion)
 		if err != nil {
@@ -395,6 +397,7 @@ func Run(s *options.APIServer) error {
 		clientConfig.GroupVersion = &gv
 	}
 
+	/* 创建 restclient */
 	client, err := clientset.NewForConfig(clientConfig)
 	if err != nil {
 		glog.Errorf("Failed to create clientset: %v", err)

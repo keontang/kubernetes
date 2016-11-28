@@ -557,14 +557,25 @@ func Run(s *options.APIServer) error {
 	}
 
 	authorizationModeNames := strings.Split(s.AuthorizationMode, ",")
-	/* 授权实例 */
+	/* 授权实例
+	 * There are multiple supported Authorization Modules. The cluster creator
+	 * configures the API server with which Authorization Modules should be
+	 * used. When multiple Authorization Modules are configured, each is
+	 * checked in sequence, and if any Module authorizes the request, then the
+	 * request can proceed. If all deny the request, then the request is
+	 * denied (HTTP status code 403).
+	 */
 	authorizer, err := apiserver.NewAuthorizerFromAuthorizationConfig(authorizationModeNames, s.AuthorizationConfig)
 	if err != nil {
 		glog.Fatalf("Invalid Authorization Config: %v", err)
 	}
 
 	admissionControlPluginNames := strings.Split(s.AdmissionControl, ",")
-	/* 准人控制器实例 */
+	/* 准人控制器实例
+	 * Multiple admission controllers can be configured. Each is called in order.
+	 * Unlike Authentication and Authorization Modules, if any admission
+	 * controller module rejects, then the request is immediately rejected.
+	 */
 	admissionController := admission.NewFromPlugins(client, admissionControlPluginNames, s.AdmissionControlConfigFile)
 
 	if len(s.ExternalHost) == 0 {

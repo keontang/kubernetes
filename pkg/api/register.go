@@ -29,6 +29,11 @@ var Scheme = runtime.NewScheme()
 // Codecs provides access to encoding and decoding for the scheme
 var Codecs = serializer.NewCodecFactory(Scheme)
 
+/*
+ * For now, the internal version types of all groups will be registered to
+ * versionMap[""], as we don't have any identically named kinds in
+ * different groups yet.
+ */
 // GroupName is the group name use in this package
 const GroupName = ""
 

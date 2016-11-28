@@ -414,11 +414,19 @@ func Run(s *options.APIServer) error {
 	if _, found := storageVersions[legacyV1Group.GroupVersion.Group]; !found {
 		glog.Fatalf("Couldn't find the storage version for group: %q in storageVersions: %v", legacyV1Group.GroupVersion.Group, storageVersions)
 	}
-	/* 创建 etcdStorage 对象, etcd_helper.go 中实现了 storage.Interface 接口 */
+	/* 创建 etcdStorage 对象, etcd_helper.go 中实现了 storage.Interface 接口
+	 * {""/__internal} 转换为 {""/v1}, encode 后存储到 etcd 中
+	 * 或者, 从 etcd 中读取 decode 到 {""/v1}, 然后转换为 {""/__internal}
+	 */
 	etcdStorage, err := newEtcd(api.Codecs, storageVersions[legacyV1Group.GroupVersion.Group], "/__internal", s.EtcdConfig)
 	if err != nil {
 		glog.Fatalf("Invalid storage version or misconfigured etcd: %v", err)
 	}
+	/*
+	 * For now, the internal version types of all groups will be registered to
+	 * versionMap[""], as we don't have any identically named kinds in
+	 * different groups yet.
+	 */
 	storageDestinations.AddAPIGroup("", etcdStorage)
 
 	if !apiGroupVersionOverrides["extensions/v1beta1"].Disable {
@@ -430,6 +438,7 @@ func Run(s *options.APIServer) error {
 		if _, found := storageVersions[expGroup.GroupVersion.Group]; !found {
 			glog.Fatalf("Couldn't find the storage version for group: %q in storageVersions: %v", expGroup.GroupVersion.Group, storageVersions)
 		}
+		/* {extensions/__internal} <-> {extensions/v1beta1} <-> etcd */
 		expEtcdStorage, err := newEtcd(api.Codecs, storageVersions[expGroup.GroupVersion.Group], "extensions/__internal", s.EtcdConfig)
 		if err != nil {
 			glog.Fatalf("Invalid extensions storage version or misconfigured etcd: %v", err)
@@ -466,6 +475,7 @@ func Run(s *options.APIServer) error {
 			glog.Fatalf("The storage version for autoscaling must be either 'autoscaling/v1' or 'extensions/v1beta1'")
 		}
 		glog.Infof("Using %v for autoscaling group storage version", storageGroupVersion)
+		/* {extensions/__internal} <-> {autoscaling/v1} <-> etcd */
 		autoscalingEtcdStorage, err := newEtcd(api.Codecs, storageGroupVersion, "extensions/__internal", s.EtcdConfig)
 		if err != nil {
 			glog.Fatalf("Invalid extensions storage version or misconfigured etcd: %v", err)
@@ -493,6 +503,7 @@ func Run(s *options.APIServer) error {
 			glog.Fatalf("The storage version for batch must be either 'batch/v1' or 'extensions/v1beta1'")
 		}
 		glog.Infof("Using %v for batch group storage version", storageGroupVersion)
+		/* {extensions/__internal} <-> {batch/v1} <-> etcd */
 		batchEtcdStorage, err := newEtcd(api.Codecs, storageGroupVersion, "extensions/__internal", s.EtcdConfig)
 		if err != nil {
 			glog.Fatalf("Invalid extensions storage version or misconfigured etcd: %v", err)
@@ -580,7 +591,7 @@ func Run(s *options.APIServer) error {
 		}
 	}
 
-	/* 构造 master 的 Config 结构 */
+	/* 构造 master 的 Config */
 	config := &master.Config{
 		Config: &genericapiserver.Config{
 			StorageDestinations:       storageDestinations,

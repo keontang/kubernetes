@@ -26,6 +26,14 @@ import (
 	"k8s.io/kubernetes/pkg/util/intstr"
 )
 
+/*
+ * Package api contains the latest (or "internal") version of the Kubernetes
+ * API objects. This is the API objects as represented in memory. The contract
+ * presented to clients is located in the versioned packages, which are
+ * sub-directories. The first one is "v1beta1". Those packages describe how a
+ * particular version is serialized to storage/network.
+ */
+
 // Common string formats
 // ---------------------
 // Many fields in this API have formatting requirements.  The commonly used

@@ -77,6 +77,7 @@ func New(config AuthenticatorConfig) (authenticator.Request, error) {
 	}
 
 	if len(config.OIDCIssuerURL) > 0 && len(config.OIDCClientID) > 0 {
+		/* OpenID Connect (OIDC) is an authentication layer on top of OAuth 2.0, an authorization framework */
 		oidcAuth, err := newAuthenticatorFromOIDCIssuerURL(config.OIDCIssuerURL, config.OIDCClientID, config.OIDCCAFile, config.OIDCUsernameClaim, config.OIDCGroupsClaim)
 		if err != nil {
 			return nil, err
@@ -93,6 +94,7 @@ func New(config AuthenticatorConfig) (authenticator.Request, error) {
 	}
 
 	if len(config.KeystoneURL) > 0 {
+		/* Keystone is the identity service used by OpenStack for authentication (authN) and high-level authorization (authZ) */
 		keystoneAuth, err := newAuthenticatorFromKeystoneURL(config.KeystoneURL)
 		if err != nil {
 			return nil, err
@@ -136,6 +138,7 @@ func newAuthenticatorFromTokenFile(tokenAuthFile string) (authenticator.Request,
 	return bearertoken.New(tokenAuthenticator), nil
 }
 
+/* OpenID Connect (OIDC) is an authentication layer on top of OAuth 2.0, an authorization framework */
 // newAuthenticatorFromOIDCIssuerURL returns an authenticator.Request or an error.
 func newAuthenticatorFromOIDCIssuerURL(issuerURL, clientID, caFile, usernameClaim, groupsClaim string) (authenticator.Request, error) {
 	tokenAuthenticator, err := oidc.New(issuerURL, clientID, caFile, usernameClaim, groupsClaim)

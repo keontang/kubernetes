@@ -128,14 +128,16 @@ func (c *EtcdConfig) newHttpTransport() (*http.Transport, error) {
 // TODO: deprecate in favor of storage.Config abstraction over time
 func NewEtcdStorage(client etcd.Client, codec runtime.Codec, prefix string, quorum bool) storage.Interface {
 	return &etcdHelper{
+		/* NewMembersAPI constructs a new MembersAPI that uses HTTP to interact with etcd's membership API. */
 		etcdMembersAPI: etcd.NewMembersAPI(client),
-		etcdKeysAPI:    etcd.NewKeysAPI(client),
-		codec:          codec,
-		versioner:      APIObjectVersioner{},
-		copier:         api.Scheme,
-		pathPrefix:     path.Join("/", prefix),
-		quorum:         quorum,
-		cache:          util.NewCache(maxEtcdCacheEntries),
+		/* NewKeysAPI builds a KeysAPI that interacts with etcd's key-value API over HTTP. */
+		etcdKeysAPI: etcd.NewKeysAPI(client),
+		codec:       codec,
+		versioner:   APIObjectVersioner{},
+		copier:      api.Scheme,
+		pathPrefix:  path.Join("/", prefix),
+		quorum:      quorum,
+		cache:       util.NewCache(maxEtcdCacheEntries),
 	}
 }
 

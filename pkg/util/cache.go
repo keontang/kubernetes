@@ -27,6 +27,7 @@ const (
 type Cache []*cacheShard
 
 func NewCache(maxSize int) Cache {
+	/* cache 包含 shardsCount 个 cacheShard */
 	cache := make(Cache, shardsCount)
 	for i := 0; i < shardsCount; i++ {
 		cache[i] = &cacheShard{
@@ -50,6 +51,7 @@ func (c *Cache) Get(index uint64) (obj interface{}, found bool) {
 	return c.getShard(index).get(index)
 }
 
+/* 每个 cacheShard 能保存 maxSize 个 item */
 type cacheShard struct {
 	items map[uint64]interface{}
 	sync.RWMutex

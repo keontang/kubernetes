@@ -556,8 +556,7 @@ func Run(s *options.APIServer) error {
 		glog.Fatalf("Invalid Authentication Config: %v", err)
 	}
 
-	authorizationModeNames := strings.Split(s.AuthorizationMode, ",")
-	/* 授权实例
+	/*
 	 * There are multiple supported Authorization Modules. The cluster creator
 	 * configures the API server with which Authorization Modules should be
 	 * used. When multiple Authorization Modules are configured, each is
@@ -565,6 +564,8 @@ func Run(s *options.APIServer) error {
 	 * request can proceed. If all deny the request, then the request is
 	 * denied (HTTP status code 403).
 	 */
+	authorizationModeNames := strings.Split(s.AuthorizationMode, ",")
+	/* 授权实例 */
 	authorizer, err := apiserver.NewAuthorizerFromAuthorizationConfig(authorizationModeNames, s.AuthorizationConfig)
 	if err != nil {
 		glog.Fatalf("Invalid Authorization Config: %v", err)

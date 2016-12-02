@@ -52,36 +52,49 @@ type APIServer struct {
 	BasicAuthFile              string
 	CloudConfigFile            string
 	CloudProvider              string
-	CorsAllowedOriginList      []string
-	DeleteCollectionWorkers    int
-	DeprecatedStorageVersion   string
-	EnableLogsSupport          bool
-	EnableProfiling            bool
-	EnableWatchCache           bool
-	EtcdServersOverrides       []string
-	EtcdConfig                 etcdstorage.EtcdConfig
-	EventTTL                   time.Duration
-	ExternalHost               string
-	KeystoneURL                string
-	KubeletConfig              kubeletclient.KubeletClientConfig
-	KubernetesServiceNodePort  int
-	MasterCount                int
-	MasterServiceNamespace     string
-	MaxConnectionBytesPerSec   int64
-	MinRequestTimeout          int
-	OIDCCAFile                 string
-	OIDCClientID               string
-	OIDCIssuerURL              string
-	OIDCUsernameClaim          string
-	OIDCGroupsClaim            string
-	RuntimeConfig              util.ConfigurationMap
-	SSHKeyfile                 string
-	SSHUser                    string
-	ServiceAccountKeyFile      string
-	ServiceAccountLookup       bool
-	ServiceClusterIPRange      net.IPNet // TODO: make this a list
-	ServiceNodePortRange       utilnet.PortRange
-	StorageVersions            string
+	/*
+	 * Cross-Origin Resource Sharing (CORS) is a specification that enables
+	 * truly open access across domain-boundaries.
+	 *
+	 * 浏览器发出 CORS 请求时, 在头信息之中, 会有一个 Origin 字段, Origin 字段用来说明,
+	 * 本次请求来自哪个源(协议 + 域名 + 端口), 服务器根据这个值, 决定是否同意这次请求,
+	 * 如果Origin指定的源, 不在许可范围内, 服务器会返回一个正常的HTTP回应. 浏览器发现,
+	 * 这个回应的头信息没有包含 Access-Control-Allow-Origin 字段(详见下文),
+	 * 就知道出错了, 从而抛出一个错误, 被 XMLHttpRequest 的 onerror 回调函数捕获.
+	 * 注意, 这种错误无法通过状态码识别, 因为 HTTP 回应的状态码有可能是 200.
+	 * 如果 Origin 指定的域名在许可范围内, 服务器返回的响应, 会多出几个头信息字段:
+	 * 与 CORS 请求相关的字段, 都以 Access-Control- 开头.
+	 */
+	CorsAllowedOriginList     []string
+	DeleteCollectionWorkers   int
+	DeprecatedStorageVersion  string
+	EnableLogsSupport         bool
+	EnableProfiling           bool
+	EnableWatchCache          bool
+	EtcdServersOverrides      []string
+	EtcdConfig                etcdstorage.EtcdConfig
+	EventTTL                  time.Duration
+	ExternalHost              string
+	KeystoneURL               string
+	KubeletConfig             kubeletclient.KubeletClientConfig
+	KubernetesServiceNodePort int
+	MasterCount               int
+	MasterServiceNamespace    string
+	MaxConnectionBytesPerSec  int64
+	MinRequestTimeout         int
+	OIDCCAFile                string
+	OIDCClientID              string
+	OIDCIssuerURL             string
+	OIDCUsernameClaim         string
+	OIDCGroupsClaim           string
+	RuntimeConfig             util.ConfigurationMap
+	SSHKeyfile                string
+	SSHUser                   string
+	ServiceAccountKeyFile     string
+	ServiceAccountLookup      bool
+	ServiceClusterIPRange     net.IPNet // TODO: make this a list
+	ServiceNodePortRange      utilnet.PortRange
+	StorageVersions           string
 	// The default values for StorageVersions. StorageVersions overrides
 	// these; you can change this if you want to change the defaults (e.g.,
 	// for testing). This is not actually exposed as a flag.

@@ -388,7 +388,6 @@ func Run(s *options.APIServer) error {
 		QPS:   50,
 		Burst: 100,
 	}
-	/* The version to store the legacy v1 resources with. */
 	if len(s.DeprecatedStorageVersion) != 0 {
 		gv, err := unversioned.ParseGroupVersion(s.DeprecatedStorageVersion)
 		if err != nil {
@@ -638,18 +637,20 @@ func Run(s *options.APIServer) error {
 		EnableCoreControllers:   true,
 		DeleteCollectionWorkers: s.DeleteCollectionWorkers,
 		EventTTL:                s.EventTTL,
-		KubeletClient:           kubeletClient,
+		/* KubeletClient 目前只用于 kubelet 的健康检查, HTTP 访问方式 */
+		KubeletClient: kubeletClient,
 
 		Tunneler: tunneler,
 	}
 
 	if s.EnableWatchCache {
+		/* 设置各资源的缓存大小 */
 		cachesize.SetWatchCacheSizes(s.WatchCacheSizes)
 	}
 
 	/*
-	 * 构造master的config结构, 生成一个master实例.
-	 * 各种api请求最后都是通过master对象来处理的
+	 * 构造 master 的 config 结构, 生成 master 实例.
+	 * 各种 api 请求最后都是通过 master 对象来处理的
 	 */
 	m, err := master.New(config)
 	if err != nil {

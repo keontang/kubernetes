@@ -487,6 +487,9 @@ func New(c *Config) (*GenericAPIServer, error) {
 		handlerContainer = NewHandlerContainer(mux, c.Serializer)
 	}
 	s.HandlerContainer = handlerContainer
+	/* CurlyRouter expects Routes with paths that contain zero or more
+	 * parameters in curly brackets.
+	 */
 	// Use CurlyRouter to be able to use regular expressions in paths. Regular expressions are required in paths for example for proxy (where the path is proxy/{kind}/{name}/{*})
 	s.HandlerContainer.Router(restful.CurlyRouter{})
 	s.MuxHelper = &apiserver.MuxHelper{Mux: s.mux, RegisteredPaths: []string{}}

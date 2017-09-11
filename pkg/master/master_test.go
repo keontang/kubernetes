@@ -56,6 +56,11 @@ import (
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
 	kubeletclient "k8s.io/kubernetes/pkg/kubelet/client"
+
+	"k8s.io/kubernetes/pkg/master/reconcilers"
+	certificatesrest "k8s.io/kubernetes/pkg/registry/certificates/rest"
+	corerest "k8s.io/kubernetes/pkg/registry/core/rest"
+	"k8s.io/kubernetes/pkg/registry/registrytest"
 	kubeversion "k8s.io/kubernetes/pkg/version"
 
 	"github.com/stretchr/testify/assert"
@@ -66,10 +71,13 @@ func setUp(t *testing.T) (*etcdtesting.EtcdTestServer, Config, *assert.Assertion
 	server, storageConfig := etcdtesting.NewUnsecuredEtcd3TestClientServer(t, api.Scheme)
 
 	config := &Config{
-		GenericConfig:           genericapiserver.NewConfig(api.Codecs),
-		APIResourceConfigSource: DefaultAPIResourceConfigSource(),
-		APIServerServicePort:    443,
-		MasterCount:             1,
+		GenericConfig: genericapiserver.NewConfig(api.Codecs),
+		ExtraConfig: ExtraConfig{
+			APIResourceConfigSource: DefaultAPIResourceConfigSource(),
+			APIServerServicePort:    443,
+			MasterCount:             1,
+			EndpointReconcilerType:  reconcilers.MasterCountReconcilerType,
+		},
 	}
 
 	resourceEncoding := serverstorage.NewDefaultResourceEncodingConfig(api.Registry)

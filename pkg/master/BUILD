@@ -22,7 +22,6 @@ go_library(
     deps = [
         "//cmd/kube-apiserver/app/options:go_default_library",
         "//pkg/api:go_default_library",
-        "//pkg/api/endpoints:go_default_library",
         "//pkg/api/install:go_default_library",
         "//pkg/api/v1:go_default_library",
         "//pkg/apis/admission/install:go_default_library",
@@ -60,7 +59,11 @@ go_library(
         "//pkg/client/clientset_generated/clientset/typed/core/v1:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/core/internalversion:go_default_library",
         "//pkg/kubelet/client:go_default_library",
+<<<<<<< HEAD
         "//pkg/master/thirdparty:go_default_library",
+=======
+        "//pkg/master/reconcilers:go_default_library",
+>>>>>>> d1bb08f44a... add lease endpoint reconciler
         "//pkg/master/tunneler:go_default_library",
         "//pkg/registry/admissionregistration/rest:go_default_library",
         "//pkg/registry/apps/rest:go_default_library",
@@ -69,6 +72,8 @@ go_library(
         "//pkg/registry/autoscaling/rest:go_default_library",
         "//pkg/registry/batch/rest:go_default_library",
         "//pkg/registry/certificates/rest:go_default_library",
+        "//pkg/registry/core/endpoint:go_default_library",
+        "//pkg/registry/core/endpoint/storage:go_default_library",
         "//pkg/registry/core/rangeallocation:go_default_library",
         "//pkg/registry/core/rest:go_default_library",
         "//pkg/registry/core/service/ipallocator:go_default_library",
@@ -96,6 +101,12 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/server:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server/healthz:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server/storage:go_default_library",
+<<<<<<< HEAD
+=======
+        "//vendor/k8s.io/apiserver/pkg/storage/storagebackend/factory:go_default_library",
+        "//vendor/k8s.io/client-go/informers:go_default_library",
+        "//vendor/k8s.io/client-go/kubernetes/typed/core/v1:go_default_library",
+>>>>>>> d1bb08f44a... add lease endpoint reconciler
     ],
 )
 
@@ -129,6 +140,13 @@ go_test(
         "//pkg/client/clientset_generated/internalclientset/fake:go_default_library",
         "//pkg/generated/openapi:go_default_library",
         "//pkg/kubelet/client:go_default_library",
+<<<<<<< HEAD
+=======
+        "//pkg/master/reconcilers:go_default_library",
+        "//pkg/registry/certificates/rest:go_default_library",
+        "//pkg/registry/core/rest:go_default_library",
+        "//pkg/registry/registrytest:go_default_library",
+>>>>>>> d1bb08f44a... add lease endpoint reconciler
         "//pkg/version:go_default_library",
         "//vendor/github.com/go-openapi/loads:go_default_library",
         "//vendor/github.com/go-openapi/spec:go_default_library",
@@ -167,7 +185,11 @@ filegroup(
     srcs = [
         ":package-srcs",
         "//pkg/master/ports:all-srcs",
+<<<<<<< HEAD
         "//pkg/master/thirdparty:all-srcs",
+=======
+        "//pkg/master/reconcilers:all-srcs",
+>>>>>>> d1bb08f44a... add lease endpoint reconciler
         "//pkg/master/tunneler:all-srcs",
     ],
     tags = ["automanaged"],
